@@ -339,7 +339,7 @@ Every autonomous action generates a notification:
 
 ## 5. The Multi-Agent Debate System (What to Visualize)
 
-This is TradeWizard's intellectual core and biggest design opportunity. The system runs on Amazon Bedrock AgentCore - each analysis spawns a fleet of AI agents in isolated microVMs that autonomously browse the web, reason about markets, and debate each other using the Strands SDK framework. The system works in 11 stages:
+This is TradeWizard's intellectual core and biggest design opportunity. The system runs on Nebius Token Factory - each analysis spawns a fleet of AI agents that autonomously browse the web, reason about markets, and debate each other using the Strands SDK framework. The system works in 11 stages:
 
 ### Simplified Mental Model for Users
 
@@ -551,7 +551,7 @@ Users should always know their credit balance and what things cost. But it shoul
 
 ## 12. Technical Constraints for Design
 
-- **Analysis takes 30-90 seconds** - design for async delivery, not instant response. Agents run in isolated microVMs on Bedrock AgentCore, browsing the web and reasoning autonomously.
+- **Analysis takes 30-90 seconds** - design for async delivery, not instant response. Agents run on Nebius Token Factory, browsing the web and reasoning autonomously.
 - **WebSocket for real-time** - results appear as push notifications / live updates
 - **Mobile-first consideration** - many users will check on mobile
 - **Dark mode expected** - trading/finance users strongly prefer dark interfaces

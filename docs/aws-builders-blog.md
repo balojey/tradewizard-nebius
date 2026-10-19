@@ -1,6 +1,6 @@
-# Building a Multi-Agent Trading Intelligence System on AWS with Strands Agents SDK, Amazon Bedrock, Aurora PostgreSQL, and DynamoDB
+# Building a Multi-Agent Trading Intelligence System with Strands Agents SDK, Nebius Token Factory, Aurora PostgreSQL, and DynamoDB
 
-**How we orchestrate 14 specialized AI agents across 7 foundation models in a single Lambda function - with Aurora Serverless v2 as the durable brain (agent memory, performance scoring, closed-loop learning) and DynamoDB as the speed layer (dedup cache, WebSocket connections, rate limiting, distributed locks).**
+**How we orchestrate 14 specialized AI agents across 7 capability buckets on Nebius Token Factory in a single Lambda function - with Aurora Serverless v2 as the durable brain (agent memory, performance scoring, closed-loop learning) and DynamoDB as the speed layer (dedup cache, WebSocket connections, rate limiting, distributed locks).**
 
 ---
 
@@ -21,7 +21,7 @@ TradeWizard runs entirely on AWS with no long-lived servers. The analysis intell
 - **Analysis_Lambda** - an 11-stage workflow that runs 14 parallel intelligence agents, fuses their signals deterministically, debates the result adversarially, and produces a final recommendation.
 - **Portfolio_Lambda** - a persona-driven agent that consumes analysis results and makes autonomous trade entry/exit decisions within hard risk limits.
 
-Both use Amazon Bedrock as the model provider, with multi-model routing across 7 foundation models.
+Both use Nebius Token Factory as the model provider, with multi-model routing across 7 capability buckets.
 
 ```
 User Request → API Gateway → Lambda (analysis-request)
@@ -37,7 +37,7 @@ User Request → API Gateway → Lambda (analysis-request)
 | Service | Role |
 |---------|------|
 | AWS Lambda (Node.js 20) | All compute - request handling, orchestration, agents, delivery |
-| Amazon Bedrock | LLM inference for 7 models via Strands SDK BedrockModel |
+| Nebius Token Factory | LLM inference for 7 capability buckets via Strands SDK OpenAIModel |
 | Aurora PostgreSQL Serverless v2 | Users, subscriptions, results, agent memory, performance tracking |
 | Amazon DynamoDB | Dedup cache (1h TTL), WebSocket connections, rate limiting |
 | Amazon SQS (FIFO) | Analysis queue with DLQ and 3-retry backoff |
@@ -55,39 +55,39 @@ Baseline infrastructure cost: ~$15–20/month at idle. Aurora scales to 0.5 ACU 
 
 ## Multi-Model Routing: Why One Model Isn't Enough
 
-Our first iteration ran all 14 agents on a single model (Nova 2 Lite). It worked - until we hit RPM limits under parallel execution. Running 14 agents simultaneously on one model with 20 RPM is a bottleneck by definition.
+Our first iteration ran all 14 agents on a single model. It worked - until parallel execution hit the provider's rate limits. Running 14 agents simultaneously on one model is a bottleneck by definition.
 
 The solution was `multi-model.ts` - a routing layer that distributes agents across models based on two criteria: **capability match** and **RPM budget**.
 
 ```typescript
-// Agent → Model assignment (simplified)
+// Agent → capability assignment (simplified)
 const AGENT_MODEL_ASSIGNMENT: Record<AgentName, string> = {
-  // Nova Micro (200 RPM) - fast data-crunching agents
+  // fast bucket (Qwen3-30B-A3B) - data-crunching agents
   market_microstructure: 'nova_micro',
   probability_baseline: 'nova_micro',
   momentum: 'nova_micro',
 
-  // Nova Lite (200 RPM) - analytical agents
+  // analytical bucket (Qwen3-235B-A22B) - analytical agents
   risk_assessment: 'nova_lite',
   polling_intelligence: 'nova_lite',
   mean_reversion: 'nova_lite',
 
-  // Nemotron 3 Super (100 RPM) - agentic, news-heavy
+  // agentic bucket (NVIDIA Nemotron 3 Super) - news-heavy agents
   breaking_news: 'nemotron',
   event_impact: 'nemotron',
   historical_patterns: 'nemotron',
 
-  // GPT-OSS 120B (100 RPM) - sentiment reasoning
+  // reasoning bucket (GPT-OSS 120B) - sentiment reasoning
   media_sentiment: 'gpt_oss',
   social_sentiment: 'gpt_oss',
   narrative_velocity: 'gpt_oss',
 
-  // Kimi K2 Thinking (100 RPM) - deep scenario reasoning
+  // deep_reasoning bucket (DeepSeek-V4-Pro) - deep scenario reasoning
   catalyst_identification: 'kimi_k2',
   tail_risk: 'kimi_k2',
 };
 
-// Non-tool stages use Llama 3.3 70B (8000 RPM, no tool-calling)
+// Non-tool stages use the non_tool bucket (Kimi K3)
 const STAGE_MODEL_ASSIGNMENT = {
   thesis: 'llama_3_3',
   cross_exam: 'llama_3_3',
@@ -100,9 +100,9 @@ const STAGE_MODEL_ASSIGNMENT = {
 
 Each model instance is cached per Lambda container (cold-start optimization), and all model IDs are environment-driven - no hardcoding.
 
-**The key insight:** Match models to workload characteristics, not just quality. Nova Micro is fast and cheap for numeric data crunching. Kimi K2 is slower but better for complex multi-step scenario reasoning. Llama 3.3 has massive RPM headroom but no tool-calling - perfect for pure synthesis stages that don't need external data.
+**The key insight:** Match models to workload characteristics, not just quality. Qwen3-30B is fast and cheap for numeric data crunching. DeepSeek-V4-Pro is slower but better for complex multi-step scenario reasoning. Kimi K3 has no tool-calling requirement - perfect for pure synthesis stages that don't need external data.
 
-Total tool-capable RPM across the fleet: ~720. Each model handles at most 3 agents in parallel. No single model becomes a bottleneck.
+Nebius rate limits are account-level and dynamic, so the system does not assume a fixed per-model RPM budget. Each model handles at most 3 agents in parallel, and throttling flows through the same partial-failure path as any other agent failure.
 
 ---
 
@@ -114,7 +114,6 @@ Here's a simplified view of how we define and run an intelligence agent:
 
 ```typescript
 import { Agent } from '@strands-agents/sdk';
-import { BedrockModel } from '@strands-agents/sdk';
 import { getModelForAgent } from '../lib/multi-model';
 import { getToolsForAgent } from '../tools/tool-factory';
 
@@ -123,7 +122,7 @@ async function runAgent(
   systemPrompt: string,
   context: string,
 ): Promise<AgentSignal> {
-  const model = getModelForAgent(agentName);  // Routes to correct Bedrock model
+  const model = getModelForAgent(agentName);  // Routes to the right Token Factory model
   const tools = getToolsForAgent(agentName);  // News, search, shell, or none
 
   const agent = new Agent({
@@ -172,7 +171,7 @@ Agent performance weights come from a closed-loop scoring system: every recommen
 
 ### Gate 2: Adversarial Cross-Examination
 
-A Llama 3.3 agent generates bull and bear theses, then a second agent runs 5 adversarial tests against each:
+A Kimi K3 agent generates bull and bear theses, then a second agent runs 5 adversarial tests against each:
 
 1. **Evidence test** - Are claims verifiable?
 2. **Causality test** - Is the thesis confusing correlation with causation?
@@ -270,7 +269,7 @@ Our initial architecture had ElastiCache (Redis) for the dedup cache and rate li
 2. **TTL is native.** Redis requires explicit expiry management or eviction policies. DynamoDB TTL is a column - set it on write, forget about it. Items disappear automatically.
 3. **No cluster management.** ElastiCache requires selecting node types, managing failover, and monitoring memory. DynamoDB on-demand just works.
 
-The trade-off: DynamoDB latency is 5–10ms vs. Redis's sub-millisecond. For our access patterns (dedup check on every analysis request, rate limit check on every API call), 5ms is fine. We're not building a real-time trading engine at the dedup layer - we're preventing redundant Bedrock invocations.
+The trade-off: DynamoDB latency is 5–10ms vs. Redis's sub-millisecond. For our access patterns (dedup check on every analysis request, rate limit check on every API call), 5ms is fine. We're not building a real-time trading engine at the dedup layer - we're preventing redundant Token Factory invocations.
 
 ### The Dedup Flow (DynamoDB + Aurora working together)
 
@@ -350,7 +349,7 @@ If the lock is already held (conditional check fails), the executor records a `s
 
 ## Market-Level Analysis Pool: The Cost Architecture
 
-At scale, naive per-user execution is financial suicide. If 10,000 users request analysis on the same election market in the same hour, that's 10,000 Bedrock invocations at ~$0.15 each = $1,500. With our dedup architecture, it's 1 invocation = $0.15.
+At scale, naive per-user execution is financial suicide. If 10,000 users request analysis on the same election market in the same hour, that's 10,000 Token Factory inference runs. With our dedup architecture, it's one.
 
 The pattern:
 
@@ -431,10 +430,10 @@ The kill switch fails closed - if any internal check errors during emergency exi
 
 ## Results
 
-- 14 agents running in parallel across 7 Bedrock models in a single Lambda invocation
+- 14 agents running in parallel across 7 capability buckets on Token Factory in a single Lambda invocation
 - ~20–25 LLM calls per analysis, completing within Lambda's timeout
 - $15–20/month baseline infrastructure (Aurora Serverless v2 at 0.5 ACU + DynamoDB on-demand + Lambda)
-- DynamoDB dedup cache reduces Bedrock cost by orders of magnitude at scale (10,000 requests → 1 invocation)
+- DynamoDB dedup cache reduces inference cost by orders of magnitude at scale (10,000 requests → 1 invocation)
 - Aurora stores the complete learning fabric: agent memory, performance scoring, delivery accounting, trade audit trails
 - DynamoDB handles all millisecond-latency gates: dedup, rate limits, WebSocket connections, distributed locks, kill switch state
 - Closed-loop scoring in Aurora adjusts agent weights without manual intervention
@@ -451,4 +450,4 @@ The kill switch fails closed - if any internal check errors during emergency exi
 
 ---
 
-*Built with AWS Lambda, Amazon Bedrock, Aurora PostgreSQL Serverless v2, DynamoDB, SQS, SNS, EventBridge, API Gateway, Cognito, SES, S3, CloudWatch, Amplify Hosting, and the Strands Agents SDK.*
+*Built with Nebius Token Factory, AWS Lambda, Aurora PostgreSQL Serverless v2, DynamoDB, SQS, SNS, EventBridge, API Gateway, Cognito, SES, S3, CloudWatch, Amplify Hosting, and the Strands Agents SDK.*

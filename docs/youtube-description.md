@@ -12,8 +12,8 @@ This video walks through both the product experience and the systems architectur
 
 ⚙️ Systems Architecture
 
-• 11-stage analysis workflow on AWS Lambda + Strands Agents SDK (TypeScript)
-• 14 specialized intelligence agents running in parallel on Amazon Bedrock (Nova 2 Lite)
+• 11-stage analysis workflow on serverless Lambda + Strands Agents SDK (TypeScript)
+• 14 specialized intelligence agents running in parallel on Nebius Token Factory, with NVIDIA Nemotron 3 Super on the tool-heavy research agents
 • Per-agent isolated memory from Aurora PostgreSQL - no cross-agent anchoring
 • Tools: NewsData.io, Serper search/scrape, sandboxed shell (Python + bash), Polymarket CLOB & Gamma APIs
 • Zod-validated typed signals with structured fallback on parse failure
@@ -34,13 +34,13 @@ This video walks through both the product experience and the systems architectur
 • Mutual exclusion between Trade Executor and Position Guard
 • Kill switch fails closed - one click exits all positions, terminates all sessions
 
-☁️ AWS-Native Infrastructure
+☁️ Deployment Substrate
 
-Lambda (Node.js 20) · Aurora PostgreSQL Serverless v2 · DynamoDB (dedup, connections, rate limits) · SQS FIFO + DLQ · EventBridge Scheduler · SNS fan-out · S3 · API Gateway (REST + WebSocket) · Cognito Custom Auth · SES · CloudWatch · Amplify Hosting
+Serverless Lambda (Node.js 20) · Aurora PostgreSQL Serverless v2 · DynamoDB (dedup, connections, rate limits) · SQS FIFO + DLQ · EventBridge Scheduler · SNS fan-out · S3 · API Gateway (REST + WebSocket) · Cognito Custom Auth · SES · CloudWatch · Amplify Hosting
 
 💰 Market-Level Analysis Pool
 
-One Bedrock execution per market per hour, shared across all users. 10,000 requests on the same market = 1 invocation. Users pay only for results they receive, exactly once.
+One Nebius inference run per market per hour, shared across all users. 10,000 requests on the same market = 1 invocation. Users pay only for results they receive, exactly once.
 
 📊 Closed-Loop Learning
 
@@ -50,8 +50,8 @@ Every recommendation is scored against actual market resolution. Every agent has
 
 🏗️ Built With
 
-AWS CDK · AWS Lambda · Amazon Bedrock · Amazon Nova 2 Lite · Strands Agents SDK · Aurora PostgreSQL Serverless v2 · DynamoDB · SQS · SNS · EventBridge · API Gateway · Cognito · SES · S3 · CloudWatch · Amplify Hosting · Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · TanStack Query · Polymarket CLOB API · viem · USDC.e on Polygon · Zod · Vitest
+Nebius Token Factory · NVIDIA Nemotron 3 Super · Qwen3 · GPT-OSS 120B · DeepSeek-V4-Pro · Kimi K3 · MiniMax M3 · Strands Agents SDK · OpenAI-compatible API · AWS CDK · AWS Lambda · Aurora PostgreSQL Serverless v2 · DynamoDB · SQS · SNS · EventBridge · API Gateway · Cognito · SES · S3 · CloudWatch · Amplify Hosting · Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · TanStack Query · Polymarket CLOB API · viem · USDC.e on Polygon · Zod · Vitest
 
 -
 
-#TradeWizard #PredictionMarkets #Polymarket #MultiAgentAI #AWSBedrock #StrandsSDK #SystemsDesign #AITrading #ServerlessArchitecture #AmazonNova #AutonomousAgents #MachineLearning #TypeScript #AWS #Hackathon
+#TradeWizard #PredictionMarkets #Polymarket #MultiAgentAI #Nebius #NebiusTokenFactory #NVIDIA #Nemotron #NVIDIAHackathon #StrandsSDK #SystemsDesign #AITrading #ServerlessArchitecture #AutonomousAgents #MachineLearning #TypeScript #Hackathon

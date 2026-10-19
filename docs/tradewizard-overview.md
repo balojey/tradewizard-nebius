@@ -2,7 +2,7 @@
 
 **The intelligence layer for real-world prediction markets.**
 
-TradeWizard is an AI-powered platform that turns prediction markets on Polymarket into a guided, probability-driven trading experience. It pairs a multi-agent analysis engine - 14 specialized AI agents that debate every market and produce explainable recommendations - with an optional autonomous Portfolio Manager that can execute trades inside hard, user-defined risk limits.
+TradeWizard is an AI-powered platform that turns prediction markets on Polymarket into a guided, probability-driven trading experience. It pairs a multi-agent analysis engine - 14 specialized AI agents that debate every market and produce explainable recommendations - with an optional autonomous Portfolio Manager that can execute trades inside hard, user-defined risk limits. The submitted configuration runs all model inference on Nebius Token Factory, with NVIDIA Nemotron 3 Super on the tool-heavy research and news agents.
 
 This document explains what TradeWizard is, how it works, the architecture behind it, and where it's going. Every technical claim here reflects what is actually implemented in the codebase.
 
@@ -63,7 +63,7 @@ There are six trading personas, each with distinct entry, sizing, exit, and moni
 
 ## 3. How the Intelligence Engine Works
 
-The analysis workflow runs in a self-hosted AWS Lambda function using the Strands Agents SDK in TypeScript. It is an 11-stage pipeline that alternates between AI reasoning stages and deterministic, non-AI computation stages.
+The analysis workflow runs in a self-hosted Lambda function using the Strands Agents SDK in TypeScript. It is an 11-stage pipeline that alternates between AI reasoning stages and deterministic, non-AI computation stages. Model inference runs on Nebius Token Factory; orchestration and state live on a serverless deployment substrate.
 
 ### 3.1 The 14 Intelligence Agents
 
@@ -99,19 +99,19 @@ Each agent's historical signals are stored per-market, and each agent sees only 
 
 ## 4. The Multi-Model Architecture
 
-TradeWizard does not run on a single model. By default, agents are distributed across seven foundation models on Amazon Bedrock, matched to workload by capability and rate-limit budget:
+TradeWizard does not run on a single model. The submitted configuration routes every inference call through **Nebius Token Factory**, with seven capability buckets matched to workload:
 
-- **Nova Micro** - fast, tool-capable data-crunching agents (microstructure, probability baseline, momentum)
-- **Nova Lite** - analytical agents (risk assessment, polling intelligence, mean reversion)
-- **Nemotron 3 Super** - news and event agents, plus the web research stage
-- **GPT-OSS 120B** - sentiment and narrative agents
-- **Kimi K2 Thinking** - deep-reasoning scenario agents (catalyst identification, tail risk)
-- **Llama 3.3 70B** - non-tool synthesis stages (thesis, cross-examination, the three risk agents, recommendation)
-- **Nova 2 Lite** - the Portfolio Manager's persona agent
+- **Nemotron 3 Super** (`agentic`) - news and event agents, plus the web research stage
+- **Qwen3-30B-A3B** (`fast`) - data-crunching agents (microstructure, probability baseline, momentum)
+- **Qwen3-235B-A22B** (`analytical`) - analytical agents (risk assessment, polling intelligence, mean reversion)
+- **GPT-OSS 120B** (`reasoning`) - sentiment and narrative agents
+- **DeepSeek-V4-Pro** (`deep_reasoning`) - deep-reasoning scenario agents (catalyst identification, tail risk)
+- **Kimi K3** (`non_tool`) - synthesis stages (thesis, cross-examination, the three risk agents, recommendation)
+- **MiniMax M3** (`default`) - the Portfolio Manager's persona agent
 
-This distribution serves two purposes. First, it matches each model to the kind of work it does best - fast models for numeric crunching, deeper-reasoning models for complex scenarios, high-throughput models for pure synthesis. Second, it spreads the parallel agent workload so no single model's rate limit becomes a bottleneck. All model IDs are configured through environment variables, so the routing can be changed per environment without code changes.
+This distribution serves two purposes. First, it matches each model to the kind of work it does best - fast models for numeric crunching, deeper-reasoning models for complex scenarios, non-tool models for pure synthesis. Second, it prevents a single model's rate limit from becoming the bottleneck for the parallel agent stage. NVIDIA Nemotron 3 Super is the agentic bucket because the news and research agents are tool-heavy: they call NewsData.io and Serper, observe results, and decide what to do next.
 
-The same logical agent assignments can run on Nebius Token Factory instead of Bedrock by setting `AI_PROVIDER=nebius`. Nebius provides an OpenAI-compatible API, and the capability model IDs are similarly environment-driven (`NEBIUS_MODEL_FAST`, `NEBIUS_MODEL_AGENTIC`, etc.). This switches inference only; trade execution remains in the portfolio executor.
+The pipeline asks for capabilities, not model names. `infra/services/shared/ai-provider.ts` resolves a logical key (`nova_micro`, `nemotron`, `llama_3_3`, etc.) to a capability, then to the Token Factory model ID. All model IDs are environment-driven (`NEBIUS_MODEL_FAST`, `NEBIUS_MODEL_AGENTIC`, and so on), so routing changes without code changes. Trade execution and risk enforcement never depend on the inference provider at all.
 
 ---
 
@@ -145,14 +145,14 @@ The most dangerous failure mode for an AI trading product is users trusting it u
 
 ## 6. Technical Architecture
 
-TradeWizard runs entirely on AWS with no long-lived servers. The entire stack - infrastructure, backend services, AI agents, and frontend - is TypeScript.
+TradeWizard runs with no long-lived servers. The intelligence layer is TS/Node and provider-agnostic at the model boundary; the deployment substrate is AWS. The entire stack - infrastructure, backend services, AI agents, and frontend - is TypeScript.
 
-### 6.1 AWS Services
+### 6.1 Platform Services
 
 | Concern | Service |
 |---------|---------|
+| AI inference | **Nebius Token Factory** (NVIDIA Nemotron 3 Super + open models) |
 | Compute | AWS Lambda (Node.js 20) |
-| AI inference | Amazon Bedrock (default) or Nebius Token Factory (optional) |
 | Durable state | Amazon Aurora PostgreSQL Serverless v2 |
 | Cache / dedup / locks | Amazon DynamoDB (with TTL) |
 | Queue | Amazon SQS (FIFO) with dead-letter queue |
@@ -174,7 +174,7 @@ DynamoDB handles everything that needs millisecond latency and benefits from aut
 
 ### 6.4 Cost-Efficient by Design
 
-The infrastructure is deliberately lean: no NAT Gateway (Aurora uses a public endpoint with SSL enforcement and security-group restrictions), no managed cache cluster, and serverless compute and database that scale to near-zero at idle. Baseline infrastructure cost is roughly $15–20 per month, with a clear scale-up path as usage grows.
+The infrastructure is deliberately lean: no NAT Gateway (Aurora uses a public endpoint with SSL enforcement and security-group restrictions), no managed cache cluster, and serverless compute and database that scale to near-zero at idle. Baseline infrastructure cost is roughly $15–20 per month, with a clear scale-up path as usage grows. Inference is metered separately on Token Factory, and the market-level analysis pool is what keeps that cost proportional to distinct markets rather than user traffic.
 
 ### 6.5 The Market-Level Analysis Pool
 
@@ -238,6 +238,6 @@ The opportunity is a horizontal one. The architecture is event-agnostic: the sam
 
 ## 10. Summary
 
-TradeWizard is a working, AWS-native platform that turns prediction markets into explainable, intelligence-driven trading. Fourteen specialized agents debate every market; three deterministic gates decide what reaches the user and allow the system to refuse when uncertainty is too high; a closed-loop scoring system makes the agents measurably better over time; and an optional autonomous Portfolio Manager executes only inside hard, user-defined limits with a kill switch that fails closed.
+TradeWizard is a working, Nebius-powered platform that turns prediction markets into explainable, intelligence-driven trading. Fourteen specialized agents debate every market; three deterministic gates decide what reaches the user and allow the system to refuse when uncertainty is too high; a closed-loop scoring system makes the agents measurably better over time; and an optional autonomous Portfolio Manager executes only inside hard, user-defined limits with a kill switch that fails closed.
 
 The user always holds the perimeter - they choose the market, the capital, the persona, and the off switch. Inside that perimeter, a coordinated system of AI specialists works the problem continuously, and every recommendation it makes is explainable, scored against reality, and bounded by design.

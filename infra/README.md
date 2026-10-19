@@ -1,6 +1,6 @@
-# TradeWizard V2 Infrastructure
+# TradeWizard Infrastructure
 
-AWS CDK infrastructure for TradeWizard V2 platform. Cost-optimized for pre-revenue stage.
+AWS CDK infrastructure for the TradeWizard deployment substrate. The AI layer runs on **Nebius Token Factory**; this stack provisions the serverless runtime, state, auth, queueing, and delivery layers around it. Cost-optimized for pre-revenue stage.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ AWS CDK infrastructure for TradeWizard V2 platform. Cost-optimized for pre-reven
 - **API**: API Gateway REST + WebSocket with Cognito authorizer
 - **Queue**: SQS FIFO (analysis requests) + EventBridge (scheduling)
 - **Storage**: S3 (analysis results, agent traces)
-- **AI**: AWS Lambda + Strands SDK (TypeScript) for self-hosted multi-agent analysis; Bedrock by default, Nebius Token Factory via `AI_PROVIDER=nebius`
+- **AI**: Nebius Token Factory for all model inference (NVIDIA Nemotron 3 Super + open models), called through Lambda + Strands SDK
 - **Notifications**: SNS (push) + Resend (email; SES retained as explicit fallback)
 - **Monitoring**: CloudWatch dashboards + alarms + SNS alerts
 - **Payments**: USDC.e on-chain transfers (Polygon) via wallet-based payment model
@@ -56,7 +56,7 @@ All changes are config-level - no architecture redesign needed.
 - S3 + SQS + Cognito + API GW + SNS + Resend: ~$2-5/mo
 - **Total: ~$45-70/mo**
 
-Bedrock costs are usage-based (~$0.06-$0.13 per analysis execution) on top of infrastructure. If `AI_PROVIDER=nebius`, those inference costs shift to Nebius Token Factory's per-token pricing.
+Inference costs are usage-based on Nebius Token Factory (per token) on top of the infrastructure estimate. The market-level analysis pool keeps inference proportional to distinct markets, not user requests.
 
 ---
 
@@ -113,7 +113,7 @@ npm install
 
 ### Step 2: Configure AWS Credentials
 
-Ensure your AWS CLI is configured with credentials that have admin access (or at minimum: CloudFormation, IAM, RDS, DynamoDB, Lambda, API Gateway, Cognito, S3, SQS, SNS, SES, Secrets Manager, EventBridge, Bedrock, CloudWatch permissions).
+Ensure your AWS CLI is configured with credentials that have admin access (or at minimum: CloudFormation, IAM, RDS, DynamoDB, Lambda, API Gateway, Cognito, S3, SQS, SNS, SES, Secrets Manager, EventBridge, CloudWatch permissions).
 
 ```bash
 aws configure
@@ -341,7 +341,7 @@ The compute stack deploys 26 Lambda functions (25 in the compute stack + 1 Cogni
 
 | Variable | Source | Description |
 |----------|--------|-------------|
-| `AI_PROVIDER` | `config.ts` / env | `bedrock` (default) or `nebius` |
+| `AI_PROVIDER` | `config.ts` / env | `nebius` (Nebius Token Factory) |
 | `NEBIUS_API_KEY_SECRET_ARN` | CDK (Secrets Manager) | Secret ARN containing `{"apiKey":"..."}` |
 | `NEBIUS_BASE_URL` | env | OpenAI-compatible endpoint (default `https://api.tokenfactory.nebius.com/v1/`) |
 | `NEBIUS_MAX_TOKENS` | env | Default max tokens for Nebius models |
@@ -669,9 +669,11 @@ Troubleshooting:
 - `Resend API key is not configured` — the secret is empty or Step 3 was skipped; populate `tw-{env}-resend-api-key`.
 - `Resend send failed (429)` — daily/monthly quota or rate limit reached; check the Resend usage dashboard.
 
-### AI Provider (Bedrock / Nebius)
+### AI Provider (Nebius Token Factory)
 
-`AI_PROVIDER=bedrock` is the default and preserves the existing model routing. `AI_PROVIDER=nebius` routes every analysis and portfolio model call through Nebius Token Factory's OpenAI-compatible API. The switch covers inference only; Polymarket order execution stays in `portfolio-trade-executor` and the risk/lifecycle Lambdas.
+`AI_PROVIDER=nebius` routes every analysis and portfolio model call through Nebius Token Factory's OpenAI-compatible API, with NVIDIA Nemotron 3 Super on the agentic/news/research bucket. The switch covers inference only; orchestration, persistence, and Polymarket order execution stay in the deterministic services (`portfolio-trade-executor`, risk/lifecycle Lambdas).
+
+For the full integration architecture, routing table, and failure modes, see [docs/nebius-token-factory.md](../docs/nebius-token-factory.md).
 
 Nebius setup:
 
@@ -699,13 +701,13 @@ npx tsx scripts/validate-nebius.ts
 
 All tool-requiring capabilities were verified against the live catalog and returned `tool_calls`. Re-run the validator after catalog changes.
 
-5. Set `AI_PROVIDER=nebius` and deploy. The analysis and portfolio Lambdas fail fast at cold start if a required `NEBIUS_MODEL_*` is missing.
+5. Set `AI_PROVIDER=nebius` (already the default in `.env.example`) and deploy. The analysis and portfolio Lambdas fail fast at cold start if a required `NEBIUS_MODEL_*` is missing.
 
 The validation script checks that each configured ID exists in `/v1/models`, that every tool-using capability actually returns a `tool_calls` response, and that the model can emit JSON that `extractJson` can parse. Nebius rate limits are dynamic and account-level; if the 14 parallel agents trigger 429s, add a concurrency cap or stagger agent starts.
 
-Rollback: set `AI_PROVIDER=bedrock` and redeploy (or update the Lambda environment variable in the console).
+To change models, update the relevant `NEBIUS_MODEL_*` value and redeploy.
 
-Note: this does not make the platform AWS-independent. Lambda, RDS, S3, SQS, EventBridge, and Polymarket execution still run in AWS; it only removes the Bedrock dependency for model inference.
+Boundary: Token Factory replaces model inference only. Lambda, RDS, S3, SQS, EventBridge, and Polymarket execution remain on AWS. That split is intentional - the inference provider is replaceable without changing the deterministic execution path.
 
 ---
 
@@ -841,7 +843,7 @@ Both Lambdas are bundled and deployed as CDK NodejsFunction resources. The `anal
 - **S3** buckets block all public access
 - **API Gateway** uses Cognito JWT authorization on all routes except `/health`
 - **On-chain verification** ensures all payments are validated against the blockchain before activation
-- **Bedrock IAM roles** follow least-privilege principle
+- **AI provider credentials** follow least-privilege principle
 - **Secrets** are never hardcoded - all sensitive values in Secrets Manager
 - **Lambda** functions run outside VPC (no VPC attachment needed since Aurora is public)
 
@@ -869,11 +871,9 @@ Check that your IP is allowed by the Aurora security group. By default, the secu
 ### Analysis Lambda timeout or errors
 
 1. Check CloudWatch logs for the `tw-{env}-analysis-lambda` Lambda
-2. Verify `BEDROCK_MODEL_ID` and `AWS_REGION` environment variables are set correctly
-3. Check IAM permissions for Bedrock model invocation
-4. Ensure `DB_SECRET_ARN` and `DB_HOST` environment variables are configured
-5. Check Bedrock service quotas for the target region
-6. If `AI_PROVIDER=nebius`, verify the `NEBIUS_MODEL_*` env vars, the `tw-{env}-nebius-api-key` secret, and run `npx tsx scripts/validate-nebius.ts`
+2. With `AI_PROVIDER=nebius`, verify the `NEBIUS_MODEL_*` env vars, the `tw-{env}-nebius-api-key` secret, and run `npx tsx scripts/validate-nebius.ts`
+3. Check Token Factory rate limits/quotas if the 14 parallel agents are being throttled
+5. Ensure `DB_SECRET_ARN` and `DB_HOST` environment variables are configured
 
 ### WebSocket connections not working
 

@@ -1,6 +1,6 @@
 # TradeWizard
 
-> The intelligence layer for real-world prediction markets. A multi-agent AI system that turns event-driven markets on Polymarket into explainable, probability-driven trades - with a closed-loop learning fabric and a bounded-autonomy Portfolio Manager governed by hard, auditable risk limits.
+> The intelligence layer for real-world prediction markets. A multi-agent AI system that runs on Nebius Token Factory with NVIDIA Nemotron 3 Super, turns event-driven markets on Polymarket into explainable, probability-driven trades - with a closed-loop learning fabric and a bounded-autonomy Portfolio Manager governed by hard, auditable risk limits.
 
 ---
 
@@ -24,6 +24,8 @@ TradeWizard is two products that share a brain.
 
 Around these sit the platform pieces a real product needs: passwordless Cognito Magic Link auth, on-chain USDC.e billing on Polygon with auto-renewal via ERC-20 allowances, a market-level analysis pool that prevents redundant compute, a credit system with an immutable audit trail, and a Next.js 16 / React 19 frontend that surfaces all of it through a clean trading-terminal UI.
 
+The inference layer runs on **Nebius Token Factory**. Every agentic stage - web research, the fourteen parallel analysts, the adversarial debate, risk philosophy, and the Portfolio Manager's decision - resolves through a provider abstraction to an open model served by Token Factory. **NVIDIA Nemotron 3 Super**, an open-source NVIDIA model, is the agentic workhorse for tool-heavy research and news agents. The orchestration, persistence, and trade execution layers run on a serverless deployment substrate; they are deliberately separate from the inference provider, so the intelligence layer is not coupled to a single model vendor.
+
 ## How we built it
 
 The product framing is simple. The architecture is where the work is.
@@ -46,14 +48,14 @@ For the Portfolio Manager, additional inputs include: the user's active session 
 
 TradeWizard employs four distinct AI capabilities in a single pipeline:
 
-| Capability | Where it's used | Models |
+| Capability | Where it's used | Models (Nebius Token Factory) |
 |------------|----------------|--------|
-| **Multi-agent reasoning** | 14 intelligence agents producing independent probability estimates and directional signals from different analytical perspectives | Nova Micro, Nova Lite, Nemotron 3 Super, GPT-OSS 120B, Kimi K2 Thinking |
-| **Autonomous tool use** | Agents calling external APIs (news, search, scrape, shell) to gather real-time data and perform numeric analysis | Nemotron 3 Super (web research), Nova Micro (shell/price analysis), Nova Lite (polling data) |
-| **Adversarial debate & synthesis** | Thesis construction, cross-examination (5 tests × 2 theses), risk philosophy perspectives, and final recommendation generation | Llama 3.3 70B |
-| **Persona-driven decision-making** | Portfolio Manager agent reasoning about entry/exit/sizing through the lens of a chosen trading persona with market context and performance history | Nova 2 Lite (Portfolio_Lambda) |
+| **Multi-agent reasoning** | 14 intelligence agents producing independent probability estimates and directional signals from different analytical perspectives | Nemotron 3 Super, Qwen3-30B-A3B, Qwen3-235B-A22B, GPT-OSS 120B, DeepSeek-V4-Pro |
+| **Autonomous tool use** | Agents calling external APIs (news, search, scrape, shell) to gather real-time data and perform numeric analysis | Nemotron 3 Super (web research), Qwen3-30B (shell/price analysis), Qwen3-235B (polling data) |
+| **Adversarial debate & synthesis** | Thesis construction, cross-examination (5 tests × 2 theses), risk philosophy perspectives, and final recommendation generation | Kimi K3 |
+| **Persona-driven decision-making** | Portfolio Manager agent reasoning about entry/exit/sizing through the lens of a chosen trading persona with market context and performance history | MiniMax M3 (Portfolio_Lambda) |
 
-None of these are chatbots or classifiers. They are **agentic workflows** - LLMs orchestrated with tools, structured outputs, and deterministic gates that constrain what the models are allowed to conclude.
+None of these are chatbots or classifiers. They are **agentic workflows** - LLMs orchestrated with tools, structured outputs, and deterministic gates that constrain what the models are allowed to conclude. The model IDs are configuration, not architecture: the same logical agent assignments can be re-pointed without touching prompts, tools, or downstream validation.
 
 #### What processing happens
 
@@ -63,13 +65,13 @@ The 11-stage pipeline processes data through a sequence of parallel and serial s
 2. **Historical Context Retrieval** (deterministic) - Loads per-agent memory and performance weights from Aurora PostgreSQL. No LLM involved.
 3. **Web Research** (agentic) - A Strands Agent with news and search tools autonomously gathers real-time context. 60-second timeout, max 10 searches + 5 scrapes.
 4. **Agent Selection** (deterministic) - All 14 agents are activated. No conditional filtering.
-5. **Parallel Intelligence Agents** (agentic) - 14 agents execute in parallel via `Promise.all`, each assigned to a specific Bedrock model. Each produces a Zod-validated `AgentSignal`: direction (YES/NO/NEUTRAL), confidence (0–1), fair probability (0–1), key drivers, and risk factors. 120-second per-agent timeout. If an agent fails to produce valid output, it is excluded from downstream stages.
+5. **Parallel Intelligence Agents** (agentic) - 14 agents execute in parallel via `Promise.all`, each resolving to a capability-routed model on Nebius Token Factory. Each produces a Zod-validated `AgentSignal`: direction (YES/NO/NEUTRAL), confidence (0–1), fair probability (0–1), key drivers, and risk factors. 120-second per-agent timeout. If an agent fails to produce valid output, it is excluded from downstream stages.
 6. **Signal Fusion** (deterministic, no LLM) - Weighted aggregation of all valid agent signals. Weights = type weight × confidence × historical accuracy score. Computes: weighted fair probability, fusion confidence, signal alignment, and a conflict map (all agent pairs diverging > 30%). If max divergence exceeds 70%, fusion confidence is halved.
-7. **Thesis Construction** (agentic) - Llama 3.3 70B generates competing bull and bear theses from the fused signal. Each thesis includes fair probability, edge, core argument, catalysts, and failure conditions.
-8. **Cross-Examination** (agentic) - Llama 3.3 70B runs 5 adversarial tests against each thesis (10 total): evidence, causality, timing, liquidity, tail risk. Each test produces a survived/weakened/refuted outcome with a numeric score.
+7. **Thesis Construction** (agentic) - Kimi K3 generates competing bull and bear theses from the fused signal. Each thesis includes fair probability, edge, core argument, catalysts, and failure conditions.
+8. **Cross-Examination** (agentic) - Kimi K3 runs 5 adversarial tests against each thesis (10 total): evidence, causality, timing, liquidity, tail risk. Each test produces a survived/weakened/refuted outcome with a numeric score.
 9. **Consensus Engine** (deterministic, no LLM) - Computes weighted consensus probability from bull/bear fair probabilities weighted by debate scores and per-agent accuracy. Computes disagreement index (stddev of agent fair probabilities). **If disagreement > 30%, consensus fails → forced NO_TRADE.** Determines action: LONG_YES, LONG_NO, or NO_TRADE.
-10. **Risk Philosophy** (agentic) - Three agents (aggressive, conservative, neutral) run in parallel on Llama 3.3 70B. Provide position-sizing perspectives - Kelly criterion, hedging, spreads - without influencing probability estimates.
-11. **Recommendation** (agentic) - Llama 3.3 70B synthesizes all upstream context into a final `TradeRecommendation`. Validated through Zod schema and price-ordering constraints. **If EV ≤ 0, the recommendation is rejected → forced NO_TRADE.** Falls back to a structured NO_TRADE explanation on any parse failure.
+10. **Risk Philosophy** (agentic) - Three agents (aggressive, conservative, neutral) run in parallel on Kimi K3. Provide position-sizing perspectives - Kelly criterion, hedging, spreads - without influencing probability estimates.
+11. **Recommendation** (agentic) - Kimi K3 synthesizes all upstream context into a final `TradeRecommendation`. Validated through Zod schema and price-ordering constraints. **If EV ≤ 0, the recommendation is rejected → forced NO_TRADE.** Falls back to a structured NO_TRADE explanation on any parse failure.
 
 For the Portfolio Manager, processing is simpler: the Portfolio_Lambda receives the latest analysis result and session context, runs a single persona-driven agent with 7 read-only tools, and produces a structured entry/exit/skip decision. The Trade Executor then validates the decision against hard limits (SL/TP present, size within cap, cooldown clear, loss limit intact) before placing orders on the CLOB.
 
@@ -139,17 +141,29 @@ The goal is not to prevent users from following recommendations - that would def
 
 ### Stack at a glance
 
-- **Infrastructure**: AWS CDK in TypeScript. Stacks for network, database, auth, queue, notification, storage, monitoring, and compute. Aurora PostgreSQL Serverless v2 for state, DynamoDB with TTL for dedup and WebSocket connections, SQS FIFO for the analysis queue with a DLQ, EventBridge for scheduling and routing, SNS topic fan-out for delivery, S3 for analysis artifacts and agent traces.
-- **Compute**: AWS Lambda on Node.js 20 throughout. No long-lived servers. No NAT Gateway. Aurora is reachable on a public endpoint with SSL enforcement, scales to 0.5 ACU at idle, and auto-scales under load. Baseline infrastructure runs around fifteen to twenty dollars a month - the architecture is shaped to make scaling a revenue decision, not a survival one.
-- **AI runtime**: Self-hosted Lambda with the Strands Agents SDK in TypeScript. Two agentic Lambdas - `Analysis_Lambda` runs the 11-stage intelligence workflow, `Portfolio_Lambda` runs the persona-driven trade decision. Both use Amazon Bedrock as the model provider with multi-model routing across 7 foundation models distributed by capability and RPM budget. Intelligence agents (tool-capable) are spread across Nova Micro (200 RPM), Nova Lite (200 RPM), Nemotron 3 Super (100 RPM), GPT-OSS 120B (100 RPM), and Kimi K2 Thinking (100 RPM). Non-tool stages (thesis, cross-exam, risk philosophy, recommendation) use Llama 3.3 70B at 8000 RPM. Web research uses Nemotron (needs tools, runs alone). Total tool-capable RPM budget: ~720 - well above what 14 parallel agents need. All model IDs are env-driven for per-environment overrides.
+- **Deployment substrate**: AWS CDK in TypeScript. Stacks for network, database, auth, queue, notification, storage, monitoring, and compute. Aurora PostgreSQL Serverless v2 for state, DynamoDB with TTL for dedup and WebSocket connections, SQS FIFO for the analysis queue with a DLQ, EventBridge for scheduling and routing, SNS topic fan-out for delivery, S3 for analysis artifacts and agent traces. The substrate is deliberately boring: it holds state, schedules work, and fans out results. It is not where the product's intelligence lives.
+- **Compute**: Lambda on Node.js 20 throughout. No long-lived servers. No NAT Gateway. Aurora is reachable on a public endpoint with SSL enforcement, scales to 0.5 ACU at idle, and auto-scales under load. Baseline infrastructure runs around fifteen to twenty dollars a month - the architecture is shaped to make scaling a revenue decision, not a survival one.
+- **AI runtime**: Nebius Token Factory, called through the Strands Agents SDK in TypeScript. Two agentic Lambdas - `Analysis_Lambda` runs the 11-stage intelligence workflow, `Portfolio_Lambda` runs the persona-driven trade decision. Every model call goes through `services/shared/ai-provider.ts`, which resolves a logical capability (`fast`, `analytical`, `agentic`, `reasoning`, `deep_reasoning`, `non_tool`, `default`) to a configured Token Factory model ID. Tool-capable agents are spread across Nemotron 3 Super (agentic), Qwen3-30B (fast), Qwen3-235B (analytical), GPT-OSS 120B (reasoning), and DeepSeek-V4-Pro (deep reasoning). Non-tool stages - thesis, cross-examination, risk philosophy, recommendation - use Kimi K3. Web research uses Nemotron 3 Super because it needs tools and runs alone before the agent league. The Portfolio Manager uses MiniMax M3. Model IDs and max-token limits are env-driven per environment, so routing changes do not require a code change.
 - **Frontend**: Next.js 16 App Router on AWS Amplify Hosting. React 19, TypeScript strict, Tailwind 4, TanStack Query, WebSocket client with exponential backoff and ping keepalive. Magic SDK plus viem for on-chain operations. Polymarket CLOB client for order placement.
 - **Payments**: On-chain USDC.e on Polygon. Subscriptions and credit packs are settled by transaction hash verification using viem; auto-renewal works through a pre-approved ERC-20 allowance and `transferFrom`. No card processor in the loop.
+
+### Nebius Token Factory integration
+
+The provider boundary is one file: `infra/services/shared/ai-provider.ts`. It exposes two things to the rest of the system - a model factory and a capability mapping. The analysis pipeline never names a vendor. It asks for `getModelForAgent('tail_risk')` or `getModelForStage('recommendation')`; the registry resolves that logical key to a capability, then to the active provider's concrete model ID. Switching `AI_PROVIDER` does not touch prompts, tools, Zod schemas, or the deterministic stages.
+
+Token Factory is OpenAI-compatible, so the integration uses Strands' `OpenAIModel` with `api: 'chat'` and a custom `baseURL`. The API key is read from Secrets Manager (`tw-{env}-nebius-api-key`), cached in-process for five minutes, and never injected into the browser or the Lambda environment as a literal. If the selected provider is `nebius` and any required model ID is missing, the Lambda fails fast at cold start rather than starting an analysis that will fail halfway through.
+
+The capability split is intentional. Tool-using agents must resolve to a tool-capable bucket; the registry throws if a tool-using agent is mapped to `non_tool`. That single check prevents the most expensive failure mode in a multi-model pipeline - a news agent that silently stops calling tools and starts inventing context. The `non_tool` bucket exists only for pure synthesis stages where external data access is not part of the job.
+
+Model validation is a deployment step, not a hope. `infra/scripts/validate-nebius.ts` checks that every configured ID exists in `/v1/models`, that tool-capable buckets actually return `tool_calls`, and that each model can emit JSON that the pipeline's extractor can parse. The script runs against the same environment file the deployment uses. Catalog changes are caught before a user request is.
+
+Rate limits on Token Factory are account-level and dynamic, so the system does not pretend to know a fixed RPM budget. The 14 agents run in parallel because the pipeline needs independent signals, not because the provider guarantees unlimited concurrency. If the account throttles, the pipeline degrades the same way it handles any partial agent failure: valid signals continue, failed agents are excluded, and the run aborts to `NO_TRADE` if coverage falls below the threshold. Inference is a dependency; it is not allowed to become an unhandled single point of failure.
 
 ### Agent architecture and coordination
 
 The 14 intelligence agents run on every analysis. There is no conditional selection by market type, no router model deciding who gets to talk. We tried router-style designs early and they introduced a single point of failure that hides behind the appearance of efficiency: when the router is wrong, the rest of the system is missing the agent that mattered. Running all 14 in parallel via `Promise.all` costs more on a per-analysis basis but produces a complete, comparable signal set every time, which is what the deterministic stages downstream need to do their job.
 
-The agents are distributed across five tool-capable models based on capability matching and RPM budgets. Data-crunching agents (microstructure, momentum, mean reversion) run on fast models like Nova Micro and Nova Lite. News and event agents that hit external APIs run on Nemotron 3 Super, which is optimized for agentic tool use. Sentiment agents requiring nuanced reasoning run on GPT-OSS 120B. Deep-reasoning scenario agents (catalyst identification, tail risk) run on Kimi K2 Thinking. Non-tool stages - thesis construction, cross-examination, risk philosophy, and recommendation - run on Llama 3.3 70B, which has 8000 RPM but no tool-calling support, making it ideal for pure reasoning stages that don't need external data access. This distribution means no single model bottlenecks the parallel stage: each model handles at most 3 intelligence agents concurrently, well within RPM limits.
+The agents are distributed across five tool-capable models on Nebius Token Factory based on capability matching. Data-crunching agents (microstructure, momentum, mean reversion) run on Qwen3-30B and Qwen3-235B. News and event agents that hit external APIs run on NVIDIA Nemotron 3 Super, which is optimized for agentic tool use and is the same model used by the web-research stage. Sentiment agents requiring nuanced reasoning run on GPT-OSS 120B. Deep-reasoning scenario agents (catalyst identification, tail risk) run on DeepSeek-V4-Pro. Non-tool stages - thesis construction, cross-examination, risk philosophy, and recommendation - run on Kimi K3, which does not need tool access and receives the full deterministic context produced upstream. This distribution means no single model is the bottleneck for the parallel stage: each handles at most three intelligence agents concurrently, and the provider boundary keeps rate-limit behavior visible and configurable.
 
 The agents fall into six tool-use categories - market microstructure, news, polling, sentiment, narrative, price action, scenario - and each gets a tool kit appropriate to its job. News agents get the NewsData.io tool. Browser-style agents get the Serper search-and-scrape tool. Price-aware agents get a sandboxed shell tool that can run Python and bash on `/tmp` for numeric work over the price-history CSV the data-preparation stage writes. Tools are wrapped with timeouts, key rotation, and error handling so a single dead key or slow source doesn't crater the run.
 
@@ -257,7 +271,7 @@ The user is never in the dark about a wrong recommendation. The system treats fa
 
 ### Cost and operational shape
 
-The market-level analysis pool is the single most consequential design choice for unit economics. Analysis is one-per-market-per-hour minimum, deduped through DynamoDB with a 1-hour TTL. Per-user delivery is tracked in Aurora's `analysis_deliveries` table. Users pay one credit when they receive an analysis they haven't seen before, and never twice for the same one. Recurring schedules from many users on the same market coalesce to the shortest active interval. At meaningful scale, this turns ten thousand users requesting the same popular market into one Bedrock execution while still collecting ten thousand credits of attribution. We designed it that way deliberately because the failure mode of naive per-user execution is bankruptcy.
+The market-level analysis pool is the single most consequential design choice for unit economics. Analysis is one-per-market-per-hour minimum, deduped through DynamoDB with a 1-hour TTL. Per-user delivery is tracked in Aurora's `analysis_deliveries` table. Users pay one credit when they receive an analysis they haven't seen before, and never twice for the same one. Recurring schedules from many users on the same market coalesce to the shortest active interval. At meaningful scale, this turns ten thousand users requesting the same popular market into one Nebius inference run while still collecting ten thousand credits of attribution. We designed it that way deliberately because the failure mode of naive per-user execution is bankruptcy.
 
 The same shape extends to delivery. SNS topic fan-out triggers WebSocket, email, push, and webhook Lambdas in parallel, each respecting quiet hours, notification preferences, and plan-based channel availability. Stale WebSocket connections are cleaned up on `410 Gone`. SQS DLQ handles failed dispatches with three retries and exponential backoff, and any failure refunds *all* subscribers - not just the requesting user - because under coalescing, a failed analysis affected everyone.
 
@@ -284,9 +298,9 @@ The same shape extends to delivery. SNS topic fan-out triggers WebSocket, email,
 - **Bounded-autonomy execution.** A kill switch that fails closed, mandatory SL/TP, hard loss limits, cross-session caps, cooldowns, capital conservation, mutual exclusion between executor and guard, and token-ID resolution by outcome. The Portfolio Manager's perimeter is small and provable.
 - **A market-level analysis pool with per-user delivery accounting.** Costs scale with markets analyzed, not with users requesting. Users only pay for analyses they actually receive, exactly once.
 - **Closed-loop learning.** Every recommendation is scored against eventual recommendation resolution. Every agent has a leaderboard. Memory feeds back into signal weighting. The system gets better with every recommendation that resolves, not just with model upgrades.
-- **An AWS-native platform that runs at fifteen to twenty dollars a month at idle.** No NAT, no ElastiCache, no always-on compute. Aurora Serverless v2 scales to 0.5 ACU. The architecture rewards growth instead of punishing it.
+- **A lean serverless substrate that runs at fifteen to twenty dollars a month at idle.** No NAT, no ElastiCache, no always-on compute. Aurora Serverless v2 scales to 0.5 ACU. The architecture rewards growth instead of punishing it.
 - **Multi-channel delivery that respects user preferences.** WebSocket, email, push, webhook - each with quiet hours, thresholds, and plan-based gating. Kill-switch and loss-warning events override quiet hours because some events are too important to wait.
-- **End-to-end TypeScript, multi-model Bedrock.** One language across CDK, Lambdas, Strands agents, and frontend. Seven foundation models on Bedrock distributed by capability - no single model bottleneck, no Python runtime in the agent path.
+- **End-to-end TypeScript, multi-model inference on Nebius Token Factory.** One language across CDK, Lambdas, Strands agents, and frontend. Seven capability buckets resolve to open models on Token Factory - no single model bottleneck, no Python runtime in the agent path, and no vendor-specific agent code.
 
 ## What we learned
 
@@ -297,9 +311,37 @@ The same shape extends to delivery. SNS topic fan-out triggers WebSocket, email,
 - **Explainability is a UI feature first and a regulatory feature second.** Reasoning chains, debate scores, agent leaderboards, and disagreement indices make users trust the output. They also make the system defensible if the output is ever questioned.
 - **You can't separate analysis from execution and call the job done.** The hard part of retail trading is the gap between the recommendation and the trade. The Portfolio Manager exists because that gap is where users get hurt.
 
+## What changed during the submission period
+
+TradeWizard's product surface and deterministic execution layers predate this hackathon. The submission-period work was the inference port and the supporting operations:
+
+- Extracted the provider boundary into `infra/services/shared/ai-provider.ts`, so the analysis and portfolio pipelines resolve models through a capability mapping instead of vendor-specific constructors.
+- Added the Nebius Token Factory registry: seven capability buckets, env-driven model IDs, per-capability token limits, and a hard invariant that tool-using agents cannot map to the non-tool model.
+- Integrated Token Factory through Strands' `OpenAIModel` with the Chat Completions surface and a configurable base URL.
+- Added Secrets Manager-backed key loading with an in-process cache, plus cold-start validation that fails when a required model ID is missing.
+- Added `infra/scripts/validate-nebius.ts` to check model availability, tool calling, and JSON extraction before deployment.
+- Kept the deterministic gates, risk engine, executor, and kill switch unchanged. The inference port was not allowed to change the safety properties of the system.
+- Rewrote the primary docs, environment templates, and deployment guidance around the Nebius configuration.
+
+The design constraint throughout was simple: the provider should be replaceable without weakening the parts of the system that users actually depend on.
+
+## Feedback on Nebius Token Factory
+
+These are integration notes from building against Token Factory, not a review of the product roadmap.
+
+**What worked well.** The OpenAI-compatible Chat Completions surface made the port small. Strands already had an `OpenAIModel` adapter, and the provider boundary was largely a matter of pointing it at a different `baseURL`, supplying a key resolver, and mapping logical capabilities to model IDs. We did not have to rewrite prompts, tool definitions, or the deterministic pipeline.
+
+**What required care.** Tool calling is the contract that matters for this workload, and it is not uniform across a catalog. We added `validate-nebius.ts` because a model ID existing in `/v1/models` is not the same as that model returning usable `tool_calls`. Every tool-capable bucket is verified before deployment; the non-tool bucket exists specifically so synthesis stages do not silently inherit a tool-use requirement they do not need.
+
+**Rate limits.** Account-level dynamic limits are the right model for a shared inference service, but they make fixed RPM planning unreliable. We stopped pretending to know a concurrency budget and made throttling flow through the same partial-failure path as any other agent failure. More per-account observability - especially around 429s and concurrency - would make that behavior easier to tune.
+
+**Model routing.** Having several open models behind one endpoint is useful for a system like this. The hard part is not calling a model; it is keeping the agent-to-capability mapping observable when a model changes underneath it. The registry and the validator are our answer to that. A first-class capability or alias concept on the platform side would reduce the amount of environment bookkeeping required.
+
+**NVIDIA Nemotron 3 Super.** We put it on the most demanding inference path in the system: multi-step news and research tasks where the model has to call tools and decide what to do with the results. That is a different workload from single-turn synthesis, and it is the right place to spend the agentic bucket.
+
 ## What's next for TradeWizard
 
-- **Model performance benchmarking.** Multi-model routing is live across 7 models. The next step is systematic quality and cost benchmarking per agent-category, with automated routing updates when a model's price-to-quality ratio shifts.
+- **Model performance benchmarking.** Multi-model routing is live across seven capability buckets on Token Factory. The next step is systematic quality and cost benchmarking per agent-category, with automated routing updates when a model's price-to-quality ratio shifts.
 - **Agent specialization and ablation.** Now that we have a leaderboard with real outcome data, we can systematically retire under-performing agents, split high-performing ones into more specialized variants, and run A/B comparisons with statistical rigor.
 - **Verticals beyond politics.** The architecture is event-agnostic. Macro and central-bank decisions are next, then sports and entertainment. Each new domain inherits the same workflow with domain-specific tools.
 - **Institutional surface.** A research-grade API for hedge funds and political-risk firms, with audit logs, signed reasoning chains, and SLA-backed delivery. The intelligence layer is already explainable enough; the work is packaging.

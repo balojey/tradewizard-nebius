@@ -13,11 +13,11 @@ from diagrams.aws.storage import S3
 from diagrams.aws.management import Cloudwatch
 from diagrams.aws.engagement import SES
 from diagrams.aws.mobile import APIGateway as MobileGateway
-from diagrams.aws.ml import Bedrock
 from diagrams.onprem.client import Users
 from diagrams.generic.database import SQL
+from diagrams.generic.compute import Rack
 from diagrams.programming.framework import React
-from diagrams.custom import Custom
+from pathlib import Path
 
 graph_attr = {
     "fontsize": "28",
@@ -29,8 +29,8 @@ graph_attr = {
 }
 
 with Diagram(
-    "TradeWizard V2 - Platform Architecture",
-    filename="/home/balo/hackathons/devpost/tradewizard/docs/tradewizard-architecture",
+    "TradeWizard - Platform Architecture",
+    filename=str(Path(__file__).with_suffix("")),
     show=False,
     direction="TB",
     graph_attr=graph_attr,
@@ -69,21 +69,21 @@ with Diagram(
         scheduler = Eventbridge("EventBridge\nScheduler")
 
     # --- AI Analysis Engine ---
-    with Cluster("AI Analysis Engine (Strands SDK)"):
+    with Cluster("AI Analysis Engine (Lambda + Strands SDK)"):
         analysis_lambda = Lambda("Analysis Lambda\n(11-Stage Workflow)")
 
         with Cluster("14 Intelligence Agents"):
-            agents_group_1 = Lambda("Nova Micro Agents\n(Microstructure, Baseline,\nMomentum)")
-            agents_group_2 = Lambda("Nova Lite Agents\n(Risk, Polling,\nMean Reversion)")
-            agents_group_3 = Lambda("Nemotron Agents\n(News, Events,\nHistorical)")
-            agents_group_4 = Lambda("GPT-OSS Agents\n(Media, Social,\nNarrative)")
-            agents_group_5 = Lambda("Kimi K2 Agents\n(Catalyst, Tail Risk)")
+            agents_group_1 = Lambda("Qwen3-30B Fast Agents\n(Microstructure, Baseline,\nMomentum)")
+            agents_group_2 = Lambda("Qwen3-235B Analytical Agents\n(Risk, Polling,\nMean Reversion)")
+            agents_group_3 = Lambda("Nemotron 3 Super Agents\n(News, Events,\nHistorical, Web Research)")
+            agents_group_4 = Lambda("GPT-OSS 120B Agents\n(Media, Social,\nNarrative)")
+            agents_group_5 = Lambda("DeepSeek-V4 Agents\n(Catalyst, Tail Risk)")
 
-        with Cluster("Non-Tool Stages (Llama 3.3 70B)"):
+        with Cluster("Non-Tool Stages (Kimi K3)"):
             thesis = Lambda("Thesis +\nCross-Exam")
             risk_rec = Lambda("Risk Philosophy +\nRecommendation")
 
-        bedrock = Bedrock("Amazon Bedrock\n(7 Models)")
+        nebius = Rack("Nebius Token Factory\n(7 capability buckets)")
 
     # --- Portfolio Manager ---
     with Cluster("Portfolio Manager (Pro/Elite)"):
@@ -155,14 +155,14 @@ with Diagram(
     analysis_lambda >> thesis
     analysis_lambda >> risk_rec
 
-    # Bedrock
-    agents_group_1 >> bedrock
-    agents_group_2 >> bedrock
-    agents_group_3 >> bedrock
-    agents_group_4 >> bedrock
-    agents_group_5 >> bedrock
-    thesis >> bedrock
-    risk_rec >> bedrock
+    # Nebius Token Factory inference
+    agents_group_1 >> nebius
+    agents_group_2 >> nebius
+    agents_group_3 >> nebius
+    agents_group_4 >> nebius
+    agents_group_5 >> nebius
+    thesis >> nebius
+    risk_rec >> nebius
 
     # External tools for agents
     agents_group_3 >> newsdata

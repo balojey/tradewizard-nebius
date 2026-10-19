@@ -1,17 +1,40 @@
 # TradeWizard
 
-> AI-powered prediction trading platform providing intelligent analysis and trading recommendations for real-world outcomes on Polymarket.
+> Multi-agent intelligence for prediction markets. Fourteen specialists on Nebius Token Factory, three deterministic gates, and a bounded-autonomy Portfolio Manager.
 
-TradeWizard transforms prediction markets from speculative guessing into guided, intelligence-driven trading. A multi-agent AI system analyzes markets from multiple perspectives to produce explainable trade recommendations with clear reasoning, catalysts, and risk scenarios.
+TradeWizard turns prediction markets from speculative guessing into intelligence-driven trading. A multi-agent system analyzes Polymarket markets from independent perspectives, fuses their signals through deterministic stages, and produces explainable trade recommendations with clear reasoning, catalysts, and risk scenarios.
+
+The inference layer runs on **Nebius Token Factory**, with NVIDIA Nemotron 3 Super handling the tool-heavy news and research agents. The orchestration, persistence, and execution layers run on a serverless AWS deployment substrate. The AI provider is a configuration boundary, not a rewrite: `AI_PROVIDER=nebius` routes every analysis and portfolio model call through Token Factory's OpenAI-compatible API.
+
+## Why Nebius
+
+The system does not need one giant model. It needs the right model for each job, a stable contract between the agent layer and the provider, and no single rate limit deciding whether a fourteen-agent run completes.
+
+Nebius Token Factory gives us that as an OpenAI-compatible endpoint, so the same Strands agent code runs against open models from NVIDIA, Qwen, OpenAI, DeepSeek, Moonshot, and MiniMax. Agents are assigned to **capability buckets** - not hard-coded model names - and the environment resolves each bucket to a concrete model ID:
+
+| Capability | Model | Used by |
+|------------|-------|---------|
+| `agentic` | `nvidia/nemotron-3-super-120b-a12b` | breaking news, event impact, historical patterns, web research |
+| `fast` | `Qwen/Qwen3-30B-A3B-Instruct-2507` | market microstructure, probability baseline, momentum |
+| `analytical` | `Qwen/Qwen3-235B-A22B-Instruct-2507` | risk assessment, polling intelligence, mean reversion |
+| `reasoning` | `openai/gpt-oss-120b` | media sentiment, social sentiment, narrative velocity |
+| `deep_reasoning` | `deepseek-ai/DeepSeek-V4-Pro` | catalyst identification, tail risk |
+| `non_tool` | `moonshotai/Kimi-K3` | thesis, cross-examination, risk philosophy, recommendation |
+| `default` | `MiniMaxAI/MiniMax-M3` | Portfolio Manager persona decisions |
+
+Tool-using agents are never allowed to resolve to the `non_tool` bucket. That invariant is checked at registry construction, so a bad environment configuration fails before an analysis starts rather than silently degrading a tool call.
+
+See [docs/nebius-token-factory.md](docs/nebius-token-factory.md) for the integration details, model validation, and failure modes.
 
 ## Components
 
 | Component | Purpose | Tech Stack |
 |-----------|---------|-----------|
-| [infra/](infra/README.md) | V2 AWS-native platform (CDK, Lambda, Strands SDK) | TypeScript, AWS CDK, Lambda, RDS, DynamoDB |
+| AI inference | Analysis and portfolio reasoning on Nebius Token Factory | NVIDIA Nemotron 3 Super + open models, Strands SDK, OpenAI-compatible API |
+| [infra/](infra/README.md) | Serverless deployment substrate: CDK, Lambda, Aurora, DynamoDB | TypeScript, AWS CDK, Lambda, RDS, DynamoDB |
 | [tradewizard-frontend/](tradewizard-frontend/README.md) | Web UI with Cognito auth, real-time delivery, subscription management | Next.js 16, React 19, Tailwind CSS 4 |
 
-## Architecture (V2)
+## Architecture
 
 ```
 User → Next.js Frontend (Cognito Auth)
@@ -20,9 +43,16 @@ User → Next.js Frontend (Cognito Auth)
          ↓ Credit check → Dedup → SQS
    Analysis Orchestrator Lambda
          ↓ Lambda invoke (Strands SDK)
-   14 Specialized AI Agents (Bedrock default; Nebius Token Factory optional)
+   Nebius Token Factory
+   ┌──────────────────────────────────────────────────────────┐
+   │ Web Research (Nemotron 3 Super)                          │
+   │ 14 Intelligence Agents (capability-routed, parallel)     │
+   │ Thesis · Cross-Exam · Risk Philosophy · Recommendation   │
+   └──────────────────────────────────────────────────────────┘
+         ↓ typed signals, deterministic gates
+   Signal Fusion → Consensus → EV Check → Recommendation
          ↓
-   Results → S3 + RDS
+   Results → S3 + Aurora PostgreSQL
          ↓ SNS Fan-out
    ┌─────────────────────────────────────┐
    │ WebSocket Push │ Email (Resend) │ Push │ Webhook │
@@ -31,13 +61,15 @@ User → Next.js Frontend (Cognito Auth)
    Real-time delivery to frontend
 ```
 
+The division of responsibility is deliberate. Nebius runs inference. The deterministic stages - signal fusion, consensus, expected-value rejection, schema validation - run in application code. The Portfolio Manager's executor, risk engine, and kill switch never depend on a model deciding to behave.
+
 ### Analysis Pipeline (11 Stages)
 
 1. **Data Preparation** - Fetch live data from Polymarket CLOB + Gamma APIs
-2. **Memory Retrieval** - Load historical agent signals from RDS
-3. **Web Research** - Autonomous research via NewsData.io and Serper tools
+2. **Memory Retrieval** - Load historical agent signals from Aurora PostgreSQL
+3. **Web Research** - Autonomous research via NewsData.io and Serper tools on Nemotron 3 Super
 4. **Agent Selection** - All 14 agents activated for every market (no conditional filtering)
-5. **Parallel Intelligence Agents** - 14 agents execute in parallel via Promise.all
+5. **Parallel Intelligence Agents** - 14 agents execute in parallel through Nebius Token Factory
 6. **Signal Fusion** (deterministic) - Weighted aggregation with conflict detection
 7. **Thesis Construction** - Competing bull and bear theses
 8. **Cross-Examination** - 5 adversarial tests on both theses
@@ -89,18 +121,21 @@ User → Next.js Frontend (Cognito Auth)
 | Requirement | Used by |
 |-------------|---------|
 | Node.js 18+ | All components |
-| AWS Account | infra (CDK deployment) |
+| Nebius Token Factory API key | AI inference |
+| AWS account | Serverless deployment substrate |
 | Platform Wallet (Polygon) | USDC.e payment receiving + renewal transferFrom |
 | Amazon Cognito User Pool | Authentication |
 
 ## Getting Started
 
-### Option A: Full V2 Platform (AWS)
+### Option A: Full Platform
 
 ```bash
-# 1. Deploy infrastructure (handles secrets, CDK, DB, Resend/SES email)
+# 1. Configure inference + deploy the substrate
 cd infra
 npm install
+cp .env.example .env.dev
+# Set AI_PROVIDER=nebius and NEBIUS_API_KEY in .env.dev
 ./deploy.sh up dev
 
 # 2. Start the frontend
@@ -120,7 +155,37 @@ cp .env.example .env.local
 npm run dev  # http://localhost:3000
 ```
 
-## Environment Variables Reference
+## Environment Variables
+
+### Nebius Token Factory
+
+```bash
+# Select the inference provider. "nebius" is the submitted configuration.
+AI_PROVIDER=nebius
+
+# Stored in Secrets Manager as tw-{env}-nebius-api-key by deploy.sh.
+NEBIUS_API_KEY=
+NEBIUS_BASE_URL=https://api.tokenfactory.nebius.com/v1/
+NEBIUS_MAX_TOKENS=30000
+
+# Capability → model ID. All IDs are env-driven and validated against
+# the live catalog before deployment.
+NEBIUS_MODEL_FAST=Qwen/Qwen3-30B-A3B-Instruct-2507
+NEBIUS_MODEL_ANALYTICAL=Qwen/Qwen3-235B-A22B-Instruct-2507
+NEBIUS_MODEL_AGENTIC=nvidia/nemotron-3-super-120b-a12b
+NEBIUS_MODEL_REASONING=openai/gpt-oss-120b
+NEBIUS_MODEL_DEEP_REASONING=deepseek-ai/DeepSeek-V4-Pro
+NEBIUS_MODEL_NON_TOOL=moonshotai/Kimi-K3
+NEBIUS_MODEL_DEFAULT=MiniMaxAI/MiniMax-M3
+```
+
+Validate the catalog and tool calling before deploying:
+
+```bash
+cd infra
+set -a; source .env.dev; set +a
+npx tsx scripts/validate-nebius.ts
+```
 
 ### tradewizard-frontend (.env.local)
 
@@ -147,7 +212,7 @@ NEXT_PUBLIC_POLYMARKET_API_URL=https://clob.polymarket.com
 ### infra (.env)
 
 ```bash
-# AWS
+# Deployment substrate
 AWS_REGION=us-east-1
 CDK_DEFAULT_ACCOUNT=your_account_id
 ENVIRONMENT=dev
@@ -202,7 +267,7 @@ Payments are made via on-chain USDC.e transfers on Polygon:
 
 ```
 tradewizard/
-├── infra/                  # V2 AWS CDK infrastructure + Lambda services
+├── infra/                  # Serverless substrate + Lambda services
 │   ├── lib/               # CDK stacks (network, database, auth, queue, compute, etc.)
 │   ├── services/          # Lambda handlers (analysis, delivery, subscriptions, portfolio, etc.)
 │   └── sql/               # PostgreSQL schema
@@ -218,9 +283,11 @@ tradewizard/
 
 ## Documentation
 
-- [infra/README.md](infra/README.md) - AWS infrastructure and deployment guide
+- [docs/nebius-token-factory.md](docs/nebius-token-factory.md) - Nebius inference architecture, routing, validation, and failure modes
+- [infra/README.md](infra/README.md) - Deployment substrate and operations guide
 - [tradewizard-frontend/README.md](tradewizard-frontend/README.md) - Frontend development guide
-- [docs/](docs/) - Product overview, architecture specs, debate protocol
+- [docs/tradewizard-overview.md](docs/tradewizard-overview.md) - Product and system overview
+- [docs/devpost-submission.md](docs/devpost-submission.md) - Full submission write-up
 
 ## Contributing
 
@@ -237,7 +304,7 @@ Code quality requirements:
 
 ## License
 
-This project is proprietary software. All rights reserved.
+MIT. See [LICENSE](LICENSE).
 
 ---
 

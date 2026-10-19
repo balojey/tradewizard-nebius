@@ -22,7 +22,7 @@
 | Scheduling | Amazon EventBridge Scheduler | Recurring analysis triggers |
 | Event Bus | Amazon EventBridge | Event routing between services |
 | AI Execution | AWS Lambda + Strands SDK (TypeScript) | Self-hosted multi-agent analysis workflow + portfolio manager |
-| Model Provider | Amazon Bedrock (default) / Nebius Token Factory (optional) | `AI_PROVIDER=bedrock` or `nebius`; Nebius uses the OpenAI-compatible Token Factory API via Strands `OpenAIModel`. Inference only — trade execution stays in the portfolio executor. |
+| Model Provider | **Nebius Token Factory** | `AI_PROVIDER=nebius`; Nebius uses the OpenAI-compatible Token Factory API via Strands `OpenAIModel`. NVIDIA Nemotron 3 Super is the agentic bucket. Inference only — trade execution stays in the portfolio executor. |
 | Email | Resend (SES retained) | Transactional emails, analysis delivery |
 | Push/SMS | Amazon SNS | Push notifications, subscriber fan-out |
 | Object Storage | Amazon S3 | Analysis payloads, agent traces, artifacts |
@@ -39,20 +39,20 @@
   - Multi-agent coordination (parallel via `Promise.all`)
   - Custom tools: News (NewsData.io), Search (Serper), Shell (bash/python on /tmp)
   - Direct Lambda invocation from dispatcher via `@aws-sdk/client-lambda`
-- **Amazon Bedrock** (model provider): LLM inference via Strands SDK BedrockModel integration
-- **Multi-model routing** via `infra/services/analysis-lambda/lib/multi-model.ts`: Distributes agents across models by capability and RPM budget
-  - All model IDs and region are env-driven (set in `.env.dev` / `.env.prod`, injected via CDK)
-  - **Intelligence agents (tool-capable, parallel):**
-    - Nova Micro (`us.amazon.nova-micro-v1:0`, 200 RPM): market_microstructure, probability_baseline, momentum
-    - Nova Lite (`us.amazon.nova-lite-v1:0`, 200 RPM): risk_assessment, polling_intelligence, mean_reversion
-    - Nemotron 3 Super (`nvidia.nemotron-super-3-120b`, 100 RPM): breaking_news, event_impact, historical_patterns
-    - GPT-OSS 120B (`openai.gpt-oss-120b-1:0`, 100 RPM): media_sentiment, social_sentiment, narrative_velocity
-    - Kimi K2 Thinking (`moonshot.kimi-k2-thinking`, 100 RPM): catalyst_identification, tail_risk
-  - **Non-tool stages (no tool-calling needed, high RPM):**
-    - Llama 3.3 70B (`us.meta.llama3-3-70b-instruct-v1:0`, 8000 RPM): thesis, cross-exam, risk philosophy (×3), recommendation
-  - **Web research (needs tools, runs alone before agents):**
-    - Nemotron 3 Super (same instance as above)
-  - Total tool-capable RPM budget: ~720 (well above 14 parallel agents)
+- **Nebius Token Factory** (model provider): LLM inference via Strands SDK `OpenAIModel` against the OpenAI-compatible Chat Completions API. Key comes from Secrets Manager `tw-{env}-nebius-api-key`.
+- **Multi-model routing** via `infra/services/analysis-lambda/lib/multi-model.ts`: logical agent keys resolve to capability buckets, then to the active provider's model ID
+  - All model IDs are env-driven (set in `.env.dev` / `.env.prod`, injected via CDK)
+  - **Intelligence agents (tool-capable, parallel) on Nebius:**
+    - `agentic` — NVIDIA Nemotron 3 Super (`nvidia/nemotron-3-super-120b-a12b`): breaking_news, event_impact, historical_patterns + web research
+    - `fast` — Qwen3-30B-A3B (`Qwen/Qwen3-30B-A3B-Instruct-2507`): market_microstructure, probability_baseline, momentum
+    - `analytical` — Qwen3-235B-A22B (`Qwen/Qwen3-235B-A22B-Instruct-2507`): risk_assessment, polling_intelligence, mean_reversion
+    - `reasoning` — GPT-OSS 120B (`openai/gpt-oss-120b`): media_sentiment, social_sentiment, narrative_velocity
+    - `deep_reasoning` — DeepSeek-V4-Pro (`deepseek-ai/DeepSeek-V4-Pro`): catalyst_identification, tail_risk
+  - **Non-tool stages (no tool-calling needed):**
+    - `non_tool` — Kimi K3 (`moonshotai/Kimi-K3`): thesis, cross-exam, risk philosophy (×3), recommendation
+  - **Portfolio Manager (`default`):** MiniMax M3 (`MiniMaxAI/MiniMax-M3`)
+  - Tool-using agents must resolve to tool-capable buckets; `non_tool` is only for stages without tools. The registry throws on violation.
+  - Validate IDs/tool calling with `scripts/validate-nebius.ts` before deploy.
   - All 14 intelligence agents run on every analysis (no conditional selection)
   - ~20-25 LLM calls per analysis (14 agents + thesis + cross-exam + 3 risk + recommendation)
 
@@ -73,13 +73,13 @@
 
 ### AI & Agent Framework
 - **Strands Agents SDK** (TypeScript, `@strands-agents/sdk`): Multi-agent workflow orchestration in self-hosted Lambda functions
-- **Amazon Bedrock** (model provider): LLM inference via Strands SDK BedrockModel integration
-- **Multi-model routing** (active, `multi-model.ts`): Agents distributed across 7 models by capability and RPM budget
-  - Tool-capable agents: Nova Micro, Nova Lite, Nemotron 3 Super, GPT-OSS 120B, Kimi K2 Thinking
-  - Non-tool stages: Llama 3.3 70B (8000 RPM, thesis/cross-exam/risk/recommendation)
-  - Web research: Nemotron 3 Super (needs tools, runs alone)
-  - Nova 2 Lite available as fallback (20 RPM, tool-capable)
-  - **Provider switch**: `AI_PROVIDER=bedrock` (default) or `nebius`. Logical agent assignments are unchanged and resolve through `services/shared/ai-provider.ts`; Nebius maps capabilities to `NEBIUS_MODEL_*`. Tool-using agents must never map to the `non_tool` capability. Validate model IDs and tool calling with `scripts/validate-nebius.ts`.
+- **Nebius Token Factory** (model provider): LLM inference via Strands SDK `OpenAIModel` (Chat Completions, configurable `baseURL`).
+- **Multi-model routing** (active, `multi-model.ts`): logical keys → capability buckets → provider model IDs
+  - Tool-capable buckets: `agentic` (NVIDIA Nemotron 3 Super), `fast` (Qwen3-30B), `analytical` (Qwen3-235B), `reasoning` (GPT-OSS 120B), `deep_reasoning` (DeepSeek-V4-Pro)
+  - Non-tool stages: `non_tool` (Kimi K3) — thesis/cross-exam/risk/recommendation
+  - Web research: `agentic` (NVIDIA Nemotron 3 Super, runs alone)
+  - Portfolio decisions: `default` (MiniMax M3)
+  - **Provider**: `AI_PROVIDER=nebius` (Nebius Token Factory). Logical agent assignments resolve through `services/shared/ai-provider.ts`; capabilities map to `NEBIUS_MODEL_*`. Tool-using agents must never map to the `non_tool` capability. Validate model IDs and tool calling with `scripts/validate-nebius.ts`.
 
 ### Database & Storage
 - Amazon Aurora PostgreSQL Serverless v2 for all persistence
@@ -336,7 +336,7 @@ npm run lint             # Check linting
 
 - Graceful degradation at every layer - partial failures don't crash the pipeline
 - Consensus can fail (disagreement > 30%) - system refuses to recommend rather than giving low-confidence output
-- CloudWatch alarms: execution time > 60s (warn), > 120s (critical), DLQ depth > 0, daily Bedrock spend > 80% budget
+- CloudWatch alarms: execution time > 60s (warn), > 120s (critical), DLQ depth > 0, daily inference spend > 80% budget
 - Per-analysis cost tracking (model costs, tool costs, compute duration)
 - SQS dead-letter queue for failed dispatches (3 retries with exponential backoff)
 - Failed executions → refund user credit, notify of failure

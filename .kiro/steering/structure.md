@@ -41,7 +41,7 @@ infra/
 │   ├── analysis-lambda/
 │   │   ├── handler.ts              # 11-stage analysis workflow entry point (Strands SDK)
 │   │   ├── lib/
-│   │   │   ├── multi-model.ts      # Multi-model routing (Bedrock/Nebius via shared/ai-provider.ts)
+│   │   │   ├── multi-model.ts      # Multi-model routing (capability buckets via shared/ai-provider.ts)
 │   │   │   ├── json-extractor.ts   # Robust JSON extraction from LLM responses
 │   │   │   └── types.ts            # Shared interfaces (TradeRecommendation, AgentSignal, etc.)
 │   │   ├── tools/
@@ -64,7 +64,7 @@ infra/
 │   │   ├── handler.ts              # Portfolio manager entry point (persona agent + decision parsing)
 │   │   ├── personas.ts             # 6 persona system prompts + exit evaluation addendum
 │   │   ├── lib/
-│   │   │   ├── model.ts            # Portfolio model factory (Bedrock/Nebius)
+│   │   │   ├── model.ts            # Portfolio model factory (Nebius Token Factory)
 │   │   │   ├── json-extractor.ts   # Robust JSON extraction
 │   │   │   └── types.ts            # PortfolioDecision, PortfolioPayload schemas
 │   │   └── tools/
@@ -136,7 +136,7 @@ infra/
 │   ├── portfolio-analysis-consumer/
 │   │   └── handler.ts              # Subscription cancellation detection, session pausing
 │   └── shared/
-│       ├── ai-provider.ts          # AI provider switch (Bedrock/Nebius), Nebius key + model factory
+│       ├── ai-provider.ts          # Nebius Token Factory provider, capability mapping, key + model factory
 │       ├── chain-verification.ts   # On-chain tx verification (viem), balance/allowance reads
 │       ├── clob-credentials.ts     # Polymarket CLOB API credentials (Secrets Manager + env fallback)
 │       ├── connections.ts          # WebSocket connection utilities (store, remove, getByUser)
@@ -360,16 +360,16 @@ User requests analysis → API Gateway → Lambda (analysis-request)
 - Deterministic logic (signal fusion, consensus) in `infra/services/analysis-lambda/stages/signal-fusion.ts` and `consensus-engine.ts`
 - Deployed via CDK as part of the Analysis_Lambda NodejsFunction (bundled into the Lambda)
 - Orchestrator Lambda (`infra/services/analysis-orchestrator/handler.ts`) is a thin dispatcher that invokes Analysis_Lambda via `@aws-sdk/client-lambda`
-- **Multi-model routing** (active, `infra/services/analysis-lambda/lib/multi-model.ts`): Agents distributed across 7 Bedrock models by capability and RPM budget:
-  - Nova Micro (200 RPM): market_microstructure, probability_baseline, momentum
-  - Nova Lite (200 RPM): risk_assessment, polling_intelligence, mean_reversion
-  - Nemotron 3 Super (100 RPM): breaking_news, event_impact, historical_patterns
-  - GPT-OSS 120B (100 RPM): media_sentiment, social_sentiment, narrative_velocity
-  - Kimi K2 Thinking (100 RPM): catalyst_identification, tail_risk
-  - Llama 3.3 70B (8000 RPM, no tool-calling): thesis, cross-exam, risk philosophy (×3), recommendation
-  - Web research: Nemotron 3 Super (needs tools, runs alone before agents)
-- All model IDs are env-driven (`MODEL_NOVA_MICRO`, `MODEL_KIMI_K2`, etc.) for per-environment overrides
-- `AI_PROVIDER=bedrock` (default) or `nebius` selects the provider via `infra/services/shared/ai-provider.ts`; Nebius model IDs use `NEBIUS_MODEL_<CAPABILITY>`. Tool-using agents must map to tool-capable capabilities; `non_tool` is only for stages without tools.
+- **Multi-model routing** (active, `infra/services/analysis-lambda/lib/multi-model.ts`): logical agent keys resolve to capability buckets, then to the active provider's model IDs:
+  - `agentic` — NVIDIA Nemotron 3 Super: breaking_news, event_impact, historical_patterns, web research
+  - `fast` — Qwen3-30B-A3B: market_microstructure, probability_baseline, momentum
+  - `analytical` — Qwen3-235B-A22B: risk_assessment, polling_intelligence, mean_reversion
+  - `reasoning` — GPT-OSS 120B: media_sentiment, social_sentiment, narrative_velocity
+  - `deep_reasoning` — DeepSeek-V4-Pro: catalyst_identification, tail_risk
+  - `non_tool` — Kimi K3: thesis, cross-exam, risk philosophy (×3), recommendation
+  - `default` — MiniMax M3: portfolio persona decisions
+- All model IDs are env-driven (`NEBIUS_MODEL_*`) for per-environment overrides
+- `AI_PROVIDER=nebius` selects Nebius Token Factory via `infra/services/shared/ai-provider.ts`; model IDs use `NEBIUS_MODEL_<CAPABILITY>`. Tool-using agents must map to tool-capable capabilities; `non_tool` is only for stages without tools.
 - Price-aware agents get shell tool, news agents get NewsData.io tool, browser agents get Serper search/scrape tool
 - Tool assignment managed by `infra/services/analysis-lambda/tools/tool-factory.ts`
 - **When adding agents**: Add system prompt to `AGENT_SYSTEM_PROMPTS` record, add name to `ALL_AGENT_NAMES`, add to tool category arrays in `intelligence-agents.ts`

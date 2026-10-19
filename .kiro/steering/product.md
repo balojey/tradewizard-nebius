@@ -1,7 +1,7 @@
 
 # Product Overview
 
-TradeWizard is an AI-powered prediction trading platform that provides intelligent analysis and trading recommendations for real-world outcomes on Polymarket. V2 is a production-grade platform designed to serve tens of millions of users on fully AWS-native infrastructure.
+TradeWizard is an AI-powered prediction trading platform that provides intelligent analysis and trading recommendations for real-world outcomes on Polymarket. V2 is a production-grade platform designed to serve tens of millions of users, with inference on Nebius Token Factory and a serverless deployment substrate.
 
 ## Core Value Proposition
 
@@ -84,7 +84,7 @@ The analysis pool is **market-level, not user-level**. The system produces at mo
 - Multiple users' recurring schedules on the same market share the same execution cadence
 - The system coalesces to the shortest active interval for that market
 - When a user activates a recurring schedule and a fresh result exists that they haven't received, they get it immediately (charged 1 credit) then continue on the recurring cadence
-- At scale, this reduces Bedrock executions dramatically (shared pool across all users)
+- At scale, this reduces inference executions dramatically (shared pool across all users)
 
 ## Subscription & Pricing
 
@@ -184,7 +184,7 @@ All channels respect:
 
 - **Explainability**: All recommendations include clear reasoning chains
 - **Autonomy**: Agents use NewsData.io and Serper search/scrape tools for autonomous web research - direct API integration without browser dependency
-- **Multi-Model Routing**: Agents distributed across 7 Bedrock models by capability and RPM budget (Nova Micro, Nova Lite, Nemotron 3 Super, GPT-OSS 120B, Kimi K2 for tool-capable stages; Llama 3.3 70B for non-tool stages; Nova 2 Lite as fallback)
+- **Multi-Model Routing**: Agents distributed across 7 capability buckets on Nebius Token Factory (NVIDIA Nemotron 3 Super for agentic stages; Qwen3-30B/235B for fast and analytical stages; GPT-OSS 120B for reasoning; DeepSeek-V4-Pro for deep reasoning; Kimi K3 for non-tool stages; MiniMax M3 for portfolio decisions)
 - **Observability**: CloudWatch metrics, alarms, and per-analysis cost tracking
 - **Memory**: Historical agent signals stored in Aurora PostgreSQL for closed-loop learning
 - **Resilience**: Graceful degradation - partial failures don't crash the pipeline; consensus can fail (refuses to recommend under high uncertainty)

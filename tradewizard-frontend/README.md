@@ -414,4 +414,4 @@ CMD ["npm", "start"]
 
 ## License
 
-This project is part of the TradeWizard platform. All rights reserved.
+MIT. See [../LICENSE](../LICENSE).
