@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"polymarket-api-docs": {
+			"url": "https://docs.polymarket.com/mcp",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

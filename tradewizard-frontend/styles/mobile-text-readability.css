@@ -1,0 +1,413 @@
+/* Mobile Text Readability Optimizations */
+/* Task 17.3: Ensure text readability on mobile */
+/* Requirements: 14.4 */
+
+/* 
+ * Minimum font sizes for mobile devices
+ * - Body text: 14px minimum
+ * - Labels: 12px minimum
+ * - Ensure proper contrast ratios for accessibility
+ * - Number formatting optimized for mobile screens
+ */
+
+/* Base mobile font sizes */
+@media (max-width: 768px) {
+  /* Body text minimum 14px */
+  body {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Ensure all text elements meet minimum sizes */
+  p, span, div {
+    font-size: max(14px, 1em);
+  }
+
+  /* Labels minimum 12px */
+  label,
+  .label,
+  [class*="label"],
+  .text-xs {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  /* Small text (like captions) minimum 12px */
+  small,
+  .text-sm {
+    font-size: max(12px, 0.875rem) !important;
+  }
+
+  /* Headings - ensure readability */
+  h1, .text-4xl, .text-5xl, .text-6xl {
+    font-size: max(24px, 1.5rem) !important;
+  }
+
+  h2, .text-3xl {
+    font-size: max(20px, 1.25rem) !important;
+  }
+
+  h3, .text-2xl {
+    font-size: max(18px, 1.125rem) !important;
+  }
+
+  h4, .text-xl {
+    font-size: max(16px, 1rem) !important;
+  }
+
+  h5, .text-lg {
+    font-size: max(15px, 0.9375rem) !important;
+  }
+
+  h6, .text-base {
+    font-size: max(14px, 0.875rem) !important;
+  }
+
+  /* Fix extremely small text that's below 12px */
+  .text-\[10px\] {
+    font-size: 12px !important;
+  }
+
+  /* Number formatting - ensure monospace numbers are readable */
+  .font-mono {
+    font-size: max(14px, 1em);
+    letter-spacing: -0.02em; /* Tighter spacing for better fit */
+  }
+
+  /* Large numbers (like metrics) */
+  .text-2xl.font-mono,
+  .text-3xl.font-mono {
+    font-size: max(20px, 1.25rem) !important;
+  }
+
+  /* Chart labels and axis text */
+  .recharts-text,
+  .recharts-cartesian-axis-tick-value {
+    font-size: 12px !important;
+  }
+
+  /* Tooltip text */
+  .recharts-tooltip-label,
+  .recharts-tooltip-item {
+    font-size: 12px !important;
+  }
+
+  /* Badge and pill text */
+  .badge,
+  .pill,
+  [class*="badge"],
+  [class*="pill"] {
+    font-size: max(11px, 0.6875rem) !important;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Button text */
+  button {
+    font-size: max(14px, 0.875rem) !important;
+  }
+
+  /* Input text */
+  input,
+  textarea,
+  select {
+    font-size: max(14px, 1rem) !important;
+  }
+}
+
+/* Contrast ratio improvements for accessibility */
+@media (max-width: 768px) {
+  /* Ensure text meets WCAG AA standards (4.5:1 for normal text, 3:1 for large text) */
+  
+  /* Primary text - white on dark background */
+  .text-white {
+    color: #FFFFFF; /* Contrast ratio: 21:1 on #0A0A0B */
+  }
+
+  /* Secondary text - light gray */
+  .text-gray-300 {
+    color: #D1D5DB; /* Improved contrast */
+  }
+
+  .text-gray-400 {
+    color: #B0B5BD; /* Improved from #9CA3AF for better contrast */
+  }
+
+  /* Tertiary text - medium gray */
+  .text-gray-500 {
+    color: #8B9099; /* Improved from #6B7280 for better contrast */
+  }
+
+  /* Success/positive text */
+  .text-emerald-400 {
+    color: #4ADE80; /* High contrast green */
+  }
+
+  /* Warning text */
+  .text-yellow-400 {
+    color: #FACC15; /* High contrast yellow */
+  }
+
+  /* Error/negative text */
+  .text-red-400 {
+    color: #F87171; /* High contrast red */
+  }
+
+  /* Info/primary text */
+  .text-blue-400 {
+    color: #60A5FA; /* High contrast blue */
+  }
+
+  .text-indigo-400 {
+    color: #818CF8; /* High contrast indigo */
+  }
+
+  .text-purple-400 {
+    color: #C084FC; /* High contrast purple */
+  }
+}
+
+/* Number formatting optimizations for mobile */
+@media (max-width: 768px) {
+  /* Compact number display */
+  .compact-number {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  /* ROI and percentage displays */
+  .roi-display,
+  .percentage-display {
+    font-size: max(16px, 1rem) !important;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Large metric displays */
+  .metric-value {
+    font-size: max(20px, 1.25rem) !important;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  /* Price displays */
+  .price-display {
+    font-size: max(14px, 0.875rem) !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Ensure currency symbols are visible */
+  .currency-symbol {
+    font-size: 0.9em;
+    opacity: 0.9;
+  }
+}
+
+/* Line height adjustments for better readability */
+@media (max-width: 768px) {
+  /* Body text */
+  p {
+    line-height: 1.6;
+  }
+
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.3;
+  }
+
+  /* Compact text (like in cards) */
+  .compact-text {
+    line-height: 1.4;
+  }
+
+  /* List items */
+  li {
+    line-height: 1.5;
+  }
+}
+
+/* Touch target improvements for text-based interactions */
+@media (max-width: 768px) {
+  /* Ensure clickable text has adequate touch targets */
+  a,
+  button,
+  [role="button"],
+  .clickable {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+  }
+
+  /* Exception for inline links */
+  p a,
+  span a {
+    min-height: auto;
+    min-width: auto;
+    padding: 0;
+  }
+}
+
+/* Specific component overrides for Performance components */
+@media (max-width: 768px) {
+  /* AccuracyMetrics component */
+  .accuracy-percentage {
+    font-size: max(24px, 1.5rem) !important;
+  }
+
+  .accuracy-label {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  /* InvestmentSimulator component */
+  .investment-input {
+    font-size: max(16px, 1rem) !important; /* Prevent zoom on iOS */
+  }
+
+  .total-pl-value {
+    font-size: max(24px, 1.5rem) !important;
+  }
+
+  .metric-card-label {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  /* RecommendationTimeline component */
+  .timeline-direction-label {
+    font-size: max(13px, 0.8125rem) !important;
+  }
+
+  .timeline-timestamp {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  .timeline-roi {
+    font-size: max(16px, 1rem) !important;
+  }
+
+  .timeline-metric-value {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  /* RiskMetrics component */
+  .risk-metric-value {
+    font-size: max(24px, 1.5rem) !important;
+  }
+
+  .risk-metric-label {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  /* PriceChart component */
+  .chart-legend-text {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  .chart-tooltip-label {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  .chart-tooltip-value {
+    font-size: max(13px, 0.8125rem) !important;
+  }
+
+  /* ClosedMarketsGrid component */
+  .market-card-title {
+    font-size: max(15px, 0.9375rem) !important;
+    line-height: 1.4;
+  }
+
+  .market-card-subtitle {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  /* BaselineComparison component */
+  .baseline-label {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  .baseline-value {
+    font-size: max(16px, 1rem) !important;
+  }
+
+  /* CalibrationAnalysis component */
+  .calibration-label {
+    font-size: max(12px, 0.75rem) !important;
+  }
+
+  .calibration-value {
+    font-size: max(14px, 0.875rem) !important;
+  }
+}
+
+/* Prevent text from being too small in any context */
+@media (max-width: 768px) {
+  * {
+    min-font-size: 12px;
+  }
+
+  /* Override any inline styles that set font size below minimum */
+  [style*="font-size"] {
+    font-size: max(12px, var(--font-size, 1em)) !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) and (max-width: 768px) {
+  /* Increase contrast for all text */
+  .text-gray-400 {
+    color: #C0C5CD;
+  }
+
+  .text-gray-500 {
+    color: #9BA1A9;
+  }
+
+  /* Ensure borders are visible */
+  [class*="border-white/"] {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+/* Dark mode specific adjustments (if needed) */
+@media (prefers-color-scheme: dark) and (max-width: 768px) {
+  /* Ensure text remains readable in dark mode */
+  body {
+    color: #EDEDED;
+  }
+
+  /* Adjust gray tones for better readability */
+  .text-gray-400 {
+    color: #B0B5BD;
+  }
+
+  .text-gray-500 {
+    color: #8B9099;
+  }
+}
+
+/* Accessibility: Respect user font size preferences */
+@media (max-width: 768px) {
+  /* Use relative units where possible */
+  html {
+    font-size: 16px; /* Base size */
+  }
+
+  /* Allow user zoom */
+  meta[name="viewport"] {
+    content: "width=device-width, initial-scale=1, maximum-scale=5";
+  }
+}
+
+/* Print styles - ensure readability when printing */
+@media print {
+  body {
+    font-size: 12pt;
+    color: #000;
+  }
+
+  .text-gray-400,
+  .text-gray-500 {
+    color: #666;
+  }
+}

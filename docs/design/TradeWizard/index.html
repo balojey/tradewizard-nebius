@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TradeWizard - Tier Experience Overview</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;padding:2rem 1.5rem}
+a{color:inherit;text-decoration:none}
+.header{max-width:1200px;margin:0 auto 2.5rem}
+.logo{font-family:var(--font-display);font-weight:700;font-size:1.5rem;display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem}
+.logo .dot{width:8px;height:8px;border-radius:50%;background:var(--ai);box-shadow:0 0 8px var(--ai)}
+.subtitle{color:var(--muted);font-size:.85rem}
+.tiers{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:1.5rem}
+.tier-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.tier-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.tier-name{font-family:var(--font-display);font-weight:700;font-size:1.1rem}
+.tier-meta{font-size:.7rem;color:var(--muted);font-family:var(--font-mono)}
+.tier-col.free .tier-header{border-top:3px solid var(--muted)}
+.tier-col.starter .tier-header{border-top:3px solid var(--accent)}
+.tier-col.pro .tier-header{border-top:3px solid var(--ai)}
+.tier-col.elite .tier-header{border-top:3px solid var(--yes)}
+.tier-links{padding:1rem 1.5rem;display:flex;flex-direction:column;gap:.5rem}
+.tier-link{display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;border-radius:8px;transition:background .15s;font-size:.8rem}
+.tier-link:hover{background:var(--surface-2)}
+.tier-link .icon{width:28px;height:28px;border-radius:6px;background:var(--surface-2);display:grid;place-items:center;font-size:.7rem;flex-shrink:0}
+.tier-link .link-name{font-weight:500}
+.shared{max-width:1200px;margin:2rem auto 0;display:flex;gap:1rem;flex-wrap:wrap}
+.shared a{font-size:.75rem;color:var(--muted);padding:.4rem .75rem;border:1px solid var(--border);border-radius:6px;transition:border-color .15s}
+.shared a:hover{border-color:var(--muted)}
+.theme-toggle{position:fixed;top:1rem;right:1rem;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center;z-index:200}
+.theme-toggle:hover{border-color:var(--muted)}
+.theme-toggle svg{width:18px;height:18px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+</style>
+</head>
+<body>
+<button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+
+<div class="header">
+  <div class="logo"><span class="dot"></span> TradeWizard</div>
+  <p class="subtitle">AI-powered prediction markets - view the platform as each subscription tier experiences it</p>
+</div>
+
+<div class="tiers">
+  <div class="tier-col free">
+    <div class="tier-header">
+      <span class="tier-name">Free</span>
+      <span class="tier-meta">$0 · 5 credits</span>
+    </div>
+    <div class="tier-links">
+      <a href="free/markets.html" class="tier-link"><span class="icon">📊</span><span class="link-name">Markets Feed</span></a>
+      <a href="free/market-detail.html" class="tier-link"><span class="icon">📈</span><span class="link-name">Market Detail</span></a>
+      <a href="free/portfolio.html" class="tier-link"><span class="icon">💼</span><span class="link-name">Portfolio</span></a>
+      <a href="free/insights.html" class="tier-link"><span class="icon">🧠</span><span class="link-name">AI Insights</span></a>
+      <a href="free/subscription.html" class="tier-link"><span class="icon">💳</span><span class="link-name">Subscription</span></a>
+      <a href="free/settings.html" class="tier-link"><span class="icon">⚙️</span><span class="link-name">Settings</span></a>
+    </div>
+  </div>
+
+  <div class="tier-col starter">
+    <div class="tier-header">
+      <span class="tier-name">Starter</span>
+      <span class="tier-meta">$19/mo · 50 credits</span>
+    </div>
+    <div class="tier-links">
+      <a href="starter/markets.html" class="tier-link"><span class="icon">📊</span><span class="link-name">Markets Feed</span></a>
+      <a href="starter/market-detail.html" class="tier-link"><span class="icon">📈</span><span class="link-name">Market Detail</span></a>
+      <a href="starter/portfolio.html" class="tier-link"><span class="icon">💼</span><span class="link-name">Portfolio</span></a>
+      <a href="starter/insights.html" class="tier-link"><span class="icon">🧠</span><span class="link-name">AI Insights</span></a>
+      <a href="starter/subscription.html" class="tier-link"><span class="icon">💳</span><span class="link-name">Subscription</span></a>
+      <a href="starter/settings.html" class="tier-link"><span class="icon">⚙️</span><span class="link-name">Settings</span></a>
+    </div>
+  </div>
+
+  <div class="tier-col pro">
+    <div class="tier-header">
+      <span class="tier-name">Pro</span>
+      <span class="tier-meta">$49/mo · 200 credits</span>
+    </div>
+    <div class="tier-links">
+      <a href="pro/markets.html" class="tier-link"><span class="icon">📊</span><span class="link-name">Markets Feed</span></a>
+      <a href="pro/market-detail.html" class="tier-link"><span class="icon">📈</span><span class="link-name">Market Detail</span></a>
+      <a href="pro/portfolio.html" class="tier-link"><span class="icon">💼</span><span class="link-name">Portfolio</span></a>
+      <a href="portfolio-manager.html" class="tier-link"><span class="icon">🤖</span><span class="link-name">Portfolio Manager (3 markets)</span></a>
+      <a href="pro/insights.html" class="tier-link"><span class="icon">🧠</span><span class="link-name">AI Insights</span></a>
+      <a href="pro/subscription.html" class="tier-link"><span class="icon">💳</span><span class="link-name">Subscription</span></a>
+      <a href="pro/settings.html" class="tier-link"><span class="icon">⚙️</span><span class="link-name">Settings</span></a>
+    </div>
+  </div>
+
+  <div class="tier-col elite">
+    <div class="tier-header">
+      <span class="tier-name">Elite</span>
+      <span class="tier-meta">$149/mo · Unlimited</span>
+    </div>
+    <div class="tier-links">
+      <a href="elite/markets.html" class="tier-link"><span class="icon">📊</span><span class="link-name">Markets Feed</span></a>
+      <a href="elite/market-detail.html" class="tier-link"><span class="icon">📈</span><span class="link-name">Market Detail</span></a>
+      <a href="elite/portfolio.html" class="tier-link"><span class="icon">💼</span><span class="link-name">Portfolio</span></a>
+      <a href="portfolio-manager.html" class="tier-link"><span class="icon">🤖</span><span class="link-name">Portfolio Manager (10 markets)</span></a>
+      <a href="persona-selection.html" class="tier-link"><span class="icon">🎭</span><span class="link-name">Persona Selection (customizable)</span></a>
+      <a href="elite/insights.html" class="tier-link"><span class="icon">🧠</span><span class="link-name">AI Insights</span></a>
+      <a href="elite/subscription.html" class="tier-link"><span class="icon">💳</span><span class="link-name">Subscription</span></a>
+      <a href="elite/settings.html" class="tier-link"><span class="icon">⚙️</span><span class="link-name">Settings</span></a>
+    </div>
+  </div>
+</div>
+
+<div class="shared">
+  <a href="portfolio-manager.html">Portfolio Manager</a>
+  <a href="persona-selection.html">Persona Selection</a>
+  <a href="landing.html">Landing Page</a>
+  <a href="auth.html">Sign In</a>
+</div>
+
+<script>
+(function(){const t=localStorage.getItem('tw-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)})})();
+</script>
+</body>
+</html>

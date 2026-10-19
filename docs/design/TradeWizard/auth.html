@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign In - TradeWizard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}
+a{color:inherit;text-decoration:none}
+
+.auth-container{width:100%;max-width:400px}
+.logo{font-family:var(--font-display);font-weight:700;font-size:1.5rem;display:flex;align-items:center;gap:.5rem;justify-content:center;margin-bottom:.5rem}
+.logo .ai-dot{width:8px;height:8px;border-radius:50%;background:var(--ai);box-shadow:0 0 8px var(--ai)}
+.tagline{text-align:center;font-size:.8rem;color:var(--muted);margin-bottom:2.5rem}
+
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem}
+.auth-card h2{font-family:var(--font-display);font-size:1.125rem;font-weight:700;margin-bottom:.25rem}
+.auth-card .sub{font-size:.8rem;color:var(--muted);margin-bottom:1.5rem}
+
+.form-group{margin-bottom:1.25rem}
+.form-group label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:.375rem;font-weight:500}
+.form-group input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;font-size:.875rem;color:var(--fg);font-family:var(--font-body);transition:border-color .15s;outline:none}
+.form-group input:focus{border-color:var(--ai)}
+.form-group input::placeholder{color:var(--muted)}
+
+.submit-btn{width:100%;padding:.75rem;border:none;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;background:var(--ai);color:var(--bg);transition:opacity .15s;margin-bottom:1rem}
+.submit-btn:hover{opacity:.85}
+
+.divider{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;font-size:.7rem;color:var(--muted)}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.alt-text{text-align:center;font-size:.75rem;color:var(--muted)}
+.alt-text a{color:var(--accent);font-weight:500}
+
+/* Sent state */
+.sent-state{display:none;text-align:center;padding:1rem 0}
+.sent-state.active{display:block}
+.sent-state .icon{width:48px;height:48px;border-radius:50%;background:oklch(58% 0.18 295 / .1);border:1px solid oklch(58% 0.18 295 / .3);display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem;font-size:1.25rem}
+.sent-state h3{font-size:1rem;font-weight:600;margin-bottom:.375rem}
+.sent-state p{font-size:.8rem;color:var(--muted);line-height:1.5;margin-bottom:1.25rem}
+.sent-state .email-display{font-family:var(--font-mono);font-size:.8rem;color:var(--fg);background:var(--bg);padding:.5rem 1rem;border-radius:6px;display:inline-block;margin-bottom:1.25rem}
+.resend-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:.5rem 1rem;font-size:.75rem;color:var(--muted);cursor:pointer;transition:border-color .15s}
+.resend-btn:hover{border-color:var(--muted);color:var(--fg)}
+
+.footer-note{text-align:center;font-size:.7rem;color:var(--muted);margin-top:1.5rem;line-height:1.5}
+
+@media(max-width:430px){
+  .auth-card{padding:1.5rem}
+}
+</style>
+</head>
+<body>
+
+<div class="auth-container">
+  <div class="logo"><span class="ai-dot"></span> TradeWizard</div>
+  <p class="tagline">AI-powered intelligence for prediction markets</p>
+
+  <div class="auth-card">
+    <div id="formState">
+      <h2>Sign in to TradeWizard</h2>
+      <p class="sub">No password needed - we'll send you a magic link</p>
+      <form onsubmit="sendLink(event)">
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <input type="email" id="email" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        <button type="submit" class="submit-btn">Send Magic Link</button>
+      </form>
+      <div class="divider">or</div>
+      <p class="alt-text">New here? Enter your email above - we'll create your account automatically with <strong>5 free credits</strong></p>
+    </div>
+
+    <div class="sent-state" id="sentState">
+      <div class="icon">✉</div>
+      <h3>Check your inbox</h3>
+      <p>We sent a magic link to:</p>
+      <div class="email-display" id="sentEmail">-</div>
+      <p>Click the link to sign in. It expires in 15 minutes.</p>
+      <button class="resend-btn" onclick="resend()">Resend link</button>
+    </div>
+  </div>
+
+  <p class="footer-note">By continuing, you agree to our Terms of Service and Privacy Policy.<br>No password is stored - authentication is via secure magic link only.</p>
+</div>
+
+<script>
+function sendLink(e){
+  e.preventDefault();
+  const email=document.getElementById('email').value;
+  document.getElementById('sentEmail').textContent=email;
+  document.getElementById('formState').style.display='none';
+  document.getElementById('sentState').classList.add('active');
+}
+function resend(){
+  const btn=document.querySelector('.resend-btn');
+  btn.textContent='Sent!';btn.disabled=true;
+  setTimeout(()=>{btn.textContent='Resend link';btn.disabled=false},3000);
+}
+(function(){const t=localStorage.getItem('tw-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t)})();
+</script>
+</body>
+</html>

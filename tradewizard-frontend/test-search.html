@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Search</title>
+</head>
+<body>
+    <h1>Test Search API</h1>
+    <input type="text" id="searchInput" placeholder="Enter search term">
+    <button onclick="testSearch()">Search</button>
+    <div id="results"></div>
+
+    <script>
+        async function testSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+            
+            try {
+                const response = await fetch(`/api/polymarket/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                
+                document.getElementById('results').innerHTML = `
+                    <h2>Results:</h2>
+                    <p>Markets found: ${data.markets?.length || 0}</p>
+                    <p>Events found: ${data.events?.length || 0}</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('results').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

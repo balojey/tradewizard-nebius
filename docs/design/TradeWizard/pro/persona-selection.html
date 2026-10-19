@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-tier="pro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trading Persona - TradeWizard Pro</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --no:oklch(65% 0.18 25);
+  --warning:oklch(78% 0.14 85);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;--max-w:1200px;--nav-bg:oklch(14% 0.015 260 / .85);
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);--surface:oklch(100% 0 0);--surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);--muted:oklch(45% 0.012 260);--border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);--ai:oklch(48% 0.18 295);--yes:oklch(45% 0.14 155);
+  --no:oklch(55% 0.18 25);--warning:oklch(55% 0.14 85);--nav-bg:oklch(98% 0.003 260 / .85);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 clamp(1rem,4vw,2rem)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-weight:700;font-size:1.125rem;display:flex;align-items:center;gap:.5rem}
+.nav-logo .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--ai);box-shadow:0 0 6px var(--ai)}
+.nav-links{display:flex;gap:1.5rem;font-size:.8125rem}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover,.nav-links a.active{color:var(--fg)}
+.nav-right{display:flex;align-items:center;gap:1rem}
+.credit-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.25rem .625rem;border-radius:6px}
+.wallet-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);background:var(--surface);border:1px solid var(--border);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;display:flex;align-items:center;gap:.5rem}
+.wallet-sub{font-size:.6rem;color:var(--muted)}
+.wallet-detail{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-width:180px;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2);display:flex;flex-direction:column;gap:.375rem;z-index:10}
+.wallet-badge:hover .wallet-detail{opacity:1;pointer-events:auto}
+.wd-row{display:flex;justify-content:space-between;font-size:.7rem}
+.wd-lbl{color:var(--muted)}
+.wd-val{font-weight:600}
+.wd-avail .wd-val{color:var(--yes)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center}
+.theme-toggle svg{width:16px;height:16px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+</style>
+<style>
+.page{max-width:900px;margin:0 auto;padding:2rem clamp(1rem,4vw,2rem)}
+.page h1{font-family:var(--font-display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.25rem}
+.page-sub{font-size:.8rem;color:var(--muted);margin-bottom:2rem}
+
+.persona-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:1rem;margin-bottom:2rem}
+.persona-card{background:var(--surface);border:2px solid var(--border);border-radius:var(--radius);padding:1.5rem;cursor:pointer;transition:all .2s;position:relative}
+.persona-card:hover{border-color:var(--muted)}
+.persona-card.selected{border-color:var(--ai);box-shadow:0 0 0 1px var(--ai),0 4px 20px oklch(58% 0.18 295 / .15)}
+.persona-card .check{position:absolute;top:1rem;right:1rem;width:22px;height:22px;border-radius:50%;background:var(--ai);display:none;align-items:center;justify-content:center}
+.persona-card.selected .check{display:flex}
+.persona-card .check svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:3}
+.persona-icon-wrap{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-size:1.25rem;margin-bottom:1rem}
+.persona-card[data-persona="sniper"] .persona-icon-wrap{background:oklch(65% 0.18 25 / .12)}
+.persona-card[data-persona="scalper"] .persona-icon-wrap{background:oklch(78% 0.14 85 / .12)}
+.persona-card[data-persona="contrarian"] .persona-icon-wrap{background:oklch(58% 0.18 295 / .12)}
+.persona-card[data-persona="catalyst"] .persona-icon-wrap{background:oklch(62% 0.20 260 / .12)}
+.persona-card[data-persona="hedge"] .persona-icon-wrap{background:oklch(72% 0.16 155 / .12)}
+.persona-card[data-persona="momentum"] .persona-icon-wrap{background:oklch(78% 0.14 85 / .12)}
+.persona-name{font-weight:600;font-size:.9rem;margin-bottom:.25rem}
+.risk-badge{font-size:.6rem;text-transform:uppercase;letter-spacing:.04em;padding:.15rem .4rem;border-radius:3px;font-weight:600;display:inline-block;margin-bottom:.75rem}
+.risk-badge.aggressive{background:oklch(65% 0.18 25 / .12);color:var(--no)}
+.risk-badge.moderate{background:oklch(78% 0.14 85 / .12);color:var(--warning)}
+.risk-badge.conservative{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.persona-philosophy{font-size:.75rem;color:oklch(80% 0.005 260);line-height:1.5;margin-bottom:1rem}
+[data-theme="light"] .persona-philosophy{color:oklch(40% 0.01 260)}
+.persona-stats{display:flex;gap:1rem;font-size:.65rem;color:var(--muted)}
+.persona-stats span{display:flex;flex-direction:column;gap:.125rem}
+.persona-stats .s-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.04em}
+.persona-stats .s-value{font-family:var(--font-mono);color:var(--fg);font-weight:500}
+
+/* Pro notice */
+.pro-notice{background:oklch(58% 0.18 295 / .06);border:1px solid oklch(58% 0.18 295 / .15);border-radius:8px;padding:.75rem 1rem;font-size:.75rem;color:var(--muted);margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem}
+.pro-notice strong{color:var(--ai)}
+
+/* Customize section - visible but locked for Pro */
+.customize-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:2rem;position:relative}
+.customize-section h3{font-size:.875rem;font-weight:600;margin-bottom:.25rem}
+.customize-section .section-desc{font-size:.7rem;color:var(--muted);margin-bottom:1.25rem}
+.slider-row{display:flex;align-items:center;gap:1rem;padding:.75rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .4);opacity:.4;pointer-events:none}
+.slider-row:last-child{border-bottom:none}
+.slider-label{flex:0 0 140px;font-size:.75rem;font-weight:500}
+.slider-label .s-desc{font-size:.65rem;color:var(--muted);font-weight:400;margin-top:.125rem}
+.slider-input{flex:1;accent-color:var(--ai);width:100%}
+.slider-val{font-family:var(--font-mono);font-size:.75rem;width:50px;text-align:right;color:var(--ai)}
+
+/* Locked overlay for sliders */
+.locked-overlay{position:absolute;inset:0;border-radius:var(--radius);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;background:oklch(14% 0.015 260 / .7);backdrop-filter:blur(2px);z-index:5}
+[data-theme="light"] .locked-overlay{background:oklch(98% 0.003 260 / .75)}
+.locked-overlay .lock-icon{font-size:1.25rem}
+.locked-overlay .lock-text{font-size:.75rem;color:var(--muted);text-align:center}
+.locked-overlay .lock-cta{font-size:.75rem;color:#fff;background:var(--ai);padding:.4rem 1rem;border-radius:6px;text-decoration:none;font-weight:600;transition:opacity .15s}
+.locked-overlay .lock-cta:hover{opacity:.85}
+
+.save-btn{background:var(--ai);color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+.save-btn:hover{opacity:.85}
+
+@media(max-width:768px){
+  .nav-links{display:none}
+  .persona-grid{grid-template-columns:1fr}
+  .slider-row{flex-direction:column;align-items:flex-start;gap:.5rem}
+  .slider-label{flex:none}
+}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><span class="ai-dot"></span> TradeWizard</a>
+    <div class="nav-links">
+      <a href="markets.html">Markets</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="../portfolio-manager.html">PM</a>
+      <a href="insights.html">Insights</a>
+      <a href="subscription.html">Plan</a>
+      <a href="settings.html" class="active">Settings</a>
+    </div>
+    <div class="nav-right">
+      <span class="wallet-badge"><span class="wallet-text">$1,240</span><span class="wallet-sub">$790 avail</span><span class="wallet-detail"><span class="wd-row"><span class="wd-lbl">Wallet</span><span class="wd-val">$1,240.00</span></span><span class="wd-row"><span class="wd-lbl">Committed</span><span class="wd-val">$450.00</span></span><span class="wd-row wd-avail"><span class="wd-lbl">Available</span><span class="wd-val">$790.00</span></span></span></span>
+      <span class="credit-badge">47/200 credits</span>
+      <button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+  <h1>Trading Persona</h1>
+  <p class="page-sub">Choose the strategy that governs all Portfolio Manager sessions. One persona applies globally.</p>
+
+  <div class="pro-notice">
+    <span>ℹ️</span> <span>You're on <strong>Pro</strong> - parameters are defaults. Upgrade to Elite for full customization.</span>
+  </div>
+
+  <div class="persona-grid">
+    <div class="persona-card" data-persona="sniper" onclick="selectPersona(this)">
+      <span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></span>
+      <div class="persona-icon-wrap">🎯</div>
+      <div class="persona-name">The Sniper</div>
+      <span class="risk-badge aggressive">Aggressive</span>
+      <p class="persona-philosophy">Patient assassin. Only strikes on high-conviction setups with edge &gt;10%. Rare trades, large positions, decisive exits.</p>
+      <div class="persona-stats">
+        <span><span class="s-label">Frequency</span><span class="s-value">1–2/week</span></span>
+        <span><span class="s-label">Position</span><span class="s-value">40–60%</span></span>
+        <span><span class="s-label">Hold</span><span class="s-value">Days–weeks</span></span>
+      </div>
+    </div>
+
+    <div class="persona-card selected" data-persona="scalper" onclick="selectPersona(this)">
+      <span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></span>
+      <div class="persona-icon-wrap">⚡</div>
+      <div class="persona-name">The Scalper</div>
+      <span class="risk-badge moderate">Moderate</span>
+      <p class="persona-philosophy">Speed demon. Exploits small edges rapidly with tight stops. High frequency, small positions, quick in-and-out.</p>
+      <div class="persona-stats">
+        <span><span class="s-label">Frequency</span><span class="s-value">Daily</span></span>
+        <span><span class="s-label">Position</span><span class="s-value">10–25%</span></span>
+        <span><span class="s-label">Hold</span><span class="s-value">Hours–1 day</span></span>
+      </div>
+    </div>
+
+    <div class="persona-card" data-persona="contrarian" onclick="selectPersona(this)">
+      <span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></span>
+      <div class="persona-icon-wrap">🔄</div>
+      <div class="persona-name">The Contrarian</div>
+      <span class="risk-badge aggressive">Aggressive</span>
+      <p class="persona-philosophy">Rebel thinker. Fades crowd consensus when agents detect overreaction. Bets against the herd with conviction.</p>
+      <div class="persona-stats">
+        <span><span class="s-label">Frequency</span><span class="s-value">2–4/week</span></span>
+        <span><span class="s-label">Position</span><span class="s-value">30–50%</span></span>
+        <span><span class="s-label">Hold</span><span class="s-value">Days</span></span>
+      </div>
+    </div>
+
+    <div class="persona-card" data-persona="catalyst" onclick="selectPersona(this)">
+      <span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></span>
+      <div class="persona-icon-wrap">📡</div>
+      <div class="persona-name">The Catalyst Hunter</div>
+      <span class="risk-badge moderate">Moderate</span>
+      <p class="persona-philosophy">Event detective. Positions before scheduled catalysts (debates, rulings, data releases). Time-sensitive, focused entries.</p>
+      <div class="persona-stats">
+        <span><span class="s-label">Frequency</span><span class="s-value">Event-driven</span></span>
+        <span><span class="s-label">Position</span><span class="s-value">20–40%</span></span>
+        <span><span class="s-label">Hold</span><span class="s-value">Hours–days</span></span>
+      </div>
+    </div>
+
+    <div class="persona-card" data-persona="hedge" onclick="selectPersona(this)">
+      <span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></span>
+      <div class="persona-icon-wrap">♟️</div>
+      <div class="persona-name">The Hedge Architect</div>
+      <span class="risk-badge conservative">Conservative</span>
+      <p class="persona-philosophy">Chess master. Builds multi-position spreads to reduce directional risk. Methodical, balanced, capital-preserving.</p>
+      <div class="persona-stats">
+        <span><span class="s-label">Frequency</span><span class="s-value">2–3/week</span></span>
+        <span><span class="s-label">Position</span><span class="s-value">15–30%</span></span>
+        <span><span class="s-label">Hold</span><span class="s-value">Days–weeks</span></span>
+      </div>
+    </div>
+
+    <div class="persona-card" data-persona="momentum" onclick="selectPersona(this)">
+      <span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg></span>
+      <div class="persona-icon-wrap">🌊</div>
+      <div class="persona-name">The Momentum Rider</div>
+      <span class="risk-badge aggressive">Aggressive</span>
+      <p class="persona-philosophy">Wave surfer. Follows strong trends with pyramiding. Adds to winners, cuts losers fast, rides until momentum breaks.</p>
+      <div class="persona-stats">
+        <span><span class="s-label">Frequency</span><span class="s-value">3–5/week</span></span>
+        <span><span class="s-label">Position</span><span class="s-value">25–50%</span></span>
+        <span><span class="s-label">Hold</span><span class="s-value">Days</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customization visible but locked for Pro -->
+  <div class="customize-section">
+    <h3>Customize Parameters</h3>
+    <p class="section-desc">Fine-tune your persona's behavior</p>
+    <div class="slider-row">
+      <div class="slider-label">Exit Sensitivity<div class="s-desc">How quickly to exit losing positions</div></div>
+      <input type="range" class="slider-input" min="1" max="5" value="3" disabled>
+      <span class="slider-val">3/5</span>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Monitoring Freq<div class="s-desc">How often to check positions (minutes)</div></div>
+      <input type="range" class="slider-input" min="5" max="60" step="5" value="15" disabled>
+      <span class="slider-val">15m</span>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Sizing Aggression<div class="s-desc">Position size multiplier</div></div>
+      <input type="range" class="slider-input" min="5" max="20" value="10" disabled>
+      <span class="slider-val">1.0x</span>
+    </div>
+    <div class="locked-overlay">
+      <span class="lock-icon">🔒</span>
+      <span class="lock-text">Parameter tuning requires Elite</span>
+      <a href="../subscription.html" class="lock-cta">Upgrade to Elite</a>
+    </div>
+  </div>
+
+  <button class="save-btn">Save Persona</button>
+</div>
+
+<script>
+function selectPersona(el){document.querySelectorAll('.persona-card').forEach(c=>c.classList.remove('selected'));el.classList.add('selected')}
+document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)});
+(function(){const t=localStorage.getItem('tw-theme');if(t)document.documentElement.setAttribute('data-theme',t)})();
+</script>
+</body>
+</html>

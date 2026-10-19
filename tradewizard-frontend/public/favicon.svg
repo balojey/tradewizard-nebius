@@ -1,0 +1,39 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1035"/>
+      <stop offset="100%" stop-color="#0c0618"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="40%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e879f9"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background with smooth rounded square -->
+  <rect x="4" y="4" width="56" height="56" rx="16" ry="16" fill="url(#bg)"/>
+  
+  <!-- Inner glow ring -->
+  <rect x="4" y="4" width="56" height="56" rx="16" ry="16"
+        fill="none" stroke="url(#spark)" stroke-width="1" opacity="0.2"/>
+
+  <!-- Upward arrow / chart motif - represents trading + wizard's hat abstract -->
+  <g fill="none" stroke="url(#mark)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Rising trend line -->
+    <polyline points="16,44 26,34 34,38 48,20"/>
+    <!-- Arrow head -->
+    <polyline points="40,20 48,20 48,28"/>
+  </g>
+
+  <!-- Wizard sparkle dot top-right -->
+  <circle cx="48" cy="16" r="2" fill="url(#spark)" opacity="0.8"/>
+  <!-- Small sparkle -->
+  <circle cx="18" cy="18" r="1.2" fill="#c4b5fd" opacity="0.5"/>
+  <!-- Tiny sparkle -->
+  <circle cx="44" cy="46" r="1" fill="#e879f9" opacity="0.4"/>
+</svg>

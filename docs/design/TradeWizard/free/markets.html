@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Markets - TradeWizard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --no:oklch(65% 0.18 25);
+  --warning:oklch(78% 0.14 85);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+  --max-w:1200px;
+  --nav-bg:oklch(14% 0.015 260 / .85);
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+  --no:oklch(55% 0.18 25);
+  --warning:oklch(55% 0.14 85);
+  --nav-bg:oklch(98% 0.003 260 / .85);
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+
+/* Shared nav */
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 clamp(1rem,4vw,2rem)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-weight:700;font-size:1.125rem;display:flex;align-items:center;gap:.5rem}
+.nav-logo .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--ai);box-shadow:0 0 6px var(--ai)}
+.nav-links{display:flex;gap:1.5rem;font-size:.8125rem}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover,.nav-links a.active{color:var(--fg)}
+.nav-links a.active{font-weight:600}
+.nav-right{display:flex;align-items:center;gap:1rem}
+.credit-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;transition:transform .15s}
+.wallet-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);background:var(--surface);border:1px solid var(--border);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;display:flex;align-items:center;gap:.5rem}
+.credit-badge.pulse{animation:creditPulse .4s ease}
+@keyframes creditPulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
+.topup{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.7rem;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2)}
+.topup a{color:var(--accent);font-weight:600;text-decoration:none}
+.topup a:hover{text-decoration:underline}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center;transition:border-color .15s}
+.theme-toggle:hover{border-color:var(--muted)}
+.theme-toggle svg{width:16px;height:16px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+a{color:inherit;text-decoration:none}
+
+/* Layout */
+.page{max-width:var(--max-w);margin:0 auto;padding:1.5rem clamp(1rem,4vw,2rem)}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem}
+.page-header h1{font-family:var(--font-display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em}
+
+/* Search */
+.search-bar{display:flex;align-items:center;gap:.5rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.5rem .75rem;width:280px;transition:border-color .15s}
+.search-bar:focus-within{border-color:var(--accent)}
+.search-bar svg{width:16px;height:16px;color:var(--muted);flex-shrink:0}
+.search-bar input{background:none;border:none;outline:none;color:var(--fg);font-size:.8125rem;width:100%;font-family:var(--font-body)}
+.search-bar input::placeholder{color:var(--muted)}
+
+/* Filters */
+.filters{display:flex;gap:.5rem;margin-bottom:1.5rem;overflow-x:auto;padding-bottom:.25rem;-webkit-overflow-scrolling:touch}
+.filters::-webkit-scrollbar{display:none}
+.filter-chip{white-space:nowrap;font-size:.75rem;padding:.375rem .875rem;border-radius:20px;border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .15s;background:transparent}
+.filter-chip:hover{border-color:var(--muted);color:var(--fg)}
+.filter-chip.active{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+
+/* Market cards grid */
+.markets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:1rem}
+.market-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;display:flex;flex-direction:column;gap:.75rem;transition:border-color .15s;cursor:pointer}
+.market-card:hover{border-color:var(--muted)}
+.market-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem}
+.market-card-header h3{font-size:.9375rem;font-weight:600;line-height:1.35;flex:1}
+.market-card .ai-badge{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ai);background:oklch(58% 0.18 295 / .1);padding:.2rem .5rem;border-radius:4px;white-space:nowrap;font-weight:600}
+.market-meta{display:flex;gap:1rem;font-size:.75rem;color:var(--muted)}
+.market-meta span{display:flex;align-items:center;gap:.25rem}
+.market-prob-row{display:flex;align-items:center;gap:.75rem}
+.prob-bar{flex:1;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.prob-bar .fill{height:100%;border-radius:3px;background:var(--yes);transition:width .3s}
+.prob-bar .fill.no-rec{background:var(--no)}
+.carousel-card .mini-bar .fill.no-rec{background:var(--no)}
+.prob-value{font-family:var(--font-mono);font-size:1.125rem;font-weight:700;color:var(--yes);font-variant-numeric:tabular-nums;min-width:3.5rem;text-align:right}
+.market-actions{display:flex;gap:.5rem}
+.market-actions button{flex:1;padding:.5rem;border-radius:6px;border:none;font-size:.75rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+.market-actions button:hover{opacity:.8}
+.market-actions .yes-btn{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.market-actions .no-btn{background:oklch(65% 0.18 25 / .12);color:var(--no)}
+.gated-row{display:flex;align-items:center;gap:.5rem;font-size:.675rem;color:var(--muted);padding-top:.25rem}
+.gated-row .lock{opacity:.6}
+.gated-row a{color:var(--accent);font-weight:500;text-decoration:none}
+.gated-row a:hover{text-decoration:underline}
+
+/* Analysis CTA - vibrant */
+.analysis-cta{display:flex;align-items:center;justify-content:center;gap:.375rem;width:100%;padding:.625rem;border-radius:8px;border:none;background:linear-gradient(135deg,oklch(58% 0.22 295),oklch(55% 0.20 270));color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:var(--font-body);box-shadow:0 2px 12px oklch(58% 0.18 295 / .35);text-shadow:0 1px 2px oklch(0% 0 0 / .2)}
+.analysis-cta:hover{transform:translateY(-1px);box-shadow:0 4px 20px oklch(58% 0.18 295 / .5);filter:brightness(1.08)}
+.analysis-cta .cost{opacity:.85;font-weight:500}
+.analysis-cta svg{width:14px;height:14px}
+
+/* Analysis result inline */
+.analysis-result{background:oklch(58% 0.18 295 / .06);border:1px solid oklch(58% 0.18 295 / .2);border-radius:8px;padding:.75rem;display:flex;flex-direction:column;gap:.5rem}
+.analysis-result .ar-header{display:flex;align-items:center;justify-content:space-between}
+.analysis-result .ar-rec{font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:.2rem .5rem;border-radius:4px}
+.analysis-result .ar-rec.buy-yes{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.analysis-result .ar-rec.buy-no{background:oklch(65% 0.18 25 / .12);color:var(--no)}
+.analysis-result .ar-edge{font-family:var(--font-mono);font-size:.6875rem;color:var(--ai);font-variant-numeric:tabular-nums}
+.analysis-result .ar-thesis{font-size:.6875rem;color:var(--muted);line-height:1.5}
+.analysis-result .ar-meta{display:flex;align-items:center;gap:.75rem;font-size:.625rem;color:var(--muted)}
+.analysis-actions{display:flex;gap:.5rem;align-items:stretch}
+.analysis-actions .act-btn{border-radius:6px;border:none;font-weight:600;cursor:pointer;transition:all .15s;font-family:var(--font-body)}
+.analysis-actions .act-btn:hover{opacity:.85}
+.analysis-actions .act-trade{flex:2;padding:.65rem .75rem;font-size:.8rem;background:var(--yes);color:#fff;box-shadow:0 2px 8px oklch(72% 0.16 155 / .3)}
+.analysis-actions .act-trade-alt{flex:1.2;padding:.5rem .5rem;font-size:.7rem;background:oklch(65% 0.18 25 / .12);color:var(--no);border:1px solid oklch(65% 0.18 25 / .2)}
+.analysis-actions .act-refresh{flex:0 0 auto;padding:.25rem .4rem;font-size:.5rem;background:var(--surface-2);color:var(--muted);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:.15rem;border-radius:4px}
+.analysis-actions .act-refresh svg{width:8px;height:8px}
+
+/* Carousel analysis CTA */
+.carousel-card .analysis-cta{padding:.5rem;font-size:.65rem;border-radius:6px;margin-top:.375rem}
+.carousel-card .ai-rec{display:flex;flex-direction:column;gap:.375rem;margin-top:.375rem;padding:.5rem;border-radius:6px;background:oklch(58% 0.18 295 / .08);border:1px solid oklch(58% 0.18 295 / .2);font-size:.625rem;color:var(--ai)}
+.carousel-card .ai-rec .rec-top{display:flex;align-items:center;gap:.375rem;font-weight:600}
+.carousel-card .ai-rec .rec-dir{font-weight:700}
+.carousel-card .ai-rec .rec-refresh{margin-left:auto;cursor:pointer;opacity:.6;transition:opacity .15s}
+.carousel-card .ai-rec .rec-refresh:hover{opacity:1}
+.carousel-card .ai-rec .rec-thesis{font-size:.6rem;color:var(--muted);line-height:1.4}
+.carousel-card .ai-rec .rec-actions{display:flex;gap:.375rem;margin-top:.25rem;align-items:stretch}
+.carousel-card .ai-rec .rec-actions button{border-radius:4px;border:none;font-weight:600;cursor:pointer;transition:opacity .15s;font-family:var(--font-body)}
+.carousel-card .ai-rec .rec-actions button:hover{opacity:.85}
+.carousel-card .ai-rec .rec-actions .rec-buy-yes{flex:2;padding:.35rem .4rem;font-size:.65rem;background:var(--yes);color:#fff;box-shadow:0 1px 6px oklch(72% 0.16 155 / .3)}
+.carousel-card .ai-rec .rec-actions .rec-buy-no{flex:1;padding:.25rem .3rem;font-size:.55rem;background:oklch(65% 0.18 25 / .12);color:var(--no);border:1px solid oklch(65% 0.18 25 / .15)}
+
+/* Trending sidebar */
+.layout{display:grid;grid-template-columns:1fr 300px;gap:1.5rem;align-items:start}
+.sidebar{position:sticky;top:72px}
+.sidebar-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem}
+.sidebar-card h3{font-size:.8125rem;font-weight:600;margin-bottom:1rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.trending-item{display:flex;flex-direction:column;gap:.25rem;padding:.625rem 0;border-bottom:1px solid var(--border)}
+.trending-item .ti-top{display:flex;justify-content:space-between;align-items:center}
+.trending-item .ti-summary{font-size:.625rem;color:var(--ai);line-height:1.4;padding-left:.25rem;border-left:2px solid oklch(58% 0.18 295 / .3)}
+.trending-item:last-child{border-bottom:none}
+.trending-item .name{font-size:.8125rem;font-weight:500;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trending-item .change{font-family:var(--font-mono);font-size:.75rem;font-weight:600;font-variant-numeric:tabular-nums}
+.trending-item .change.up{color:var(--yes)}
+.trending-item .change.down{color:var(--no)}
+
+.sidebar-card+.sidebar-card{margin-top:1rem}
+.ai-summary{font-size:.8rem;color:var(--muted);line-height:1.6}
+.ai-summary strong{color:var(--ai);font-weight:600}
+
+/* Trending carousel */
+.carousel{margin-bottom:1.5rem}
+.carousel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.carousel-header h2{font-family:var(--font-display);font-size:.875rem;font-weight:600;display:flex;align-items:center;gap:.5rem}
+.carousel-header h2::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--yes);animation:livePulse 2s infinite}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
+.carousel-nav{display:flex;gap:.375rem}
+.carousel-nav button{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center;transition:border-color .15s}
+.carousel-nav button:hover{border-color:var(--muted)}
+.carousel-track{display:flex;gap:1rem;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:.25rem}
+.carousel-track::-webkit-scrollbar{display:none}
+.carousel-card{flex:0 0 300px;scroll-snap-align:start;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s;cursor:pointer;text-decoration:none;color:inherit}
+.carousel-card:hover{border-color:var(--accent)}
+.carousel-card .card-img{width:100%;height:140px;object-fit:cover;display:block}
+.carousel-card .card-body{padding:1rem;display:flex;flex-direction:column;gap:.5rem;flex:1}
+.carousel-card .tag{font-size:.625rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+.carousel-card .tag.hot{color:var(--no)}
+.carousel-card h3{font-size:.8125rem;font-weight:600;line-height:1.4}
+.carousel-card .stats{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
+.carousel-card .prob{font-family:var(--font-mono);font-size:1.25rem;font-weight:700;color:var(--yes);font-variant-numeric:tabular-nums}
+.carousel-card .vol{font-size:.6875rem;color:var(--muted)}
+.carousel-card .mini-bar{height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden}
+.carousel-card .mini-bar .fill{height:100%;border-radius:2px;background:var(--yes)}
+.carousel-card .cta{display:flex;gap:.5rem;margin-top:.5rem}
+.carousel-card .cta button{flex:1;padding:.4rem 0;border-radius:6px;font-size:.6875rem;font-weight:600;border:none;cursor:pointer;font-family:var(--font-body);transition:opacity .15s}
+.carousel-card .cta .buy-yes{background:var(--yes);color:#fff}
+.carousel-card .cta .buy-no{background:var(--no);color:#fff}
+.carousel-card .cta button:hover{opacity:.85}
+
+/* Market card images */
+.market-card-img{width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0}
+
+/* Responsive */
+@media(max-width:1024px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:static;display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .markets-grid{grid-template-columns:1fr}
+  .sidebar{grid-template-columns:1fr}
+  .search-bar{width:100%}
+  .page-header{flex-direction:column;align-items:stretch}
+}
+@media(max-width:430px){
+  .page{padding:1rem}
+  .market-card{padding:1rem}
+}
+.upgrade-prompt,.upgrade-prompt-pro{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-radius:var(--radius);background:linear-gradient(135deg,oklch(30% 0.04 260),oklch(22% 0.03 280));border:1px solid oklch(40% 0.08 270 / .4);margin-bottom:1rem}
+.upgrade-prompt .prompt-icon,.upgrade-prompt-pro .prompt-icon{font-size:1rem;flex-shrink:0}
+.upgrade-prompt .prompt-text,.upgrade-prompt-pro .prompt-text{flex:1;font-size:.8rem;color:var(--muted);line-height:1.4}
+.upgrade-prompt .prompt-text strong,.upgrade-prompt-pro .prompt-text strong{color:var(--fg);font-weight:600}
+.upgrade-prompt .prompt-cta,.upgrade-prompt-pro .prompt-cta{flex-shrink:0;padding:.4rem .9rem;border-radius:8px;font-size:.75rem;font-weight:600;background:linear-gradient(135deg,var(--accent),var(--ai));color:#fff;text-decoration:none;white-space:nowrap;transition:opacity .15s,transform .15s;box-shadow:0 2px 8px oklch(58% 0.18 255 / .3)}
+.upgrade-prompt .prompt-cta:hover,.upgrade-prompt-pro .prompt-cta:hover{opacity:.9;transform:translateY(-1px)}
+.upgrade-prompt-pro{background:linear-gradient(135deg,oklch(28% 0.05 280),oklch(22% 0.04 300));border-color:oklch(50% 0.12 295 / .3)}
+.upgrade-prompt-pro .prompt-cta{background:linear-gradient(135deg,var(--ai),oklch(55% 0.20 270));box-shadow:0 2px 8px oklch(58% 0.18 295 / .3)}
+[data-theme="light"] .upgrade-prompt,[data-theme="light"] .upgrade-prompt-pro{background:linear-gradient(135deg,oklch(94% 0.02 260),oklch(90% 0.03 280));border-color:oklch(80% 0.06 270 / .4)}
+[data-theme="light"] .upgrade-prompt .prompt-cta,[data-theme="light"] .upgrade-prompt-pro .prompt-cta{box-shadow:0 2px 8px oklch(58% 0.18 255 / .15)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><span class="ai-dot"></span> TradeWizard</a>
+    <div class="nav-links">
+      <a href="markets.html" class="active">Markets</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="insights.html">Insights</a>
+      <a href="subscription.html">Plan</a>
+      <a href="settings.html">Settings</a>
+    </div>
+    <div class="nav-right">
+      <span class="wallet-badge"><span class="wallet-text">$1,240</span></span>
+      <span class="credit-badge"><span class="credit-text">3 credits</span><span class="topup"><a href="subscription.html">+ Top up</a></span></span>
+      <button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <h1>Markets</h1>
+    <div class="search-bar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search markets…">
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-chip active">All</span>
+    <span class="filter-chip">Politics</span>
+    <span class="filter-chip">Economics</span>
+    <span class="filter-chip">Courts</span>
+    <span class="filter-chip">Geopolitics</span>
+    <span class="filter-chip">Tech</span>
+    <span class="filter-chip">Crypto</span>
+    <span class="filter-chip">Climate</span>
+    <span class="filter-chip">Sports</span>
+  </div>
+
+  <div class="upgrade-prompt" style="display:flex">
+    <span class="prompt-icon">🔒</span>
+    <span class="prompt-text">You're on the <strong>Free plan</strong> - unlock recurring analysis, more credits, and real-time alerts by upgrading.</span>
+    <a href="subscription.html" class="prompt-cta">View Plans</a>
+  </div>
+
+  <div class="carousel">
+    <div class="carousel-header">
+      <h2>Trending Now</h2>
+      <div class="carousel-nav">
+        <button class="carousel-prev" aria-label="Previous"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <button class="carousel-next" aria-label="Next"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+      </div>
+    </div>
+    <div class="carousel-track">
+      <a href="market-detail.html" class="carousel-card">
+        <svg class="card-img" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="100%" stop-color="#2d6a9f"/></linearGradient></defs><rect fill="url(#g1)" width="300" height="140"/><text x="150" y="70" text-anchor="middle" fill="rgba(255,255,255,.85)" font-size="40">🏛️</text><text x="150" y="100" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="11" font-family="system-ui">Federal Reserve</text></svg>
+        <div class="card-body">
+          <span class="tag hot">🔥 Hot</span>
+          <h3>Will the Fed cut rates before September 2026?</h3>
+          <div class="mini-bar"><div class="fill" style="width:62%"></div></div>
+          <div class="stats"><span class="prob">62¢</span><span class="vol">$2.4M vol · +8¢ today</span></div>
+          <div class="ai-rec"><div class="rec-top"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> <span class="rec-dir">Buy Yes 71%</span> · +9% edge <span class="rec-refresh" title="Refresh analysis">↻</span></div><p class="rec-thesis">Labor market cooling + CPI trajectory suggest 2 cuts by Sep.</p><div class="rec-actions"><button class="rec-buy-yes">★ Buy Yes 62¢</button><button class="rec-buy-no">Buy No 38¢</button></div></div>
+        </div>
+      </a>
+      <a href="market-detail.html" class="carousel-card">
+        <svg class="card-img" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2d4a3e"/><stop offset="100%" stop-color="#1a6b5a"/></linearGradient></defs><rect fill="url(#g2)" width="300" height="140"/><text x="150" y="70" text-anchor="middle" fill="rgba(255,255,255,.85)" font-size="40">🕊️</text><text x="150" y="100" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="11" font-family="system-ui">Geopolitics</text></svg>
+        <div class="card-body">
+          <span class="tag hot">🔥 Surging</span>
+          <h3>US–Iran permanent peace deal by Dec 2026?</h3>
+          <div class="mini-bar"><div class="fill" style="width:41%"></div></div>
+          <div class="stats"><span class="prob">41¢</span><span class="vol">$3.2M vol · +12¢ today</span></div>
+          <div class="cta"><button class="buy-yes">Buy Yes 41¢</button><button class="buy-no">Buy No 59¢</button></div>
+          <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        </div>
+      </a>
+      <a href="market-detail.html" class="carousel-card">
+        <svg class="card-img" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1c2e"/><stop offset="100%" stop-color="#8b2252"/></linearGradient></defs><rect fill="url(#g3)" width="300" height="140"/><text x="150" y="70" text-anchor="middle" fill="rgba(255,255,255,.85)" font-size="40">🗳️</text><text x="150" y="100" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="11" font-family="system-ui">GOP Primary</text></svg>
+        <div class="card-body">
+          <span class="tag">Politics</span>
+          <h3>Trump wins 2028 GOP primary?</h3>
+          <div class="mini-bar"><div class="fill" style="width:71%"></div></div>
+          <div class="stats"><span class="prob">71¢</span><span class="vol">$4.1M vol · -3¢ today</span></div>
+          <div class="cta"><button class="buy-yes">Buy Yes 71¢</button><button class="buy-no">Buy No 29¢</button></div>
+          <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        </div>
+      </a>
+      <a href="market-detail.html" class="carousel-card">
+        <svg class="card-img" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3d2e0a"/><stop offset="100%" stop-color="#b8860b"/></linearGradient></defs><rect fill="url(#g4)" width="300" height="140"/><text x="150" y="70" text-anchor="middle" fill="rgba(255,255,255,.85)" font-size="40">₿</text><text x="150" y="100" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="11" font-family="system-ui">Cryptocurrency</text></svg>
+        <div class="card-body">
+          <span class="tag">Crypto</span>
+          <h3>Bitcoin above $150K by end of 2026?</h3>
+          <div class="mini-bar"><div class="fill" style="width:29%"></div></div>
+          <div class="stats"><span class="prob">29¢</span><span class="vol">$5.7M vol · +3¢ today</span></div>
+          <div class="cta"><button class="buy-yes">Buy Yes 29¢</button><button class="buy-no">Buy No 71¢</button></div>
+          <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        </div>
+      </a>
+      <a href="market-detail.html" class="carousel-card">
+        <svg class="card-img" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g5" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1c1c3a"/><stop offset="100%" stop-color="#4a4a8a"/></linearGradient></defs><rect fill="url(#g5)" width="300" height="140"/><text x="150" y="70" text-anchor="middle" fill="rgba(255,255,255,.85)" font-size="40">⚖️</text><text x="150" y="100" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="11" font-family="system-ui">Supreme Court</text></svg>
+        <div class="card-body">
+          <span class="tag">Courts</span>
+          <h3>Supreme Court overturns Chevron deference?</h3>
+          <div class="mini-bar"><div class="fill" style="width:78%"></div></div>
+          <div class="stats"><span class="prob">78¢</span><span class="vol">$890K vol · -2¢ today</span></div>
+          <div class="cta"><button class="buy-yes">Buy Yes 78¢</button><button class="buy-no">Buy No 22¢</button></div>
+          <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        </div>
+      </a>
+      <a href="market-detail.html" class="carousel-card">
+        <svg class="card-img" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g6" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a1c1c"/><stop offset="100%" stop-color="#8b3a3a"/></linearGradient></defs><rect fill="url(#g6)" width="300" height="140"/><text x="150" y="70" text-anchor="middle" fill="rgba(255,255,255,.85)" font-size="40">🏛️</text><text x="150" y="100" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="11" font-family="system-ui">Government</text></svg>
+        <div class="card-body">
+          <span class="tag hot">🔥 New</span>
+          <h3>US government shutdown before Oct 2026?</h3>
+          <div class="mini-bar"><div class="fill" style="width:45%"></div></div>
+          <div class="stats"><span class="prob">45¢</span><span class="vol">$1.1M vol · +6¢ today</span></div>
+          <div class="cta"><button class="buy-yes">Buy Yes 45¢</button><button class="buy-no">Buy No 55¢</button></div>
+          <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="markets-grid">
+      <a href="market-detail.html" class="market-card">
+        <div class="market-card-header">
+          <svg class="market-card-img" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="t1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="100%" stop-color="#2d6a9f"/></linearGradient></defs><rect fill="url(#t1)" width="48" height="48" rx="8"/><text x="24" y="30" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="20">🏛️</text></svg>
+          <h3>Will the Fed cut rates before September 2026?</h3>
+          <span class="ai-badge">Analyzed</span>
+        </div>
+        <div class="market-meta">
+          <span>Economics</span>
+          <span>$2.4M vol</span>
+          <span>Ends Sep 30</span>
+        </div>
+        <div class="market-prob-row">
+          <div class="prob-bar"><div class="fill" style="width:62%"></div></div>
+          <span class="prob-value">62¢</span>
+        </div>
+        <div class="analysis-result">
+          <div class="ar-header">
+            <span class="ar-rec buy-yes">Buy Yes</span>
+            <span class="ar-edge">+9% edge · 71% AI consensus</span>
+          </div>
+          <p class="ar-thesis">Labor market cooling + CPI trajectory suggest 2 cuts by Sep. 12/14 agents bullish.</p>
+          <div class="ar-meta"><span>2h ago</span><span>High confidence</span></div>
+        </div>
+        <div class="analysis-actions">
+          <button class="act-btn act-trade">★ Buy Yes 62¢</button>
+          <button class="act-btn act-trade-alt">Buy No 38¢</button>
+          <button class="act-btn act-refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh · 1 credit</button>
+        </div>
+        <div class="gated-row"><span class="lock">🔒</span> Recurring analysis · <a href="subscription.html" class="upgrade-link">Upgrade to Starter+</a></div>
+      </a>
+
+      <div class="market-card">
+        <div class="market-card-header">
+          <svg class="market-card-img" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="t2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a1c2e"/><stop offset="100%" stop-color="#6b2244"/></linearGradient></defs><rect fill="url(#t2)" width="48" height="48" rx="8"/><text x="24" y="30" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="20">📉</text></svg>
+          <h3>US recession declared by Q4 2026?</h3>
+          <span class="ai-badge">AI Ready</span>
+        </div>
+        <div class="market-meta">
+          <span>Economics</span>
+          <span>$1.8M vol</span>
+          <span>Ends Dec 31</span>
+        </div>
+        <div class="market-prob-row">
+          <div class="prob-bar"><div class="fill" style="width:34%"></div></div>
+          <span class="prob-value">34¢</span>
+        </div>
+        <div class="market-actions">
+          <button class="yes-btn">Yes 34¢</button>
+          <button class="no-btn">No 66¢</button>
+        </div>
+        <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        <div class="gated-row"><span class="lock">🔒</span> Recurring analysis · <a href="subscription.html" class="upgrade-link">Upgrade to Starter+</a></div>
+      </div>
+
+      <div class="market-card">
+        <div class="market-card-header">
+          <svg class="market-card-img" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="t3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1c2e"/><stop offset="100%" stop-color="#8b2252"/></linearGradient></defs><rect fill="url(#t3)" width="48" height="48" rx="8"/><text x="24" y="30" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="20">🗳️</text></svg>
+          <h3>Trump wins 2028 GOP primary?</h3>
+        </div>
+        <div class="market-meta">
+          <span>Politics</span>
+          <span>$4.1M vol</span>
+          <span>Ends Mar 2028</span>
+        </div>
+        <div class="market-prob-row">
+          <div class="prob-bar"><div class="fill" style="width:71%"></div></div>
+          <span class="prob-value">71¢</span>
+        </div>
+        <div class="market-actions">
+          <button class="yes-btn">Yes 71¢</button>
+          <button class="no-btn">No 29¢</button>
+        </div>
+        <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        <div class="gated-row"><span class="lock">🔒</span> Recurring analysis · <a href="subscription.html" class="upgrade-link">Upgrade to Starter+</a></div>
+      </div>
+
+      <div class="market-card">
+        <div class="market-card-header">
+          <svg class="market-card-img" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="t4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1c1c3a"/><stop offset="100%" stop-color="#4a4a8a"/></linearGradient></defs><rect fill="url(#t4)" width="48" height="48" rx="8"/><text x="24" y="30" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="20">⚖️</text></svg>
+          <h3>Supreme Court overturns Chevron deference?</h3>
+          <span class="ai-badge">AI Ready</span>
+        </div>
+        <div class="market-meta">
+          <span>Courts</span>
+          <span>$890K vol</span>
+          <span>Ends Jun 30</span>
+        </div>
+        <div class="market-prob-row">
+          <div class="prob-bar"><div class="fill" style="width:78%"></div></div>
+          <span class="prob-value">78¢</span>
+        </div>
+        <div class="market-actions">
+          <button class="yes-btn">Yes 78¢</button>
+          <button class="no-btn">No 22¢</button>
+        </div>
+        <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        <div class="gated-row"><span class="lock">🔒</span> Recurring analysis · <a href="subscription.html" class="upgrade-link">Upgrade to Starter+</a></div>
+      </div>
+
+      <div class="market-card">
+        <div class="market-card-header">
+          <svg class="market-card-img" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="t5" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2d4a3e"/><stop offset="100%" stop-color="#1a6b5a"/></linearGradient></defs><rect fill="url(#t5)" width="48" height="48" rx="8"/><text x="24" y="30" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="20">🕊️</text></svg>
+          <h3>US–Iran permanent peace deal by Dec 2026?</h3>
+        </div>
+        <div class="market-meta">
+          <span>Geopolitics</span>
+          <span>$3.2M vol</span>
+          <span>Ends Dec 31</span>
+        </div>
+        <div class="market-prob-row">
+          <div class="prob-bar"><div class="fill" style="width:41%"></div></div>
+          <span class="prob-value">41¢</span>
+        </div>
+        <div class="market-actions">
+          <button class="yes-btn">Yes 41¢</button>
+          <button class="no-btn">No 59¢</button>
+        </div>
+        <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        <div class="gated-row"><span class="lock">🔒</span> Recurring analysis · <a href="subscription.html" class="upgrade-link">Upgrade to Starter+</a></div>
+      </div>
+
+      <div class="market-card">
+        <div class="market-card-header">
+          <svg class="market-card-img" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="t6" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3d2e0a"/><stop offset="100%" stop-color="#b8860b"/></linearGradient></defs><rect fill="url(#t6)" width="48" height="48" rx="8"/><text x="24" y="30" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="20">₿</text></svg>
+          <h3>Bitcoin above $150K by end of 2026?</h3>
+          <span class="ai-badge">AI Ready</span>
+        </div>
+        <div class="market-meta">
+          <span>Crypto</span>
+          <span>$5.7M vol</span>
+          <span>Ends Dec 31</span>
+        </div>
+        <div class="market-prob-row">
+          <div class="prob-bar"><div class="fill" style="width:29%"></div></div>
+          <span class="prob-value">29¢</span>
+        </div>
+        <div class="market-actions">
+          <button class="yes-btn">Yes 29¢</button>
+          <button class="no-btn">No 71¢</button>
+        </div>
+        <button class="analysis-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg> Get Analysis <span class="cost">· 1 credit</span></button>
+        <div class="gated-row"><span class="lock">🔒</span> Recurring analysis · <a href="subscription.html" class="upgrade-link">Upgrade to Starter+</a></div>
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Trending</h3>
+        <div class="trending-item"><div class="ti-top"><span class="name">Fed Rate Cut Sep</span><span class="change up">+8¢</span></div><span class="ti-summary">AI: Buy Yes · +9% edge · 71% consensus</span></div>
+        <div class="trending-item"><div class="ti-top"><span class="name">US Recession Q4</span><span class="change down">-5¢</span></div><span class="ti-summary">No analysis yet</span></div>
+        <div class="trending-item"><div class="ti-top"><span class="name">Iran Peace Deal</span><span class="change up">+12¢</span></div><span class="ti-summary">No analysis yet</span></div>
+        <div class="trending-item"><div class="ti-top"><span class="name">BTC $150K</span><span class="change up">+3¢</span></div><span class="ti-summary">No analysis yet</span></div>
+        <div class="trending-item"><div class="ti-top"><span class="name">Chevron Overturned</span><span class="change down">-2¢</span></div><span class="ti-summary">No analysis yet</span></div>
+      </div>
+      <div class="sidebar-card">
+        <h3>AI Spotlight</h3>
+        <p class="ai-summary"><strong>Highest edge detected:</strong> Fed Rate Cut market - AI consensus 71% vs market 62%. 12/14 agents bullish on YES. Labor data + CPI trajectory driving conviction.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+// Filter chip interaction
+document.querySelectorAll('.filter-chip').forEach(chip=>{
+  chip.addEventListener('click',()=>{
+    document.querySelector('.filter-chip.active')?.classList.remove('active');
+    chip.classList.add('active');
+  });
+});
+// Carousel nav
+const track=document.querySelector('.carousel-track');
+document.querySelector('.carousel-prev').addEventListener('click',()=>track.scrollBy({left:-316,behavior:'smooth'}));
+document.querySelector('.carousel-next').addEventListener('click',()=>track.scrollBy({left:316,behavior:'smooth'}));
+</script>
+<script>
+(function(){const t=localStorage.getItem('tw-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)})})();
+</script>
+</body>
+</html>

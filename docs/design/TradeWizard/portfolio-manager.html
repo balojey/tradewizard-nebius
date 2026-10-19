@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-tier="pro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio Manager - TradeWizard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --no:oklch(65% 0.18 25);
+  --warning:oklch(78% 0.14 85);
+  --kill:oklch(55% 0.22 25);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+  --max-w:1200px;
+  --nav-bg:oklch(14% 0.015 260 / .85);
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+  --no:oklch(55% 0.18 25);
+  --warning:oklch(55% 0.14 85);
+  --kill:oklch(50% 0.22 25);
+  --nav-bg:oklch(98% 0.003 260 / .85);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 clamp(1rem,4vw,2rem)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-weight:700;font-size:1.125rem;display:flex;align-items:center;gap:.5rem}
+.nav-logo .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--ai);box-shadow:0 0 6px var(--ai)}
+.nav-links{display:flex;gap:1.5rem;font-size:.8125rem}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover,.nav-links a.active{color:var(--fg)}
+.nav-right{display:flex;align-items:center;gap:1rem}
+.credit-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.25rem .625rem;border-radius:6px}
+.wallet-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);background:var(--surface);border:1px solid var(--border);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;display:flex;align-items:center;gap:.5rem}
+.wallet-sub{font-size:.6rem;color:var(--muted)}
+.wallet-detail{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-width:180px;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2);display:flex;flex-direction:column;gap:.375rem;z-index:10}
+.wallet-badge:hover .wallet-detail{opacity:1;pointer-events:auto}
+.wd-row{display:flex;justify-content:space-between;font-size:.7rem}
+.wd-lbl{color:var(--muted)}
+.wd-val{font-weight:600}
+.wd-avail .wd-val{color:var(--yes)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center}
+.theme-toggle svg{width:16px;height:16px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+</style>
+<style>
+/* Page layout */
+.page{max-width:var(--max-w);margin:0 auto;padding:1.5rem clamp(1rem,4vw,2rem)}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem}
+.page-header h1{font-family:var(--font-display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:.75rem}
+.persona-badge{font-size:.7rem;background:oklch(58% 0.18 295 / .12);color:var(--ai);padding:.25rem .625rem;border-radius:6px;font-weight:500;display:inline-flex;align-items:center;gap:.375rem}
+.persona-badge svg{width:14px;height:14px}
+.kill-btn{display:flex;align-items:center;gap:.5rem;background:oklch(55% 0.22 25 / .1);border:1px solid var(--kill);color:var(--kill);padding:.5rem 1rem;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .15s}
+.kill-btn:hover{background:var(--kill);color:#fff}
+.kill-btn svg{width:16px;height:16px}
+
+/* Stats bar */
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem}
+.stat-card .label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem}
+.stat-card .value{font-family:var(--font-mono);font-size:1.375rem;font-weight:700;font-variant-numeric:tabular-nums}
+.stat-card .value.profit{color:var(--yes)}
+.stat-card .value.loss{color:var(--no)}
+.stat-card .sub{font-size:.65rem;color:var(--muted);margin-top:.125rem;font-family:var(--font-mono)}
+
+/* Session cards */
+.sessions-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.sessions-header h2{font-size:.875rem;font-weight:600}
+.sessions-header .count{font-size:.7rem;color:var(--muted);font-family:var(--font-mono)}
+.session-list{display:flex;flex-direction:column;gap:1rem}
+.session-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;transition:border-color .15s;cursor:pointer}
+.session-card:hover{border-color:var(--muted)}
+.session-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.75rem}
+.session-market{font-weight:600;font-size:.875rem;display:flex;align-items:center;gap:.5rem}
+.status-badge{font-size:.6rem;text-transform:uppercase;letter-spacing:.04em;padding:.2rem .5rem;border-radius:4px;font-weight:600}
+.status-badge.positioned{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.status-badge.watching{background:oklch(62% 0.012 260 / .15);color:var(--muted)}
+.status-badge.analyzing{background:oklch(62% 0.20 260 / .12);color:var(--accent);animation:pulse 2s infinite}
+.status-badge.exiting{background:oklch(78% 0.14 85 / .12);color:var(--warning)}
+.status-badge.paused{background:oklch(62% 0.012 260 / .1);color:var(--muted);opacity:.7}
+.status-badge.cooldown{background:oklch(78% 0.14 85 / .08);color:var(--warning);opacity:.8}
+.status-badge.completed{background:oklch(62% 0.012 260 / .1);color:var(--muted)}
+.status-badge.terminated{background:oklch(55% 0.22 25 / .12);color:var(--kill)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.session-meta{display:flex;align-items:center;gap:1.5rem;font-size:.75rem;color:var(--muted);margin-bottom:.625rem}
+.session-meta .persona-icon{color:var(--ai)}
+.session-progress{display:flex;align-items:center;gap:1rem}
+.util-bar{flex:1;height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden;display:flex}
+.util-bar .in-pos{background:var(--yes);height:100%}
+.util-bar .pending{background:var(--warning);height:100%}
+.util-bar .available{background:var(--border);height:100%}
+.util-label{font-size:.65rem;color:var(--muted);font-family:var(--font-mono);white-space:nowrap}
+.session-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:.75rem;padding-top:.75rem;border-top:1px solid oklch(30% 0.010 260 / .4)}
+[data-theme="light"] .session-bottom{border-top-color:oklch(88% 0.006 260 / .6)}
+.session-pnl{display:flex;gap:1.5rem;font-size:.75rem}
+.session-pnl .lbl{color:var(--muted)}
+.session-pnl .val{font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
+.session-pnl .val.up{color:var(--yes)}
+.session-pnl .val.down{color:var(--no)}
+.session-actions{display:flex;gap:.5rem}
+.session-actions button{font-size:.65rem;padding:.3rem .6rem;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.session-actions button:hover{border-color:var(--muted);color:var(--fg)}
+.session-decision{font-size:.7rem;color:var(--muted);font-style:italic;margin-top:.5rem}
+.session-prob{font-size:.7rem;color:var(--muted);font-family:var(--font-mono)}
+.risk-indicator{font-size:.6rem;padding:.15rem .4rem;border-radius:3px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-left:.5rem}
+.risk-indicator.warning{background:oklch(78% 0.14 85 / .15);color:var(--warning)}
+.risk-indicator.critical{background:oklch(55% 0.22 25 / .15);color:var(--kill)}
+
+/* Kill Switch Active State */
+.kill-active-banner{display:none;background:oklch(55% 0.22 25 / .08);border:2px solid var(--kill);border-radius:var(--radius);padding:1.5rem;text-align:center;margin-bottom:2rem}
+
+/* Session badges row */
+.session-badges{display:flex;align-items:center;gap:.5rem}
+.target-badge{font-size:.6rem;font-family:var(--font-mono);color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.2rem .5rem;border-radius:4px;font-weight:500;white-space:nowrap}
+.term-badge{font-size:.6rem;font-weight:600;padding:.2rem .5rem;border-radius:4px;white-space:nowrap}
+.term-badge.resolved{background:oklch(62% 0.012 260 / .12);color:var(--muted)}
+.term-badge.target-reached{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.term-badge.stopped{background:oklch(62% 0.012 260 / .12);color:var(--muted)}
+.term-badge.risk-limit{background:oklch(78% 0.14 85 / .12);color:var(--warning)}
+.term-badge.capital-depleted{background:oklch(55% 0.22 25 / .12);color:var(--kill)}
+.kill-active-banner.active{display:block}
+.kill-active-banner h3{color:var(--kill);font-size:1rem;margin-bottom:.5rem;display:flex;align-items:center;justify-content:center;gap:.5rem}
+.kill-active-banner p{font-size:.75rem;color:var(--muted);margin-bottom:1rem}
+.kill-reset-btn{background:transparent;border:1px solid var(--kill);color:var(--kill);padding:.5rem 1.25rem;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .15s}
+.kill-reset-btn:hover{background:var(--kill);color:#fff}
+
+/* Tab panels */
+.tab-panel{display:none;padding:1.25rem}
+.tab-panel.active{display:block}
+.tab-panel .capital-grid{padding:0}
+
+/* Trade history */
+.trade-history-item{display:grid;grid-template-columns:auto 1fr auto;gap:.75rem;padding:.75rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .3);align-items:center;font-size:.75rem}
+[data-theme="light"] .trade-history-item{border-bottom-color:oklch(88% 0.006 260 / .5)}
+.trade-history-item:last-child{border-bottom:none}
+.trade-pair{display:flex;align-items:center;gap:.375rem}
+.trade-pair .entry-exit{font-family:var(--font-mono);font-size:.65rem}
+.trade-pair .arrow{color:var(--muted)}
+.trade-pnl{font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
+.trade-pnl.up{color:var(--yes)}
+.trade-pnl.down{color:var(--no)}
+.trade-reason{font-size:.65rem;color:var(--muted)}
+
+/* Session controls */
+.session-detail-controls{display:flex;gap:.5rem;padding:1rem 1.25rem;border-top:1px solid var(--border)}
+.session-detail-controls button{font-size:.7rem;padding:.4rem .75rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.session-detail-controls button:hover{border-color:var(--muted);color:var(--fg)}
+.session-detail-controls button.primary{background:var(--ai);border-color:var(--ai);color:#fff}
+.session-detail-controls button.danger{border-color:var(--kill);color:var(--kill)}
+.session-detail-controls button.danger:hover{background:var(--kill);color:#fff}
+
+/* Detail panel */
+.detail-panel{display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:1.5rem;overflow:hidden}
+.detail-panel.active{display:block}
+.detail-header{padding:1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.detail-header h3{font-size:.9rem;font-weight:600}
+.detail-close{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;font-size:.8rem}
+.detail-tabs{display:flex;border-bottom:1px solid var(--border)}
+.detail-tab{padding:.625rem 1.25rem;font-size:.75rem;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.detail-tab.active{color:var(--fg);border-bottom-color:var(--accent)}
+
+/* Capital breakdown */
+.capital-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem}
+.capital-item{text-align:center}
+.capital-item .c-label{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.25rem}
+.capital-item .c-value{font-family:var(--font-mono);font-size:1rem;font-weight:700;font-variant-numeric:tabular-nums}
+.capital-item .c-value.profit{color:var(--yes)}
+
+/* Capital utilization bar */
+.capital-util{margin-top:1.25rem;padding-top:1rem;border-top:1px solid oklch(30% 0.010 260 / .3)}
+[data-theme="light"] .capital-util{border-top-color:oklch(88% 0.006 260 / .5)}
+.capital-util-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem}
+.capital-bar{height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden;display:flex}
+.capital-bar .seg-position{background:var(--yes);height:100%}
+.capital-bar .seg-pending{background:var(--warning);height:100%}
+.capital-bar .seg-available{background:var(--border);height:100%}
+.capital-bar-legend{display:flex;gap:1rem;margin-top:.5rem;font-size:.6rem;color:var(--muted)}
+.capital-bar-legend span{display:flex;align-items:center;gap:.25rem}
+.capital-bar-legend .dot{width:8px;height:8px;border-radius:2px}
+.capital-bar-legend .dot.pos{background:var(--yes)}
+.capital-bar-legend .dot.pend{background:var(--warning)}
+.capital-bar-legend .dot.avail{background:var(--border)}
+
+/* Current position */
+.current-position{margin-top:1.25rem;padding:1rem;background:var(--surface-2);border-radius:8px;border:1px solid oklch(72% 0.16 155 / .15)}
+.current-position .pos-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
+.current-position .pos-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.current-position .pos-direction{font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:4px}
+.current-position .pos-direction.long-yes{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.current-position .pos-direction.long-no{background:oklch(65% 0.18 25 / .12);color:var(--no)}
+.current-position .pos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
+.current-position .pos-item .p-label{font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.125rem}
+.current-position .pos-item .p-value{font-family:var(--font-mono);font-size:.85rem;font-weight:600;font-variant-numeric:tabular-nums}
+.current-position .pos-item .p-value.up{color:var(--yes)}
+.current-position .pos-item .p-value.down{color:var(--no)}
+
+/* Add Funds / Withdraw buttons */
+.capital-actions{display:flex;gap:.5rem;margin-top:1rem}
+.capital-actions button{font-size:.7rem;padding:.4rem .75rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.capital-actions button:hover{border-color:var(--muted);color:var(--fg)}
+
+/* Profit target progress */
+.profit-target-section{margin-top:1.25rem;padding-top:1rem;border-top:1px solid oklch(30% 0.010 260 / .3)}
+[data-theme="light"] .profit-target-section{border-top-color:oklch(88% 0.006 260 / .5)}
+.pt-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.pt-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.pt-value{font-size:.7rem;font-family:var(--font-mono);color:var(--fg);font-weight:500}
+.pt-bar{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.pt-fill{height:100%;background:var(--yes);border-radius:3px;transition:width .3s}
+.pt-meta{display:flex;justify-content:space-between;margin-top:.375rem;font-size:.6rem;color:var(--muted);font-family:var(--font-mono)}
+
+/* Decision log */
+.decision-log{}
+.log-entry{display:grid;grid-template-columns:auto auto 1fr auto;gap:.75rem;padding:.625rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .3);align-items:center;font-size:.75rem}
+[data-theme="light"] .log-entry{border-bottom-color:oklch(88% 0.006 260 / .5)}
+.log-entry:last-child{border-bottom:none}
+.log-time{color:var(--muted);font-family:var(--font-mono);font-size:.65rem;white-space:nowrap}
+.log-action{font-weight:600;font-size:.65rem;padding:.15rem .4rem;border-radius:3px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.log-action.enter{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.log-action.exit{background:oklch(78% 0.14 85 / .12);color:var(--warning)}
+.log-action.hold{background:oklch(62% 0.20 260 / .1);color:var(--accent)}
+.log-action.skip{background:oklch(62% 0.012 260 / .1);color:var(--muted)}
+.log-action.rejected{background:oklch(55% 0.22 25 / .12);color:var(--kill);border:1px solid oklch(55% 0.22 25 / .25)}
+.log-reason{color:oklch(80% 0.005 260)}
+[data-theme="light"] .log-reason{color:oklch(35% 0.01 260)}
+.log-conviction{font-family:var(--font-mono);font-size:.6rem;color:var(--muted);white-space:nowrap}
+.log-entry.rejected-entry{background:oklch(55% 0.22 25 / .04);border-radius:4px;padding:.625rem .5rem;margin:0 -.5rem}
+.log-entry.rejected-entry .log-reason{display:flex;align-items:center;gap:.375rem}
+.log-entry.rejected-entry .safety-icon{font-size:.7rem}
+
+/* Kill switch modal */
+.kill-modal{display:none;position:fixed;inset:0;z-index:1000;background:oklch(0% 0 0 / .7);align-items:center;justify-content:center;padding:1rem}
+.kill-modal.active{display:flex}
+.kill-modal-content{background:var(--surface);border:2px solid var(--kill);border-radius:var(--radius);padding:2rem;max-width:400px;width:100%;text-align:center}
+.kill-modal-content h3{color:var(--kill);font-size:1.125rem;margin-bottom:.5rem}
+.kill-modal-content p{font-size:.8rem;color:var(--muted);margin-bottom:1.5rem}
+.kill-modal-actions{display:flex;gap:.75rem;justify-content:center}
+.kill-confirm{background:var(--kill);color:#fff;border:none;padding:.625rem 1.25rem;border-radius:8px;font-weight:600;font-size:.8rem;cursor:pointer}
+.kill-cancel{background:transparent;border:1px solid var(--border);color:var(--fg);padding:.625rem 1.25rem;border-radius:8px;font-size:.8rem;cursor:pointer}
+
+@media(max-width:1024px){.stats-bar{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .stats-bar{grid-template-columns:1fr 1fr}
+  .capital-grid{grid-template-columns:repeat(2,1fr)}
+  .page-header{flex-direction:column;align-items:flex-start}
+  .current-position .pos-grid{grid-template-columns:repeat(3,1fr)}
+  .detail-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+@media(max-width:430px){
+  .page{padding:1rem}
+  .stats-bar{grid-template-columns:1fr}
+  .session-meta{flex-wrap:wrap;gap:.75rem}
+  .session-pnl{flex-wrap:wrap;gap:.75rem}
+  .capital-grid{grid-template-columns:1fr 1fr}
+  .current-position .pos-grid{grid-template-columns:1fr 1fr 1fr}
+  .current-position .pos-grid .pos-item{text-align:center}
+  .capital-bar-legend{flex-wrap:wrap;gap:.5rem}
+  .capital-actions{flex-direction:column}
+  .capital-actions button{width:100%;text-align:center}
+  .session-detail-controls{flex-wrap:wrap}
+  .session-detail-controls button{flex:1;min-width:calc(50% - .25rem);text-align:center}
+  .kill-modal-content{padding:1.5rem;margin:1rem}
+  .detail-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .detail-tab{white-space:nowrap;padding:.625rem 1rem}
+  .session-progress{flex-direction:column;align-items:stretch;gap:.375rem}
+  .util-label{text-align:right}
+}
+</style>
+</head>
+<body>
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo"><span class="ai-dot"></span> TradeWizard</a>
+    <div class="nav-links">
+      <a href="markets.html">Markets</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="portfolio-manager.html" class="active">PM</a>
+      <a href="insights.html">Insights</a>
+      <a href="subscription.html">Plan</a>
+      <a href="settings.html">Settings</a>
+    </div>
+    <div class="nav-right">
+      <span class="wallet-badge"><span class="wallet-text">$1,240</span><span class="wallet-sub">$790 avail</span><span class="wallet-detail"><span class="wd-row"><span class="wd-lbl">Wallet</span><span class="wd-val">$1,240.00</span></span><span class="wd-row"><span class="wd-lbl">Committed</span><span class="wd-val">$450.00</span></span><span class="wd-row wd-avail"><span class="wd-lbl">Available</span><span class="wd-val">$790.00</span></span></span></span>
+      <span class="credit-badge">47/200 credits</span>
+      <button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+</nav>
+
+<!-- Page content -->
+<div class="page">
+  <div class="page-header">
+    <h1>Portfolio Manager <span class="persona-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg> The Sniper</span></h1>
+    <button class="kill-btn" onclick="document.querySelector('.kill-modal').classList.add('active')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 5.64l-1.41 1.41M5.64 18.36l1.41-1.41M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="3"/></svg>
+      Kill Switch
+    </button>
+  </div>
+
+  <!-- Aggregate stats -->
+  <div class="stats-bar">
+    <div class="stat-card"><div class="label">Committed Capital</div><div class="value">$450</div><div class="sub">$790 available of $1,240</div></div>
+    <div class="stat-card"><div class="label">Unrealized P&L</div><div class="value profit">+$23.40</div><div class="sub">+5.2%</div></div>
+    <div class="stat-card"><div class="label">Realized P&L</div><div class="value profit">+$67.20</div><div class="sub">cumulative</div></div>
+    <div class="stat-card"><div class="label">Active Sessions</div><div class="value">3/3</div><div class="sub">Pro limit</div></div>
+  </div>
+
+  <!-- Kill Switch Active State (hidden by default, shown after trigger) -->
+  <div class="kill-active-banner" id="killActiveBanner">
+    <h3>🚨 KILL SWITCH ACTIVE</h3>
+    <p>All autonomous trading halted. All positions exited. All sessions terminated.</p>
+    <button class="kill-reset-btn" onclick="resetKillSwitch()">Reset Kill Switch</button>
+  </div>
+
+  <!-- Sessions list -->
+  <div class="sessions-header">
+    <h2>Sessions</h2>
+    <span class="count">3 active · 3 past</span>
+  </div>
+
+  <div class="session-list">
+    <!-- Session 1: Positioned (with profit target) -->
+    <div class="session-card" onclick="toggleDetail()">
+      <div class="session-top">
+        <span class="session-market">🏛️ Will Trump win 2024? <span class="session-prob">68%</span></span>
+        <div class="session-badges"><span class="target-badge">Target 100% · 47%</span><span class="status-badge positioned">Positioned</span></div>
+      </div>
+      <div class="session-meta">
+        <span class="persona-icon">🎯 Sniper</span>
+        <span>$150 invested</span>
+        <span>33% utilized</span>
+      </div>
+      <div class="session-progress">
+        <div class="util-bar"><div class="in-pos" style="width:33%"></div><div class="available" style="width:67%"></div></div>
+        <span class="util-label">$50 / $150</span>
+      </div>
+      <div class="session-bottom">
+        <div class="session-pnl">
+          <span><span class="lbl">Unrealized </span><span class="val up">+$9.50</span></span>
+          <span><span class="lbl">Realized </span><span class="val up">+$12.00</span></span>
+          <span><span class="lbl">LONG YES @ 0.42 → 0.48</span></span>
+        </div>
+        <div class="session-actions">
+          <button>Pause</button>
+          <button>Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session 2: Watching -->
+    <div class="session-card">
+      <div class="session-top">
+        <span class="session-market">🏦 Fed rate cut by March? <span class="session-prob">42%</span></span>
+        <span class="status-badge watching">Watching</span>
+      </div>
+      <div class="session-meta">
+        <span class="persona-icon">🎯 Sniper</span>
+        <span>$200 invested</span>
+        <span>0% utilized</span>
+      </div>
+      <div class="session-progress">
+        <div class="util-bar"><div class="available" style="width:100%"></div></div>
+        <span class="util-label">$0 / $200</span>
+      </div>
+      <div class="session-decision">Last decision: "Edge 7%, below Sniper threshold of 10%" - 2h ago</div>
+      <div class="session-bottom">
+        <div class="session-pnl">
+          <span><span class="lbl">Unrealized </span><span class="val">$0.00</span></span>
+          <span><span class="lbl">Realized </span><span class="val up">+$18.50</span></span>
+        </div>
+        <div class="session-actions">
+          <button>Pause</button>
+          <button>Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session 3: Positioned (with 30% warning - sizing reduced) -->
+    <div class="session-card">
+      <div class="session-top">
+        <span class="session-market">₿ Bitcoin > $100k by June? <span class="session-prob">33%</span><span class="risk-indicator warning">⚠️ -32%</span></span>
+        <span class="status-badge positioned">Positioned</span>
+      </div>
+      <div class="session-meta">
+        <span class="persona-icon">🎯 Sniper</span>
+        <span>$100 invested</span>
+        <span>45% utilized</span>
+      </div>
+      <div class="session-progress">
+        <div class="util-bar"><div class="in-pos" style="width:45%"></div><div class="available" style="width:55%"></div></div>
+        <span class="util-label">$45 / $100</span>
+      </div>
+      <div class="session-decision">⚠️ Loss hit 30% - position sizing reduced 50% for subsequent trades</div>
+      <div class="session-bottom">
+        <div class="session-pnl">
+          <span><span class="lbl">Unrealized </span><span class="val down">-$2.10</span></span>
+          <span><span class="lbl">Realized </span><span class="val up">+$36.70</span></span>
+          <span><span class="lbl">LONG YES @ 0.35 → 0.33</span></span>
+        </div>
+        <div class="session-actions">
+          <button>Pause</button>
+          <button>Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session 4: Cooldown (recently exited at a loss) -->
+    <div class="session-card" style="opacity:.8">
+      <div class="session-top">
+        <span class="session-market">⚖️ Supreme Court rules on TikTok ban? <span class="session-prob">71%</span></span>
+        <span class="status-badge cooldown">Cooldown</span>
+      </div>
+      <div class="session-meta">
+        <span class="persona-icon">🎯 Sniper</span>
+        <span>$80 invested</span>
+        <span>0% utilized</span>
+      </div>
+      <div class="session-progress">
+        <div class="util-bar"><div class="available" style="width:100%"></div></div>
+        <span class="util-label">$0 / $80</span>
+      </div>
+      <div class="session-decision">🕐 Cooldown (28 min remaining) - waiting before re-entry after loss</div>
+      <div class="session-bottom">
+        <div class="session-pnl">
+          <span><span class="lbl">Unrealized </span><span class="val">$0.00</span></span>
+          <span><span class="lbl">Realized </span><span class="val down">-$6.40</span></span>
+        </div>
+        <div class="session-actions">
+          <button>Resume</button>
+          <button>Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session 5: Completed (market resolved) -->
+    <div class="session-card" style="opacity:.65">
+      <div class="session-top">
+        <span class="session-market">🇬🇧 UK general election before 2025? <span class="session-prob">100%</span></span>
+        <div class="session-badges"><span class="term-badge resolved">Market resolved</span><span class="status-badge completed">Completed</span></div>
+      </div>
+      <div class="session-meta">
+        <span class="persona-icon">🎯 Sniper</span>
+        <span>$120 invested</span>
+        <span>Resolved YES</span>
+      </div>
+      <div class="session-decision">Market resolved: YES. Redemption: +$34.00. Session complete.</div>
+      <div class="session-bottom">
+        <div class="session-pnl">
+          <span><span class="lbl">Final P&L </span><span class="val up">+$34.00</span></span>
+          <span><span class="lbl">ROI </span><span class="val up">+28.3%</span></span>
+        </div>
+        <div class="session-actions">
+          <button>View History</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session 6: Profit target reached -->
+    <div class="session-card" style="opacity:.65">
+      <div class="session-top">
+        <span class="session-market">🛢️ Oil above $90 by Q3? <span class="session-prob">56%</span></span>
+        <div class="session-badges"><span class="term-badge target-reached">Target reached</span><span class="status-badge completed">Completed</span></div>
+      </div>
+      <div class="session-meta">
+        <span class="persona-icon">🎯 Sniper</span>
+        <span>$100 invested</span>
+        <span>Target: 100%</span>
+      </div>
+      <div class="session-decision">Profit target reached (100%). Positions exited. Capital released.</div>
+      <div class="session-bottom">
+        <div class="session-pnl">
+          <span><span class="lbl">Final P&L </span><span class="val up">+$104.50</span></span>
+          <span><span class="lbl">ROI </span><span class="val up">+104.5%</span></span>
+        </div>
+        <div class="session-actions">
+          <button>View History</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session detail panel -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <h3>🏛️ Will Trump win 2024? - Session Detail</h3>
+      <button class="detail-close" onclick="toggleDetail()">✕</button>
+    </div>
+    <div class="detail-tabs">
+      <div class="detail-tab active" data-tab="capital" onclick="switchTab(this)">Capital</div>
+      <div class="detail-tab" data-tab="decisions" onclick="switchTab(this)">Decision Log</div>
+      <div class="detail-tab" data-tab="trades" onclick="switchTab(this)">Trade History</div>
+    </div>
+
+    <!-- Capital Tab -->
+    <div class="tab-panel active" id="tab-capital">
+      <div class="capital-grid">
+        <div class="capital-item"><div class="c-label">In Positions</div><div class="c-value">$50</div></div>
+        <div class="capital-item"><div class="c-label">Pending Orders</div><div class="c-value">$0</div></div>
+        <div class="capital-item"><div class="c-label">Available</div><div class="c-value">$100</div></div>
+        <div class="capital-item"><div class="c-label">Realized P&L</div><div class="c-value profit">+$12.00</div></div>
+      </div>
+      <div class="capital-util">
+        <div class="capital-util-label">Capital Utilization - $150 total</div>
+        <div class="capital-bar">
+          <div class="seg-position" style="width:33%"></div>
+          <div class="seg-pending" style="width:0%"></div>
+          <div class="seg-available" style="width:67%"></div>
+        </div>
+        <div class="capital-bar-legend">
+          <span><span class="dot pos"></span> In positions (33%)</span>
+          <span><span class="dot pend"></span> Pending (0%)</span>
+          <span><span class="dot avail"></span> Available (67%)</span>
+        </div>
+      </div>
+      <div class="current-position">
+        <div class="pos-header">
+          <span class="pos-label">Current Position</span>
+          <span class="pos-direction long-yes">LONG YES</span>
+        </div>
+        <div class="pos-grid">
+          <div class="pos-item"><div class="p-label">Entry Price</div><div class="p-value">$0.42</div></div>
+          <div class="pos-item"><div class="p-label">Current Price</div><div class="p-value">$0.48</div></div>
+          <div class="pos-item"><div class="p-label">Unrealized P&L</div><div class="p-value up">+$9.50</div></div>
+        </div>
+      </div>
+      <div class="capital-actions">
+        <button>+ Add Funds</button>
+        <button>− Withdraw Available</button>
+      </div>
+      <div class="profit-target-section">
+        <div class="pt-header"><span class="pt-label">Profit Target</span><span class="pt-value">100% (+$150.00)</span></div>
+        <div class="pt-bar"><div class="pt-fill" style="width:47%"></div></div>
+        <div class="pt-meta"><span>Progress: 47%</span><span>+$70.50 / $150.00</span></div>
+      </div>
+    </div>
+
+    <!-- Decision Log Tab -->
+    <div class="tab-panel" id="tab-decisions">
+      <div class="decision-log">
+        <div class="log-entry"><span class="log-time">Today 14:30</span><span class="log-action skip">Skip</span><span class="log-reason">Edge 7% but alignment weak (0.6). Sniper requires &gt;10% with strong alignment. Waiting.</span><span class="log-conviction">0.3</span></div>
+        <div class="log-entry"><span class="log-time">Today 10:30</span><span class="log-action hold">Hold</span><span class="log-reason">Position +$4.20, momentum intact. No regime shift detected. Holding.</span><span class="log-conviction">0.8</span></div>
+        <div class="log-entry"><span class="log-time">Yesterday 18:00</span><span class="log-action enter">Enter</span><span class="log-reason">Edge 12%, alignment 0.85, catalyst approaching. Entering $50 limit.</span><span class="log-conviction">0.9</span></div>
+        <div class="log-entry"><span class="log-time">2 days ago</span><span class="log-action skip">Skip</span><span class="log-reason">Edge 5%, insufficient for Sniper threshold. Market too quiet.</span><span class="log-conviction">0.2</span></div>
+        <div class="log-entry"><span class="log-time">3 days ago</span><span class="log-action skip">Skip</span><span class="log-reason">Consensus failed (disagreement 35%) - no reliable signal to act on.</span><span class="log-conviction">0.1</span></div>
+        <div class="log-entry rejected-entry"><span class="log-time">4 days ago</span><span class="log-action rejected">Rejected</span><span class="log-reason"><span class="safety-icon">🛡️</span> Agent proposed 60% allocation but guardrail capped at 50%. No trade.</span><span class="log-conviction">-</span></div>
+        <div class="log-entry"><span class="log-time">5 days ago</span><span class="log-action exit">Exit</span><span class="log-reason">Regime shift detected - exited $40 YES @ 0.55 (+$5.20)</span><span class="log-conviction">0.7</span></div>
+      </div>
+    </div>
+
+    <!-- Trade History Tab -->
+    <div class="tab-panel" id="tab-trades">
+      <div class="trade-history-item">
+        <span class="trade-pair"><span class="entry-exit">BUY YES @ 0.42</span><span class="arrow">→</span><span class="entry-exit">holding</span></span>
+        <span class="trade-reason">Edge 12%, high alignment · Entered yesterday</span>
+        <span class="trade-pnl up">+$9.50</span>
+      </div>
+      <div class="trade-history-item">
+        <span class="trade-pair"><span class="entry-exit">BUY YES @ 0.38</span><span class="arrow">→</span><span class="entry-exit">SELL @ 0.55</span></span>
+        <span class="trade-reason">Regime shift exit · Held 3 days</span>
+        <span class="trade-pnl up">+$5.20</span>
+      </div>
+      <div class="trade-history-item">
+        <span class="trade-pair"><span class="entry-exit">BUY YES @ 0.45</span><span class="arrow">→</span><span class="entry-exit">SELL @ 0.52</span></span>
+        <span class="trade-reason">Target reached · Held 5 days</span>
+        <span class="trade-pnl up">+$6.80</span>
+      </div>
+    </div>
+
+    <!-- Session Controls -->
+    <div class="session-detail-controls">
+      <button class="primary">Adjust Investment</button>
+      <button>Pause</button>
+      <button>Resume</button>
+      <button class="danger">Stop Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- Kill Switch Modal -->
+<div class="kill-modal">
+  <div class="kill-modal-content">
+    <h3>⚠️ Kill Switch</h3>
+    <p>Exit ALL positions across ALL markets? This will terminate all 3 active sessions and cannot be undone.</p>
+    <div class="kill-modal-actions">
+      <button class="kill-confirm">Exit All Positions</button>
+      <button class="kill-cancel" onclick="document.querySelector('.kill-modal').classList.remove('active')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleDetail(){document.getElementById('detailPanel').classList.toggle('active')}
+function switchTab(el){
+  document.querySelectorAll('.detail-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+el.dataset.tab).classList.add('active');
+}
+function triggerKillSwitch(){
+  document.querySelector('.kill-modal').classList.remove('active');
+  document.getElementById('killActiveBanner').classList.add('active');
+  document.querySelectorAll('.status-badge').forEach(b=>{b.className='status-badge terminated';b.textContent='Terminated'});
+  document.querySelectorAll('.session-actions button').forEach(b=>b.disabled=true);
+  document.querySelector('.kill-btn').style.display='none';
+}
+function resetKillSwitch(){
+  document.getElementById('killActiveBanner').classList.remove('active');
+  document.querySelector('.kill-btn').style.display='flex';
+  location.reload();
+}
+document.querySelector('.kill-confirm').addEventListener('click',triggerKillSwitch);
+document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)});
+(function(){const t=localStorage.getItem('tw-theme');if(t)document.documentElement.setAttribute('data-theme',t)})();
+</script>
+</body>
+</html>

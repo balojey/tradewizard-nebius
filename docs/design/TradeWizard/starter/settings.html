@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings - TradeWizard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --no:oklch(65% 0.18 25);
+  --warning:oklch(78% 0.14 85);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+  --max-w:1200px;
+  --nav-bg:oklch(14% 0.015 260 / .85);
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+  --no:oklch(55% 0.18 25);
+  --warning:oklch(55% 0.14 85);
+  --nav-bg:oklch(98% 0.003 260 / .85);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 clamp(1rem,4vw,2rem)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-weight:700;font-size:1.125rem;display:flex;align-items:center;gap:.5rem}
+.nav-logo .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--ai);box-shadow:0 0 6px var(--ai)}
+.nav-links{display:flex;gap:1.5rem;font-size:.8125rem}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover,.nav-links a.active{color:var(--fg)}
+.nav-right{display:flex;align-items:center;gap:1rem}
+.credit-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;transition:transform .15s}
+.wallet-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);background:var(--surface);border:1px solid var(--border);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;display:flex;align-items:center;gap:.5rem}
+.credit-badge.pulse{animation:creditPulse .4s ease}
+@keyframes creditPulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
+.topup{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.7rem;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2)}
+.topup a{color:var(--accent);font-weight:600;text-decoration:none}
+.topup a:hover{text-decoration:underline}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center;transition:border-color .15s}
+.theme-toggle:hover{border-color:var(--muted)}
+.theme-toggle svg{width:16px;height:16px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+
+.page{max-width:720px;margin:0 auto;padding:2rem clamp(1rem,4vw,2rem)}
+.page h1{font-family:var(--font-display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.5rem}
+.page .page-sub{font-size:.8rem;color:var(--muted);margin-bottom:2rem}
+
+.section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.25rem}
+.section h3{font-size:.875rem;font-weight:600;margin-bottom:.25rem}
+.section .section-desc{font-size:.75rem;color:var(--muted);margin-bottom:1.25rem}
+
+/* Toggle rows */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:.75rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .4)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-info .toggle-label{font-size:.8125rem;font-weight:500}
+.toggle-info .toggle-desc{font-size:.7rem;color:var(--muted);margin-top:.125rem}
+.toggle-switch{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-switch .slider{position:absolute;inset:0;background:var(--surface-2);border-radius:11px;border:1px solid var(--border);cursor:pointer;transition:all .2s}
+.toggle-switch .slider::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--muted);top:2px;left:2px;transition:all .2s}
+.toggle-switch input:checked+.slider{background:var(--ai);border-color:var(--ai)}
+.toggle-switch input:checked+.slider::before{transform:translateX(18px);background:var(--bg)}
+.toggle-row .pro-badge{font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;color:var(--warning);background:oklch(78% 0.14 85 / .1);padding:.15rem .4rem;border-radius:3px;margin-left:.5rem;font-weight:600}
+
+/* Quiet hours */
+.quiet-hours{display:flex;align-items:center;gap:.75rem;margin-top:.75rem}
+.quiet-hours label{font-size:.75rem;color:var(--muted)}
+.time-input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.375rem .625rem;font-size:.75rem;color:var(--fg);font-family:var(--font-mono);width:80px;outline:none}
+.time-input:focus{border-color:var(--ai)}
+
+/* Threshold */
+.threshold-row{margin-top:1rem}
+.threshold-row label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:.5rem}
+.threshold-slider{width:100%;accent-color:var(--ai);cursor:pointer}
+.threshold-value{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);margin-top:.25rem}
+.pro-badge{font-size:.6rem;background:var(--ai);color:var(--bg);padding:.125rem .5rem;border-radius:4px;vertical-align:middle;margin-left:.5rem;font-weight:700;letter-spacing:.03em}
+
+/* Webhook */
+.webhook-section{margin-top:1rem}
+.webhook-section label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:.375rem}
+.webhook-input{display:flex;gap:.5rem}
+.webhook-input input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.75rem;color:var(--fg);font-family:var(--font-mono);outline:none}
+.webhook-input input:focus{border-color:var(--ai)}
+.webhook-input button{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.7rem;color:var(--fg);cursor:pointer;white-space:nowrap;font-weight:500}
+.webhook-input button:hover{border-color:var(--muted)}
+
+@media(max-width:768px){
+  .nav-links{display:none}
+}
+@media(max-width:430px){
+  .page{padding:1.25rem 1rem}
+  .section{padding:1.25rem}
+}
+.upgrade-prompt,.upgrade-prompt-pro{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-radius:var(--radius);background:linear-gradient(135deg,oklch(30% 0.04 260),oklch(22% 0.03 280));border:1px solid oklch(40% 0.08 270 / .4);margin-bottom:1rem}
+.upgrade-prompt .prompt-icon,.upgrade-prompt-pro .prompt-icon{font-size:1rem;flex-shrink:0}
+.upgrade-prompt .prompt-text,.upgrade-prompt-pro .prompt-text{flex:1;font-size:.8rem;color:var(--muted);line-height:1.4}
+.upgrade-prompt .prompt-text strong,.upgrade-prompt-pro .prompt-text strong{color:var(--fg);font-weight:600}
+.upgrade-prompt .prompt-cta,.upgrade-prompt-pro .prompt-cta{flex-shrink:0;padding:.4rem .9rem;border-radius:8px;font-size:.75rem;font-weight:600;background:linear-gradient(135deg,var(--accent),var(--ai));color:#fff;text-decoration:none;white-space:nowrap;transition:opacity .15s,transform .15s;box-shadow:0 2px 8px oklch(58% 0.18 255 / .3)}
+.upgrade-prompt .prompt-cta:hover,.upgrade-prompt-pro .prompt-cta:hover{opacity:.9;transform:translateY(-1px)}
+.upgrade-prompt-pro{background:linear-gradient(135deg,oklch(28% 0.05 280),oklch(22% 0.04 300));border-color:oklch(50% 0.12 295 / .3)}
+.upgrade-prompt-pro .prompt-cta{background:linear-gradient(135deg,var(--ai),oklch(55% 0.20 270));box-shadow:0 2px 8px oklch(58% 0.18 295 / .3)}
+[data-theme="light"] .upgrade-prompt,[data-theme="light"] .upgrade-prompt-pro{background:linear-gradient(135deg,oklch(94% 0.02 260),oklch(90% 0.03 280));border-color:oklch(80% 0.06 270 / .4)}
+[data-theme="light"] .upgrade-prompt .prompt-cta,[data-theme="light"] .upgrade-prompt-pro .prompt-cta{box-shadow:0 2px 8px oklch(58% 0.18 255 / .15)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><span class="ai-dot"></span> TradeWizard</a>
+    <div class="nav-links">
+      <a href="markets.html">Markets</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="insights.html">Insights</a>
+      <a href="subscription.html">Plan</a>
+      <a href="settings.html" class="active">Settings</a>
+    </div>
+    <div class="nav-right">
+      <span class="wallet-badge"><span class="wallet-text">$1,240</span></span>
+      <span class="credit-badge"><span class="credit-text">38 credits</span><span class="topup"><a href="subscription.html">+ Top up</a></span></span>
+      <button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="upgrade-prompt"><span class="prompt-icon">🔒</span><span class="prompt-text">You're on the <strong>Free plan</strong> - email, push, and webhook delivery require Starter+</span><a href="subscription.html" class="prompt-cta">Upgrade</a></div>
+  <h1>Notifications & Delivery</h1>
+  <p class="page-sub">Configure how and when you receive analysis results and market alerts</p>
+
+  <div class="section">
+    <h3>Delivery Channels</h3>
+    <p class="section-desc">Choose where analysis results are delivered</p>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">In-app notifications</div>
+        <div class="toggle-desc">Results appear in your notification center</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+
+    <div class="toggle-row email-toggle" style="position:relative">
+      <div class="tier-lock-overlay"><span class="lock-icon">🔒</span><span class="lock-text">Email requires Starter+</span><a href="subscription.html" class="lock-cta">Upgrade</a></div>
+      <div class="toggle-info">
+        <div class="toggle-label">Email delivery</div>
+        <div class="toggle-desc">Full analysis sent to your inbox</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+
+    <div class="toggle-row push-toggle" style="position:relative">
+      <div class="tier-lock-overlay"><span class="lock-icon">🔒</span><span class="lock-text">Push requires Starter+</span><a href="subscription.html" class="lock-cta">Upgrade</a></div>
+      <div class="toggle-info">
+        <div class="toggle-label">Push notifications</div>
+        <div class="toggle-desc">Real-time alerts on mobile and desktop</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Webhook delivery<span class="pro-badge">Pro+</span></div>
+        <div class="toggle-desc">POST analysis JSON to your endpoint for programmatic use</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox"><span class="slider"></span></label>
+    </div>
+
+    <div class="webhook-section" style="position:relative"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:oklch(14% 0.015 260 / .75);border-radius:inherit;font-size:.75rem;color:oklch(97% 0.005 260);backdrop-filter:blur(2px);z-index:2">🔒 Pro+ required</div>
+      <div class="tier-lock-overlay"><span class="lock-icon">🔒</span><span class="lock-text">Webhook delivery requires Pro+</span><a href="subscription.html" class="lock-cta">Upgrade</a></div>
+      <label>Webhook URL</label>
+      <div class="webhook-input">
+        <input type="url" placeholder="https://your-api.com/webhook/tradewizard" value="https://api.myapp.io/hooks/tw">
+        <button>Test</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Quiet Hours</h3>
+    <p class="section-desc">Pause non-critical notifications during these hours</p>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Enable quiet hours</div>
+        <div class="toggle-desc">Only urgent alerts (large probability shifts) will come through</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+
+    <div class="quiet-hours">
+      <label>From</label>
+      <input type="time" class="time-input" value="22:00">
+      <label>To</label>
+      <input type="time" class="time-input" value="07:00">
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Alert Thresholds</h3>
+    <p class="section-desc">Only notify when probability shifts exceed your threshold</p>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Probability shift alerts</div>
+        <div class="toggle-desc">Get notified when a tracked market moves significantly</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+
+    <div class="threshold-row">
+      <label>Minimum shift to trigger alert</label>
+      <input type="range" class="threshold-slider" min="1" max="20" value="5" id="thresholdRange">
+      <div class="threshold-value" id="thresholdVal">±5% probability change</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Recurring Analysis Notifications</h3>
+    <p class="section-desc">Control notifications for your scheduled recurring analyses</p>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Notify on every delivery</div>
+        <div class="toggle-desc">Get alerted each time a recurring analysis completes</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Only notify on recommendation change</div>
+        <div class="toggle-desc">Silent unless the recommendation flips (e.g. BUY YES → NO TRADE)</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox"><span class="slider"></span></label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Notify on confidence drop</div>
+        <div class="toggle-desc">Alert when confidence drops below 50% on an active position</div>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" checked><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div class="section tier-gate-pro" style="position:relative">
+    <div class="tier-lock-overlay"><span class="lock-icon">🔒</span><span class="lock-text">Trading Persona requires Pro+</span><a href="subscription.html" class="lock-cta">Upgrade</a></div>
+    <h3>Trading Persona</h3>
+    <p class="section-desc">Your active persona governs how the Portfolio Manager trades on your behalf</p>
+
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-top:1rem;display:flex;align-items:center;gap:1rem">
+      <div style="width:44px;height:44px;border-radius:10px;background:oklch(58% 0.18 295 / .15);display:grid;place-items:center;font-size:1.25rem;flex-shrink:0">🎯</div>
+      <div style="flex:1">
+        <div style="font-size:.875rem;font-weight:600">The Sniper</div>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:.125rem">Aggressive · High-conviction, rare trades · Edge &gt;10% required</div>
+      </div>
+      <a href="persona-selection.html" style="font-size:.75rem;color:var(--ai);font-weight:600;text-decoration:none;padding:.4rem .875rem;border:1px solid oklch(58% 0.18 295 / .3);border-radius:6px;white-space:nowrap">Change Persona</a>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('thresholdRange').addEventListener('input',function(){
+  document.getElementById('thresholdVal').textContent='±'+this.value+'% probability change';
+});
+document.querySelector('.webhook-input button').addEventListener('click',function(){
+  const url=this.previousElementSibling.value;
+  if(!url){this.textContent='Enter URL first';setTimeout(()=>{this.textContent='Test'},1500);return}
+  this.textContent='Sending…';this.disabled=true;
+  setTimeout(()=>{this.textContent='✓ 200 OK';setTimeout(()=>{this.textContent='Test';this.disabled=false},2000)},1200);
+});
+
+(function(){const t=localStorage.getItem('tw-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)})})();
+</script>
+</body>
+</html>

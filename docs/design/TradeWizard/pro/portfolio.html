@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio - TradeWizard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --no:oklch(65% 0.18 25);
+  --warning:oklch(78% 0.14 85);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+  --max-w:1200px;
+  --nav-bg:oklch(14% 0.015 260 / .85);
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+  --no:oklch(55% 0.18 25);
+  --warning:oklch(55% 0.14 85);
+  --nav-bg:oklch(98% 0.003 260 / .85);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 clamp(1rem,4vw,2rem)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-weight:700;font-size:1.125rem;display:flex;align-items:center;gap:.5rem}
+.nav-logo .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--ai);box-shadow:0 0 6px var(--ai)}
+.nav-links{display:flex;gap:1.5rem;font-size:.8125rem}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover,.nav-links a.active{color:var(--fg)}
+.nav-right{display:flex;align-items:center;gap:1rem}
+.credit-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;transition:transform .15s}
+.wallet-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);background:var(--surface);border:1px solid var(--border);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;display:flex;align-items:center;gap:.5rem}
+.wallet-sub{font-size:.6rem;color:var(--muted)}
+.wallet-detail{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-width:180px;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2);display:flex;flex-direction:column;gap:.375rem;z-index:10}
+.wallet-badge:hover .wallet-detail{opacity:1;pointer-events:auto}
+.wd-row{display:flex;justify-content:space-between;font-size:.7rem}
+.wd-lbl{color:var(--muted)}
+.wd-val{font-weight:600}
+.wd-avail .wd-val{color:var(--yes)}
+.credit-badge:hover .topup{opacity:1;pointer-events:auto}
+.credit-badge.pulse{animation:creditPulse .4s ease}
+@keyframes creditPulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
+.topup{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.7rem;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2)}
+.topup a{color:var(--accent);font-weight:600;text-decoration:none}
+.topup a:hover{text-decoration:underline}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center;transition:border-color .15s}
+.theme-toggle:hover{border-color:var(--muted)}
+.theme-toggle svg{width:16px;height:16px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+
+.page{max-width:var(--max-w);margin:0 auto;padding:1.5rem clamp(1rem,4vw,2rem)}
+.page h1{font-family:var(--font-display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:1.5rem}
+
+/* Summary cards */
+.summary-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem}
+.summary-card .label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.375rem}
+.summary-card .value{font-family:var(--font-mono);font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
+.summary-card .value.profit{color:var(--yes)}
+.summary-card .value.loss{color:var(--no)}
+.summary-card .sub{font-size:.7rem;color:var(--muted);margin-top:.25rem;font-family:var(--font-mono)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
+.tab{padding:.625rem 1.25rem;font-size:.8125rem;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--fg)}
+.tab.active{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
+
+/* Positions table */
+.positions-table{width:100%;border-collapse:collapse}
+.positions-table th{font-size:.6875rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:.625rem 0;border-bottom:1px solid var(--border);font-weight:500}
+.positions-table td{padding:.875rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .5);font-size:.8125rem;vertical-align:middle}
+.positions-table .market-name{font-weight:500;max-width:240px}
+.positions-table .market-cell{display:flex;align-items:center;gap:.625rem}
+.positions-table .market-thumb{width:32px;height:32px;border-radius:6px;flex-shrink:0}
+.positions-table .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:.8rem}
+.positions-table .direction{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:600}
+.positions-table .direction.yes{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.positions-table .direction.no{background:oklch(65% 0.18 25 / .12);color:var(--no)}
+.positions-table .pnl{font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
+.positions-table .pnl.up{color:var(--yes)}
+.positions-table .pnl.down{color:var(--no)}
+.positions-table .ai-tag{font-size:.6rem;color:var(--ai);background:oklch(58% 0.18 295 / .1);padding:.125rem .375rem;border-radius:3px}
+.positions-table .pm-badge{font-size:.6rem;color:var(--ai);background:oklch(58% 0.18 295 / .15);padding:.125rem .375rem;border-radius:3px;display:inline-flex;align-items:center;gap:.2rem}
+.pm-summary{background:var(--surface);border:1px solid oklch(58% 0.18 295 / .25);border-radius:var(--radius);padding:1.25rem;margin-bottom:1.5rem}
+.pm-summary-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.pm-summary-header h3{font-size:.875rem;font-weight:600;display:flex;align-items:center;gap:.5rem}
+.pm-summary-header .pm-icon{color:var(--ai)}
+.pm-summary-header .pm-link{font-size:.75rem;color:var(--ai);text-decoration:none;font-weight:500}
+.pm-summary-header .pm-link:hover{text-decoration:underline}
+.pm-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.pm-stat .pm-stat-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.pm-stat .pm-stat-value{font-family:var(--font-mono);font-size:1rem;font-weight:700;margin-top:.25rem;font-variant-numeric:tabular-nums}
+[] .pm-summary,[] .pm-summary{position:relative}
+[] .pm-summary .tier-lock-overlay,[] .pm-summary .tier-lock-overlay{display:flex}
+@media(max-width:600px){.pm-stats{grid-template-columns:1fr}}
+
+/* Analysis history */
+.history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:1rem}
+.history-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem}
+.history-card .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem}
+.history-card .market{font-size:.875rem;font-weight:600;max-width:200px;display:flex;align-items:center;gap:.5rem}
+.history-card .market-thumb{width:28px;height:28px;border-radius:5px;flex-shrink:0}
+.history-card .outcome{font-size:.65rem;font-weight:600;padding:.2rem .5rem;border-radius:4px}
+.history-card .outcome.correct{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.history-card .outcome.incorrect{background:oklch(65% 0.18 25 / .12);color:var(--no)}
+.history-card .outcome.pending{background:oklch(78% 0.14 85 / .12);color:var(--warning)}
+.history-card .details{display:grid;grid-template-columns:1fr 1fr;gap:.375rem;font-size:.75rem}
+.history-card .details .lbl{color:var(--muted)}
+.history-card .details .val{font-family:var(--font-mono);text-align:right;font-variant-numeric:tabular-nums}
+
+/* Performance chart */
+.perf-section{margin-top:2rem}
+.perf-section h3{font-size:.875rem;font-weight:600;margin-bottom:1rem}
+.perf-chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;height:160px;display:flex;align-items:flex-end;gap:2px}
+.perf-bar{flex:1;background:var(--yes);border-radius:3px 3px 0 0;min-height:4px;transition:height .3s}
+.perf-bar.loss{background:var(--no)}
+
+/* Responsive */
+@media(max-width:1024px){
+  .summary-row{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .summary-row{grid-template-columns:1fr 1fr}
+  .positions-table{display:block;overflow-x:auto}
+  .history-grid{grid-template-columns:1fr}
+}
+@media(max-width:430px){
+  .page{padding:1rem}
+  .summary-row{grid-template-columns:1fr}
+  .tabs{overflow-x:auto}
+  .tab{white-space:nowrap;font-size:.75rem;padding:.5rem 1rem}
+}
+.upgrade-prompt,.upgrade-prompt-pro{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-radius:var(--radius);background:linear-gradient(135deg,oklch(30% 0.04 260),oklch(22% 0.03 280));border:1px solid oklch(40% 0.08 270 / .4);margin-bottom:1rem}
+.upgrade-prompt .prompt-icon,.upgrade-prompt-pro .prompt-icon{font-size:1rem;flex-shrink:0}
+.upgrade-prompt .prompt-text,.upgrade-prompt-pro .prompt-text{flex:1;font-size:.8rem;color:var(--muted);line-height:1.4}
+.upgrade-prompt .prompt-text strong,.upgrade-prompt-pro .prompt-text strong{color:var(--fg);font-weight:600}
+.upgrade-prompt .prompt-cta,.upgrade-prompt-pro .prompt-cta{flex-shrink:0;padding:.4rem .9rem;border-radius:8px;font-size:.75rem;font-weight:600;background:linear-gradient(135deg,var(--accent),var(--ai));color:#fff;text-decoration:none;white-space:nowrap;transition:opacity .15s,transform .15s;box-shadow:0 2px 8px oklch(58% 0.18 255 / .3)}
+.upgrade-prompt .prompt-cta:hover,.upgrade-prompt-pro .prompt-cta:hover{opacity:.9;transform:translateY(-1px)}
+.upgrade-prompt-pro{background:linear-gradient(135deg,oklch(28% 0.05 280),oklch(22% 0.04 300));border-color:oklch(50% 0.12 295 / .3)}
+.upgrade-prompt-pro .prompt-cta{background:linear-gradient(135deg,var(--ai),oklch(55% 0.20 270));box-shadow:0 2px 8px oklch(58% 0.18 295 / .3)}
+[data-theme="light"] .upgrade-prompt,[data-theme="light"] .upgrade-prompt-pro{background:linear-gradient(135deg,oklch(94% 0.02 260),oklch(90% 0.03 280));border-color:oklch(80% 0.06 270 / .4)}
+[data-theme="light"] .upgrade-prompt .prompt-cta,[data-theme="light"] .upgrade-prompt-pro .prompt-cta{box-shadow:0 2px 8px oklch(58% 0.18 255 / .15)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><span class="ai-dot"></span> TradeWizard</a>
+    <div class="nav-links">
+      <a href="markets.html">Markets</a>
+      <a href="portfolio.html" class="active">Portfolio</a>
+      <a href="portfolio-manager.html">PM</a>
+      <a href="insights.html">Insights</a>
+      <a href="subscription.html">Plan</a>
+      <a href="settings.html">Settings</a>
+    </div>
+    <div class="nav-right">
+      <span class="wallet-badge"><span class="wallet-text">$1,240</span><span class="wallet-sub">$790 avail</span><span class="wallet-detail"><span class="wd-row"><span class="wd-lbl">Wallet</span><span class="wd-val">$1,240.00</span></span><span class="wd-row"><span class="wd-lbl">Committed</span><span class="wd-val">$450.00</span></span><span class="wd-row wd-avail"><span class="wd-lbl">Available</span><span class="wd-val">$790.00</span></span></span></span>
+      <span class="credit-badge"><span class="credit-text">47/200 credits</span><span class="topup"><a href="subscription.html">+ Top up</a></span></span>
+      <button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+  <h1>Portfolio</h1>
+
+  <div class="upgrade-prompt" style="display:none">
+    <span class="prompt-icon">🔒</span>
+    <span class="prompt-text">You're on the <strong>Free plan</strong> - upgrade to see full analysis history and accuracy tracking.</span>
+    <a href="subscription.html" class="prompt-cta">View Plans</a>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-card">
+      <div class="label">Total Value</div>
+      <div class="value">$4,868</div>
+      <div class="sub">across 9 positions</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Unrealized P&L</div>
+      <div class="value profit">+$623</div>
+      <div class="sub">+14.7% all-time</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Win Rate</div>
+      <div class="value">73%</div>
+      <div class="sub">11 of 15 resolved</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">AI Accuracy</div>
+      <div class="value" style="color:var(--ai)">78%</div>
+      <div class="sub">on followed recs</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="positions">Active Positions</div>
+    <div class="tab" data-tab="history">Analysis History</div>
+    <div class="tab" data-tab="closed">Closed Trades</div>
+  </div>
+
+  <div id="positions" class="tab-content">
+    <div class="pm-summary">
+      <div class="tier-lock-overlay"><span class="lock-icon">🔒</span><span class="lock-text">Portfolio Manager requires Pro+</span><a href="subscription.html" class="lock-cta">Upgrade</a></div>
+      <div class="pm-summary-header">
+        <h3><span class="pm-icon">🤖</span> Portfolio Manager</h3>
+        <a href="portfolio-manager.html" class="pm-link">View dashboard →</a>
+      </div>
+      <div class="pm-stats">
+        <div class="pm-stat"><div class="pm-stat-label">Active Sessions</div><div class="pm-stat-value">3 / 3</div></div>
+        <div class="pm-stat"><div class="pm-stat-label">PM Unrealized</div><div class="pm-stat-value" style="color:var(--yes)">+$23.40</div></div>
+        <div class="pm-stat"><div class="pm-stat-label">PM Realized</div><div class="pm-stat-value" style="color:var(--yes)">+$67.00</div></div>
+      </div>
+    </div>
+
+    <table class="positions-table">
+      <thead>
+        <tr>
+          <th>Market</th>
+          <th>Side</th>
+          <th>Entry</th>
+          <th>Current</th>
+          <th>Shares</th>
+          <th>P&L</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="p1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="100%" stop-color="#2d6a9f"/></linearGradient></defs><rect fill="url(#p1)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">🏛️</text></svg><span>Fed Rate Cut Sep 2026</span></div></td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">54¢</td>
+          <td class="mono">62¢</td>
+          <td class="mono">400</td>
+          <td class="pnl up">+$32.00</td>
+          <td><span class="ai-tag">AI Rec</span></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="p2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="100%" stop-color="#2d6a9f"/></linearGradient></defs><rect fill="url(#p2)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">📉</text></svg><span>US Recession Q4 2026</span></div></td>
+          <td><span class="direction no">NO</span></td>
+          <td class="mono">58¢</td>
+          <td class="mono">66¢</td>
+          <td class="mono">300</td>
+          <td class="pnl up">+$24.00</td>
+          <td><span class="ai-tag">AI Rec</span></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pm1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1c3a1c"/><stop offset="100%" stop-color="#2d8a3f"/></linearGradient></defs><rect fill="url(#pm1)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">🌍</text></svg><span>EU Carbon Tax Passed</span></div></td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">38¢</td>
+          <td class="mono">47¢</td>
+          <td class="mono">130</td>
+          <td class="pnl up">+$11.70</td>
+          <td><span class="pm-badge">🤖 PM</span></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pm2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a2a0a"/><stop offset="100%" stop-color="#c49b2a"/></linearGradient></defs><rect fill="url(#pm2)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">🏦</text></svg><span>BOJ Rate Hike Jul 2026</span></div></td>
+          <td><span class="direction no">NO</span></td>
+          <td class="mono">55¢</td>
+          <td class="mono">61¢</td>
+          <td class="mono">90</td>
+          <td class="pnl up">+$5.40</td>
+          <td><span class="pm-badge">🤖 PM</span></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="pm3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2a1a3a"/><stop offset="100%" stop-color="#6a3a9f"/></linearGradient></defs><rect fill="url(#pm3)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">🚀</text></svg><span>SpaceX IPO by 2027</span></div></td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">22¢</td>
+          <td class="mono">19¢</td>
+          <td class="mono">200</td>
+          <td class="pnl down">-$6.00</td>
+          <td><span class="pm-badge">🤖 PM</span></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="p3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1c2e"/><stop offset="100%" stop-color="#8b2252"/></linearGradient></defs><rect fill="url(#p3)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">🗳️</text></svg><span>Trump 2028 GOP Primary</span></div></td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">65¢</td>
+          <td class="mono">71¢</td>
+          <td class="mono">200</td>
+          <td class="pnl up">+$12.00</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="p4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2d4a3e"/><stop offset="100%" stop-color="#1a6b5a"/></linearGradient></defs><rect fill="url(#p4)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">🕊️</text></svg><span>Iran Peace Deal Dec</span></div></td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">48¢</td>
+          <td class="mono">41¢</td>
+          <td class="mono">250</td>
+          <td class="pnl down">-$17.50</td>
+          <td><span class="ai-tag">AI Rec</span></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="p5" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3d2e0a"/><stop offset="100%" stop-color="#b8860b"/></linearGradient></defs><rect fill="url(#p5)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">₿</text></svg><span>BTC $150K by EOY</span></div></td>
+          <td><span class="direction no">NO</span></td>
+          <td class="mono">64¢</td>
+          <td class="mono">71¢</td>
+          <td class="mono">150</td>
+          <td class="pnl up">+$10.50</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td class="market-name"><div class="market-cell"><svg class="market-thumb" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="p6" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1c1c3a"/><stop offset="100%" stop-color="#4a4a8a"/></linearGradient></defs><rect fill="url(#p6)" width="32" height="32" rx="6"/><text x="16" y="21" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="14">⚖️</text></svg><span>Chevron Deference Overturned</span></div></td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">72¢</td>
+          <td class="mono">78¢</td>
+          <td class="mono">350</td>
+          <td class="pnl up">+$21.00</td>
+          <td><span class="ai-tag">AI Rec</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="history" class="tab-content" style="display:none">
+    <div style="display:flex;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;font-size:.75rem;flex:1;min-width:120px"><span style="color:var(--muted)">Total analyses</span><div style="font-family:var(--font-mono);font-size:1.125rem;font-weight:700;margin-top:.25rem">12</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;font-size:.75rem;flex:1;min-width:120px"><span style="color:var(--muted)">Correct calls</span><div style="font-family:var(--font-mono);font-size:1.125rem;font-weight:700;margin-top:.25rem;color:var(--yes)">9 / 11</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;font-size:.75rem;flex:1;min-width:120px"><span style="color:var(--muted)">Accuracy rate</span><div style="font-family:var(--font-mono);font-size:1.125rem;font-weight:700;margin-top:.25rem;color:var(--ai)">81.8%</div></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;font-size:.75rem;flex:1;min-width:120px"><span style="color:var(--muted)">Avg edge captured</span><div style="font-family:var(--font-mono);font-size:1.125rem;font-weight:700;margin-top:.25rem;color:var(--yes)">+8.4¢</div></div>
+    </div>
+    <div class="history-grid">
+      <div class="history-card">
+        <div class="top">
+          <span class="market"><svg class="market-thumb" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="h1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="100%" stop-color="#2d6a9f"/></linearGradient></defs><rect fill="url(#h1)" width="28" height="28" rx="5"/><text x="14" y="19" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="12">🏛️</text></svg>Fed Rate Cut Sep 2026</span>
+          <span class="outcome pending">Pending</span>
+        </div>
+        <div class="details">
+          <span class="lbl">Recommendation</span><span class="val" style="color:var(--yes)">BUY YES</span>
+          <span class="lbl">AI Probability</span><span class="val">71%</span>
+          <span class="lbl">Market at time</span><span class="val">54¢</span>
+          <span class="lbl">Edge</span><span class="val">+17¢</span>
+        </div>
+      </div>
+      <div class="history-card">
+        <div class="top">
+          <span class="market"><svg class="market-thumb" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="h2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a1c1c"/><stop offset="100%" stop-color="#8b3a3a"/></linearGradient></defs><rect fill="url(#h2)" width="28" height="28" rx="5"/><text x="14" y="19" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="12">🏛️</text></svg>Debt Ceiling Raised Q1</span>
+          <span class="outcome correct">Correct</span>
+        </div>
+        <div class="details">
+          <span class="lbl">Recommendation</span><span class="val" style="color:var(--yes)">BUY YES</span>
+          <span class="lbl">AI Probability</span><span class="val">84%</span>
+          <span class="lbl">Resolved</span><span class="val">YES ✓</span>
+          <span class="lbl">P&L</span><span class="val" style="color:var(--yes)">+$48</span>
+        </div>
+      </div>
+      <div class="history-card">
+        <div class="top">
+          <span class="market"><svg class="market-thumb" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="h3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1c2e"/><stop offset="100%" stop-color="#8b2252"/></linearGradient></defs><rect fill="url(#h3)" width="28" height="28" rx="5"/><text x="14" y="19" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="12">🗳️</text></svg>Biden Pardons Before Exit</span>
+          <span class="outcome correct">Correct</span>
+        </div>
+        <div class="details">
+          <span class="lbl">Recommendation</span><span class="val" style="color:var(--yes)">BUY YES</span>
+          <span class="lbl">AI Probability</span><span class="val">91%</span>
+          <span class="lbl">Resolved</span><span class="val">YES ✓</span>
+          <span class="lbl">P&L</span><span class="val" style="color:var(--yes)">+$62</span>
+        </div>
+      </div>
+      <div class="history-card">
+        <div class="top">
+          <span class="market"><svg class="market-thumb" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="h4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1c1c3a"/><stop offset="100%" stop-color="#4a4a8a"/></linearGradient></defs><rect fill="url(#h4)" width="28" height="28" rx="5"/><text x="14" y="19" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="12">📱</text></svg>TikTok Ban Enforced</span>
+          <span class="outcome incorrect">Incorrect</span>
+        </div>
+        <div class="details">
+          <span class="lbl">Recommendation</span><span class="val" style="color:var(--yes)">BUY YES</span>
+          <span class="lbl">AI Probability</span><span class="val">67%</span>
+          <span class="lbl">Resolved</span><span class="val" style="color:var(--no)">NO ✗</span>
+          <span class="lbl">P&L</span><span class="val" style="color:var(--no)">-$34</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="closed" class="tab-content" style="display:none">
+    <table class="positions-table">
+      <thead>
+        <tr><th>Market</th><th>Side</th><th>Entry</th><th>Exit</th><th>P&L</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="market-name">Debt Ceiling Raised Q1</td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">52¢</td>
+          <td class="mono">100¢</td>
+          <td class="pnl up">+$48.00</td>
+          <td style="color:var(--yes);font-size:.75rem;font-weight:600">Won</td>
+        </tr>
+        <tr>
+          <td class="market-name">TikTok Ban Enforced</td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">67¢</td>
+          <td class="mono">0¢</td>
+          <td class="pnl down">-$34.00</td>
+          <td style="color:var(--no);font-size:.75rem;font-weight:600">Lost</td>
+        </tr>
+        <tr>
+          <td class="market-name">Biden Pardons Before Exit</td>
+          <td><span class="direction yes">YES</span></td>
+          <td class="mono">38¢</td>
+          <td class="mono">100¢</td>
+          <td class="pnl up">+$62.00</td>
+          <td style="color:var(--yes);font-size:.75rem;font-weight:600">Won</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="perf-section">
+    <h3>Monthly Performance</h3>
+    <div class="perf-chart">
+      <div class="perf-bar" style="height:45%"></div>
+      <div class="perf-bar" style="height:60%"></div>
+      <div class="perf-bar loss" style="height:20%"></div>
+      <div class="perf-bar" style="height:75%"></div>
+      <div class="perf-bar" style="height:55%"></div>
+      <div class="perf-bar" style="height:80%"></div>
+      <div class="perf-bar loss" style="height:15%"></div>
+      <div class="perf-bar" style="height:90%"></div>
+      <div class="perf-bar" style="height:65%"></div>
+      <div class="perf-bar" style="height:70%"></div>
+      <div class="perf-bar" style="height:85%"></div>
+      <div class="perf-bar" style="height:50%"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelector('.tab.active').classList.remove('active');
+    tab.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+    document.getElementById(tab.dataset.tab).style.display='';
+  });
+});
+</script>
+<script>
+(function(){const t=localStorage.getItem('tw-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)})})();
+</script>
+</body>
+</html>

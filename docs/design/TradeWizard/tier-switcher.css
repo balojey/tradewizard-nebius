@@ -1,0 +1,105 @@
+/* Tier switcher control */
+.tier-switcher{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.5rem .75rem;display:flex;align-items:center;gap:.75rem;box-shadow:0 8px 32px oklch(0% 0 0 / .3);backdrop-filter:blur(8px)}
+.tier-sw-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.tier-sw-btns{display:flex;gap:.25rem}
+.tier-sw-btns button{font-size:.7rem;padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s;white-space:nowrap}
+.tier-sw-btns button:hover{border-color:var(--muted);color:var(--fg)}
+.tier-sw-btns button.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.tier-sw-btns button[data-t="elite"].active{background:oklch(58% 0.18 295);border-color:oklch(58% 0.18 295)}
+
+/* Tier-gated visibility utilities */
+.tier-gate-starter{position:relative}
+.tier-gate-pro{position:relative}
+
+/* Upgrade prompt overlay */
+.tier-lock-overlay{display:none;position:absolute;inset:0;background:oklch(14% 0.015 260 / .85);border-radius:inherit;z-index:2;align-items:center;justify-content:center;flex-direction:column;gap:.5rem;padding:1rem;text-align:center;backdrop-filter:blur(2px)}
+.tier-lock-overlay .lock-icon{font-size:1.25rem;opacity:.7}
+.tier-lock-overlay .lock-text{font-size:.75rem;color:var(--fg);font-weight:500}
+.tier-lock-overlay .lock-cta{font-size:.7rem;color:var(--accent);font-weight:600;text-decoration:none;padding:.3rem .75rem;border:1px solid var(--accent);border-radius:6px;transition:all .15s}
+.tier-lock-overlay .lock-cta:hover{background:var(--accent);color:#fff}
+[data-theme="light"] .tier-lock-overlay{background:oklch(98% 0.003 260 / .9)}
+
+/* --- FREE TIER RESTRICTIONS --- */
+/* Hide recurring badges */
+[data-tier="free"] .recurring-badge{display:none}
+/* Show gated rows */
+[data-tier="free"] .gated-row{display:flex}
+/* Lock debate expansion */
+[data-tier="free"] .debate-summary{position:relative;max-height:60px;overflow:hidden}
+[data-tier="free"] .debate-summary::after{content:'';position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(transparent,var(--surface));pointer-events:none}
+/* Lock interval chips (non-daily) */
+[data-tier="free"] .interval-chip:not([data-i="once"]){opacity:.4;pointer-events:none}
+[data-tier="free"] .interval-chip[data-i="once"]{opacity:1;pointer-events:auto}
+/* Show upgrade prompts */
+[data-tier="free"] .upgrade-prompt{display:flex}
+/* Hide running analysis card */
+[data-tier="free"] .running-card{display:none}
+/* Limit history */
+[data-tier="free"] .analysis-card:nth-child(n+4){display:none}
+[data-tier="free"] .history-card:nth-child(n+3){display:none}
+/* Lock performance chart for free */
+[data-tier="free"] .perf-section{position:relative;max-height:80px;overflow:hidden}
+[data-tier="free"] .perf-section::after{content:'';position:absolute;bottom:0;left:0;right:0;height:60px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
+/* Lock webhook section */
+[data-tier="free"] .webhook-section .tier-lock-overlay{display:flex}
+/* Lock push notifications */
+[data-tier="free"] .push-toggle .tier-lock-overlay{display:flex}
+/* Lock email delivery */
+[data-tier="free"] .email-toggle .tier-lock-overlay{display:flex}
+/* Hide priority badge */
+[data-tier="free"] .priority-badge{display:none}
+
+/* --- STARTER TIER --- */
+[data-tier="starter"] .gated-row{display:flex}
+[data-tier="starter"] .gated-row .upgrade-link{display:none}
+[data-tier="starter"] .recurring-badge{display:inline-flex}
+/* Lock sub-daily intervals */
+[data-tier="starter"] .interval-chip[data-i="1h"],
+[data-tier="starter"] .interval-chip[data-i="4h"],
+[data-tier="starter"] .interval-chip[data-i="12h"]{opacity:.4;pointer-events:none}
+[data-tier="starter"] .interval-chip[data-i="1d"],
+[data-tier="starter"] .interval-chip[data-i="once"]{opacity:1;pointer-events:auto}
+/* Show upgrade prompts for Pro features */
+[data-tier="starter"] .upgrade-prompt{display:none}
+[data-tier="starter"] .upgrade-prompt-pro{display:flex}
+/* Lock webhook */
+[data-tier="starter"] .webhook-section .tier-lock-overlay{display:flex}
+/* Hide priority badge */
+[data-tier="starter"] .priority-badge{display:none}
+
+/* --- PRO TIER (current default - everything visible) --- */
+[data-tier="pro"] .gated-row{display:flex}
+[data-tier="pro"] .gated-row .upgrade-link{display:none}
+[data-tier="pro"] .upgrade-prompt{display:none}
+[data-tier="pro"] .upgrade-prompt-pro{display:none}
+[data-tier="pro"] .tier-lock-overlay{display:none}
+
+/* --- ELITE TIER --- */
+[data-tier="elite"] .gated-row{display:flex}
+[data-tier="elite"] .gated-row .upgrade-link{display:none}
+[data-tier="elite"] .upgrade-prompt{display:none}
+[data-tier="elite"] .upgrade-prompt-pro{display:none}
+[data-tier="elite"] .tier-lock-overlay{display:none}
+[data-tier="elite"] .elite-badge{display:inline-flex}
+[data-tier="elite"] .priority-badge{display:inline-flex}
+
+/* Elite badge */
+.elite-badge{display:none;align-items:center;gap:.25rem;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;color:oklch(58% 0.18 295);background:oklch(58% 0.18 295 / .1);padding:.2rem .5rem;border-radius:4px;font-weight:600}
+/* Priority badge */
+.priority-badge{display:none;align-items:center;gap:.25rem;font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;color:var(--warning);background:oklch(78% 0.14 85 / .1);padding:.2rem .5rem;border-radius:4px;font-weight:600}
+
+/* Upgrade prompt banner */
+.upgrade-prompt,.upgrade-prompt-pro{display:none;align-items:center;gap:1rem;background:linear-gradient(135deg,oklch(58% 0.18 295 / .1),oklch(62% 0.20 260 / .06));border:1px solid oklch(58% 0.18 295 / .25);border-radius:var(--radius,12px);padding:1rem 1.5rem;margin-bottom:1.25rem;position:relative;overflow:hidden}
+.upgrade-prompt::before,.upgrade-prompt-pro::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,oklch(58% 0.18 295 / .04) 50%,transparent 100%);animation:upgradeShimmer 3s ease-in-out infinite;pointer-events:none}
+@keyframes upgradeShimmer{0%,100%{transform:translateX(-100%)}50%{transform:translateX(100%)}}
+.upgrade-prompt .prompt-icon,.upgrade-prompt-pro .prompt-icon{font-size:1.5rem;width:2.25rem;height:2.25rem;display:flex;align-items:center;justify-content:center;background:oklch(58% 0.18 295 / .15);border-radius:8px;flex-shrink:0}
+.upgrade-prompt .prompt-text,.upgrade-prompt-pro .prompt-text{flex:1;font-size:.8rem;color:var(--fg);line-height:1.4}
+.upgrade-prompt .prompt-text strong,.upgrade-prompt-pro .prompt-text strong{color:oklch(68% 0.16 295)}
+.upgrade-prompt .prompt-cta,.upgrade-prompt-pro .prompt-cta{font-size:.75rem;font-weight:600;color:#fff;background:linear-gradient(135deg,oklch(58% 0.18 295),oklch(52% 0.20 270));padding:.5rem 1.125rem;border-radius:8px;text-decoration:none;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 2px 8px oklch(58% 0.18 295 / .3)}
+.upgrade-prompt .prompt-cta:hover,.upgrade-prompt-pro .prompt-cta:hover{transform:translateY(-1px);box-shadow:0 4px 12px oklch(58% 0.18 295 / .4)}
+
+@media(max-width:600px){
+  .tier-switcher{bottom:1rem;padding:.4rem .5rem;gap:.5rem}
+  .tier-sw-label{display:none}
+  .tier-sw-btns button{padding:.25rem .5rem;font-size:.65rem}
+}

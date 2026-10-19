@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-tier="pro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Insights - TradeWizard</title>
+<style id="tier-switcher-css">
+.tier-switcher{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.5rem .75rem;display:flex;align-items:center;gap:.75rem;box-shadow:0 8px 32px oklch(0% 0 0 / .3);backdrop-filter:blur(8px)}
+.tier-sw-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.tier-sw-btns{display:flex;gap:.25rem}
+.tier-sw-btns button{font-size:.7rem;padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s;white-space:nowrap}
+.tier-sw-btns button:hover{border-color:var(--muted);color:var(--fg)}
+.tier-sw-btns button.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.tier-sw-btns button[data-t="elite"].active{background:oklch(58% 0.18 295);border-color:oklch(58% 0.18 295)}
+.tier-gate-starter{position:relative}
+.tier-gate-pro{position:relative}
+.tier-lock-overlay{display:none;position:absolute;inset:0;background:oklch(14% 0.015 260 / .85);border-radius:inherit;z-index:2;align-items:center;justify-content:center;flex-direction:column;gap:.5rem;padding:1rem;text-align:center;backdrop-filter:blur(2px)}
+.tier-lock-overlay .lock-icon{font-size:1.25rem;opacity:.7}
+.tier-lock-overlay .lock-text{font-size:.75rem;color:var(--fg);font-weight:500}
+.tier-lock-overlay .lock-cta{font-size:.7rem;color:var(--accent);font-weight:600;text-decoration:none;padding:.3rem .75rem;border:1px solid var(--accent);border-radius:6px;transition:all .15s}
+.tier-lock-overlay .lock-cta:hover{background:var(--accent);color:#fff}
+[data-theme="light"] .tier-lock-overlay{background:oklch(98% 0.003 260 / .9)}
+[data-tier="free"] .recurring-badge{display:none}
+[data-tier="free"] .gated-row{display:flex}
+[data-tier="free"] .debate-summary{position:relative;max-height:60px;overflow:hidden}
+[data-tier="free"] .debate-summary::after{content:'';position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(transparent,var(--surface));pointer-events:none}
+[data-tier="free"] .interval-chip:not([data-i="once"]){opacity:.4;pointer-events:none}
+[data-tier="free"] .interval-chip[data-i="once"]{opacity:1;pointer-events:auto}
+[data-tier="free"] .upgrade-prompt{display:flex}
+[data-tier="free"] .running-card{display:none}
+[data-tier="free"] .analysis-card:nth-child(n+4){display:none}
+[data-tier="free"] .history-card:nth-child(n+3){display:none}
+[data-tier="free"] .perf-section{position:relative;max-height:80px;overflow:hidden}
+[data-tier="free"] .perf-section::after{content:'';position:absolute;bottom:0;left:0;right:0;height:60px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
+[data-tier="free"] .webhook-section .tier-lock-overlay{display:flex}
+[data-tier="free"] .push-toggle .tier-lock-overlay{display:flex}
+[data-tier="free"] .email-toggle .tier-lock-overlay{display:flex}
+[data-tier="free"] .priority-badge{display:none}
+[data-tier="starter"] .gated-row{display:flex}
+[data-tier="starter"] .gated-row .upgrade-link{display:none}
+[data-tier="starter"] .recurring-badge{display:inline-flex}
+[data-tier="starter"] .interval-chip[data-i="1h"],
+[data-tier="starter"] .interval-chip[data-i="4h"],
+[data-tier="starter"] .interval-chip[data-i="12h"]{opacity:.4;pointer-events:none}
+[data-tier="starter"] .interval-chip[data-i="1d"],
+[data-tier="starter"] .interval-chip[data-i="once"]{opacity:1;pointer-events:auto}
+[data-tier="starter"] .upgrade-prompt{display:none}
+[data-tier="starter"] .upgrade-prompt-pro{display:flex}
+[data-tier="starter"] .webhook-section .tier-lock-overlay{display:flex}
+[data-tier="starter"] .priority-badge{display:none}
+[data-tier="pro"] .gated-row{display:flex}
+[data-tier="pro"] .gated-row .upgrade-link{display:none}
+[data-tier="pro"] .upgrade-prompt{display:none}
+[data-tier="pro"] .upgrade-prompt-pro{display:none}
+[data-tier="pro"] .tier-lock-overlay{display:none}
+[data-tier="elite"] .gated-row{display:flex}
+[data-tier="elite"] .gated-row .upgrade-link{display:none}
+[data-tier="elite"] .upgrade-prompt{display:none}
+[data-tier="elite"] .upgrade-prompt-pro{display:none}
+[data-tier="elite"] .tier-lock-overlay{display:none}
+[data-tier="elite"] .elite-badge{display:inline-flex}
+[data-tier="elite"] .priority-badge{display:inline-flex}
+.elite-badge{display:none;align-items:center;gap:.25rem;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;color:oklch(58% 0.18 295);background:oklch(58% 0.18 295 / .1);padding:.2rem .5rem;border-radius:4px;font-weight:600}
+.priority-badge{display:none;align-items:center;gap:.25rem;font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;color:var(--warning);background:oklch(78% 0.14 85 / .1);padding:.2rem .5rem;border-radius:4px;font-weight:600}
+.upgrade-prompt,.upgrade-prompt-pro{display:none;align-items:center;gap:1rem;background:linear-gradient(135deg,oklch(58% 0.18 295 / .1),oklch(62% 0.20 260 / .06));border:1px solid oklch(58% 0.18 295 / .25);border-radius:var(--radius,12px);padding:1rem 1.5rem;margin-bottom:1.25rem;position:relative;overflow:hidden}
+.upgrade-prompt::before,.upgrade-prompt-pro::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,oklch(58% 0.18 295 / .04) 50%,transparent 100%);animation:upgradeShimmer 3s ease-in-out infinite;pointer-events:none}
+@keyframes upgradeShimmer{0%,100%{transform:translateX(-100%)}50%{transform:translateX(100%)}}
+.upgrade-prompt .prompt-icon,.upgrade-prompt-pro .prompt-icon{font-size:1.5rem;width:2.25rem;height:2.25rem;display:flex;align-items:center;justify-content:center;background:oklch(58% 0.18 295 / .15);border-radius:8px;flex-shrink:0}
+.upgrade-prompt .prompt-text,.upgrade-prompt-pro .prompt-text{flex:1;font-size:.8rem;color:var(--fg);line-height:1.4}
+.upgrade-prompt .prompt-text strong,.upgrade-prompt-pro .prompt-text strong{color:oklch(68% 0.16 295)}
+.upgrade-prompt .prompt-cta,.upgrade-prompt-pro .prompt-cta{font-size:.75rem;font-weight:600;color:#fff;background:linear-gradient(135deg,oklch(58% 0.18 295),oklch(52% 0.20 270));padding:.5rem 1.125rem;border-radius:8px;text-decoration:none;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 2px 8px oklch(58% 0.18 295 / .3)}
+.upgrade-prompt .prompt-cta:hover,.upgrade-prompt-pro .prompt-cta:hover{transform:translateY(-1px);box-shadow:0 4px 12px oklch(58% 0.18 295 / .4)}
+@media(max-width:600px){
+  .tier-switcher{bottom:1rem;padding:.4rem .5rem;gap:.5rem}
+  .tier-sw-label{display:none}
+  .tier-sw-btns button{padding:.25rem .5rem;font-size:.65rem}
+}
+</style>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --no:oklch(65% 0.18 25);
+  --warning:oklch(78% 0.14 85);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+  --max-w:1200px;
+  --nav-bg:oklch(14% 0.015 260 / .85);
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+  --no:oklch(55% 0.18 25);
+  --warning:oklch(55% 0.14 85);
+  --nav-bg:oklch(98% 0.003 260 / .85);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 clamp(1rem,4vw,2rem)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-weight:700;font-size:1.125rem;display:flex;align-items:center;gap:.5rem}
+.nav-logo .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--ai);box-shadow:0 0 6px var(--ai)}
+.nav-links{display:flex;gap:1.5rem;font-size:.8125rem}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover,.nav-links a.active{color:var(--fg)}
+.nav-right{display:flex;align-items:center;gap:1rem}
+.credit-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;transition:transform .15s}
+.wallet-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);background:var(--surface);border:1px solid var(--border);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;display:flex;align-items:center;gap:.5rem}
+.wallet-sub{font-size:.6rem;color:var(--muted)}
+.wallet-detail{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-width:180px;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2);display:flex;flex-direction:column;gap:.375rem;z-index:10}
+.wallet-badge:hover .wallet-detail{opacity:1;pointer-events:auto}
+.wd-row{display:flex;justify-content:space-between;font-size:.7rem}
+.wd-lbl{color:var(--muted)}
+.wd-val{font-weight:600}
+.wd-avail .wd-val{color:var(--yes)}
+.credit-badge:hover .topup{opacity:1;pointer-events:auto}
+.credit-badge.pulse{animation:creditPulse .4s ease}
+@keyframes creditPulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
+.topup{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.7rem;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2)}
+.topup a{color:var(--accent);font-weight:600;text-decoration:none}
+.topup a:hover{text-decoration:underline}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center;transition:border-color .15s}
+.theme-toggle:hover{border-color:var(--muted)}
+.theme-toggle svg{width:16px;height:16px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+
+.page{max-width:var(--max-w);margin:0 auto;padding:1.5rem clamp(1rem,4vw,2rem)}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem}
+.page-header h1{font-family:var(--font-display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em}
+.new-analysis-btn{background:var(--ai);color:var(--bg);font-weight:600;font-size:.8125rem;padding:.5rem 1.25rem;border-radius:8px;border:none;cursor:pointer;transition:opacity .15s}
+.new-analysis-btn:hover{opacity:.85}
+
+/* Layout */
+.insights-layout{display:grid;grid-template-columns:1fr 340px;gap:1.5rem;align-items:start}
+
+/* Active analyses */
+.section-title{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:1rem}
+
+.analysis-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+.analysis-card .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem}
+.analysis-card .market-name{font-size:.9375rem;font-weight:600;display:flex;align-items:center;gap:.5rem}
+.analysis-card .market-thumb{width:36px;height:36px;border-radius:7px;flex-shrink:0}
+.analysis-card .rec-pill{font-size:.65rem;font-weight:700;padding:.2rem .5rem;border-radius:4px}
+.analysis-card .rec-pill.buy-yes{background:oklch(72% 0.16 155 / .12);color:var(--yes)}
+.analysis-card .rec-pill.buy-no{background:oklch(65% 0.18 25 / .12);color:var(--no)}
+.analysis-card .rec-pill.no-trade{background:oklch(78% 0.14 85 / .12);color:var(--warning)}
+
+.analysis-card .meta-row{display:flex;gap:1.25rem;font-size:.75rem;color:var(--muted);margin-bottom:1rem}
+.analysis-card .meta-row .val{font-family:var(--font-mono);color:var(--fg);font-variant-numeric:tabular-nums}
+
+/* Edge visualization */
+.edge-viz{margin-bottom:1rem}
+.edge-bar{position:relative;height:28px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.edge-bar .market-marker{position:absolute;top:0;height:100%;width:2px;background:var(--muted)}
+.edge-bar .ai-marker{position:absolute;top:0;height:100%;width:2px;background:var(--ai)}
+.edge-bar .edge-fill{position:absolute;top:0;height:100%;background:oklch(72% 0.16 155 / .1)}
+.edge-labels{display:flex;justify-content:space-between;font-size:.65rem;margin-top:.375rem;color:var(--muted)}
+.edge-labels .ai-label{color:var(--ai)}
+
+/* Agent consensus */
+.consensus-row{display:flex;gap:.375rem;margin-bottom:1rem;flex-wrap:wrap}
+.agent-dot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;border:1.5px solid}
+.agent-dot.bullish{border-color:var(--yes);color:var(--yes);background:oklch(72% 0.16 155 / .08)}
+.agent-dot.bearish{border-color:var(--no);color:var(--no);background:oklch(65% 0.18 25 / .08)}
+.agent-dot.neutral{border-color:var(--muted);color:var(--muted);background:oklch(62% 0.012 260 / .08)}
+
+/* Debate summary */
+.debate-summary{background:var(--surface-2);border-radius:8px;padding:1rem;margin-bottom:1rem}
+.debate-summary h4{font-size:.7rem;color:var(--ai);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;font-weight:600}
+.debate-sides{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.debate-side h5{font-size:.7rem;font-weight:600;margin-bottom:.375rem}
+.debate-side.bull h5{color:var(--yes)}
+.debate-side.bear h5{color:var(--no)}
+.debate-side p{font-size:.75rem;color:var(--muted);line-height:1.5}
+.debate-score{text-align:center;margin-top:.75rem;font-size:.7rem;color:var(--muted)}
+.debate-score strong{color:var(--fg)}
+
+/* Running analysis pipeline */
+.running-card{background:linear-gradient(160deg,oklch(19% 0.02 295),oklch(19% 0.012 260));border:1px solid oklch(35% 0.04 295);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+[data-theme="light"] .running-card{background:linear-gradient(160deg,oklch(95% 0.02 295),oklch(96% 0.01 260));border-color:oklch(85% 0.03 295)}
+.running-card .card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.running-card .market-name{font-size:.9375rem;font-weight:600;display:flex;align-items:center;gap:.5rem}
+.running-card .running-pill{font-size:.65rem;font-weight:600;padding:.2rem .5rem;border-radius:4px;background:oklch(58% 0.18 295 / .15);color:var(--ai);display:flex;align-items:center;gap:.375rem}
+.running-card .running-pill .spin{width:8px;height:8px;border:1.5px solid var(--ai);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mini-pipeline{display:flex;gap:.375rem;align-items:center;flex-wrap:wrap}
+.mini-stage{width:28px;height:4px;border-radius:2px;background:var(--surface-2)}
+.mini-stage.done{background:var(--ai)}
+.mini-stage.active{background:var(--ai);animation:stageBlink 1s infinite}
+@keyframes stageBlink{0%,100%{opacity:1}50%{opacity:.4}}
+.running-card .progress-text{font-size:.7rem;color:var(--muted);margin-top:.625rem}
+
+/* Recurring badge */
+.recurring-badge{display:inline-flex;align-items:center;gap:.375rem;font-size:.65rem;color:var(--accent);background:oklch(62% 0.20 260 / .08);padding:.2rem .5rem;border-radius:4px}
+.recurring-badge .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Sidebar */
+.sidebar{position:sticky;top:72px}
+.sidebar-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+.sidebar-card h3{font-size:.8125rem;font-weight:600;margin-bottom:1rem}
+
+/* Agent performance */
+.agent-perf-item{display:flex;align-items:center;gap:.625rem;padding:.5rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .5)}
+.agent-perf-item:last-child{border-bottom:none}
+.agent-perf-item .name{font-size:.75rem;flex:1}
+.agent-perf-item .accuracy{font-family:var(--font-mono);font-size:.75rem;font-weight:600;color:var(--yes);font-variant-numeric:tabular-nums}
+.agent-perf-item .bar{width:48px;height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden}
+.agent-perf-item .bar .fill{height:100%;background:var(--ai);border-radius:2px}
+
+/* Credit usage */
+.credit-usage{display:flex;flex-direction:column;gap:.75rem}
+.credit-row{display:flex;justify-content:space-between;align-items:center;font-size:.8rem}
+.credit-row .lbl{color:var(--muted)}
+.credit-row .val{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.credit-meter{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.credit-meter .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--ai));border-radius:3px}
+
+/* Upcoming */
+.upcoming-item{display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .5);font-size:.75rem}
+.upcoming-item:last-child{border-bottom:none}
+.upcoming-item .market{max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upcoming-item .time{color:var(--muted);font-family:var(--font-mono);font-size:.65rem}
+
+/* Responsive */
+@media(max-width:1024px){
+  .insights-layout{grid-template-columns:1fr}
+  .sidebar{position:static;display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .sidebar{grid-template-columns:1fr}
+  .debate-sides{grid-template-columns:1fr}
+}
+@media(max-width:430px){
+  .page{padding:1rem}
+  .analysis-card{padding:1rem}
+  .consensus-row{gap:.25rem}
+  .agent-dot{width:20px;height:20px;font-size:.5rem}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo"><span class="ai-dot"></span> TradeWizard</a>
+    <div class="nav-links">
+      <a href="markets.html">Markets</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="portfolio-manager.html">PM</a>
+      <a href="insights.html" class="active">Insights</a>
+      <a href="subscription.html">Plan</a>
+      <a href="settings.html">Settings</a>
+    </div>
+    <div class="nav-right">
+      <span class="wallet-badge"><span class="wallet-text">$1,240</span><span class="wallet-sub">$790 avail</span><span class="wallet-detail"><span class="wd-row"><span class="wd-lbl">Wallet</span><span class="wd-val">$1,240.00</span></span><span class="wd-row"><span class="wd-lbl">Committed</span><span class="wd-val">$450.00</span></span><span class="wd-row wd-avail"><span class="wd-lbl">Available</span><span class="wd-val">$790.00</span></span></span></span>
+      <span class="credit-badge"><span class="credit-text">47/200 credits</span><span class="topup"><a href="subscription.html">+ Top up</a></span></span>
+      <button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <h1>AI Insights</h1>
+    <button class="new-analysis-btn">+ New Analysis</button>
+  </div>
+
+  <div class="upgrade-prompt">
+    <span class="prompt-icon">🔒</span>
+    <span class="prompt-text">You're on the <strong>Free plan</strong> - one-time analysis only. Upgrade to unlock recurring analysis and full debate access.</span>
+    <a href="subscription.html" class="prompt-cta">View Plans</a>
+  </div>
+  <div class="upgrade-prompt-pro">
+    <span class="prompt-icon">⚡</span>
+    <span class="prompt-text">Unlock <strong>sub-daily intervals</strong> (1h, 4h, 12h) and priority queue with Pro.</span>
+    <a href="subscription.html" class="prompt-cta">Go Pro</a>
+  </div>
+
+  <div class="insights-layout">
+    <div>
+      <div class="section-title">Recent Analyses</div>
+
+      <!-- Running analysis -->
+      <div class="running-card">
+        <div class="card-top">
+          <span class="market-name"><svg class="market-thumb" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="i0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a1c2e"/><stop offset="100%" stop-color="#8b2252"/></linearGradient></defs><rect fill="url(#i0)" width="36" height="36" rx="7"/><text x="18" y="24" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="16">🗳️</text></svg>Will Trump win the 2028 GOP primary?</span>
+          <span class="running-pill"><span class="spin"></span> Analyzing</span>
+        </div>
+        <div class="mini-pipeline">
+          <div class="mini-stage done"></div>
+          <div class="mini-stage done"></div>
+          <div class="mini-stage done"></div>
+          <div class="mini-stage done"></div>
+          <div class="mini-stage done"></div>
+          <div class="mini-stage done"></div>
+          <div class="mini-stage active"></div>
+          <div class="mini-stage"></div>
+          <div class="mini-stage"></div>
+          <div class="mini-stage"></div>
+          <div class="mini-stage"></div>
+        </div>
+        <div class="progress-text">Stage 7 of 11 - Running cross-examination · 42s elapsed</div>
+      </div>
+
+      <!-- Analysis 1: Full detail -->
+      <div class="analysis-card">
+        <div class="card-top">
+          <span class="market-name"><svg class="market-thumb" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="i1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="100%" stop-color="#2d6a9f"/></linearGradient></defs><rect fill="url(#i1)" width="36" height="36" rx="7"/><text x="18" y="24" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="16">🏛️</text></svg>Will the Fed cut rates before September 2026?</span>
+          <span class="rec-pill buy-yes">BUY YES</span>
+        </div>
+        <div class="meta-row">
+          <span>Edge: <span class="val" style="color:var(--yes)">+9¢</span></span>
+          <span>Confidence: <span class="val">82%</span></span>
+          <span>Agents: <span class="val">14</span></span>
+          <span class="recurring-badge"><span class="dot"></span> Every 4h</span>
+        </div>
+
+        <!-- Edge visualization -->
+        <div class="edge-viz">
+          <div class="edge-bar">
+            <div class="edge-fill" style="left:62%;width:9%"></div>
+            <div class="market-marker" style="left:62%"></div>
+            <div class="ai-marker" style="left:71%"></div>
+          </div>
+          <div class="edge-labels">
+            <span>0%</span>
+            <span>Market 62¢</span>
+            <span class="ai-label">AI 71¢</span>
+            <span>100%</span>
+          </div>
+        </div>
+
+        <!-- Agent consensus dots -->
+        <div class="consensus-row">
+          <div class="agent-dot bullish" title="Polling Intel">P</div>
+          <div class="agent-dot bullish" title="Momentum">M</div>
+          <div class="agent-dot bullish" title="News Impact">N</div>
+          <div class="agent-dot bullish" title="Historical">H</div>
+          <div class="agent-dot bullish" title="Sentiment">S</div>
+          <div class="agent-dot bullish" title="Social">So</div>
+          <div class="agent-dot bullish" title="Narrative">Na</div>
+          <div class="agent-dot bullish" title="Microstructure">Mi</div>
+          <div class="agent-dot bullish" title="Probability">Pr</div>
+          <div class="agent-dot bullish" title="Catalyst">Ca</div>
+          <div class="agent-dot bullish" title="Mean Reversion">MR</div>
+          <div class="agent-dot bullish" title="Breaking News">BN</div>
+          <div class="agent-dot bearish" title="Tail Risk">TR</div>
+          <div class="agent-dot neutral" title="Conservative">Co</div>
+        </div>
+
+        <!-- Debate -->
+        <div class="debate-summary">
+          <h4>Bull vs Bear Debate</h4>
+          <div class="debate-sides">
+            <div class="debate-side bull">
+              <h5>Bull Case (12 agents)</h5>
+              <p>Labor market softening accelerating. CPI below 2.5% for 3 consecutive months. Fed dot plot shifted dovish. Historical precedent: 4 of 5 similar setups resulted in cuts within 90 days.</p>
+            </div>
+            <div class="debate-side bear">
+              <h5>Bear Case (2 agents)</h5>
+              <p>Geopolitical supply shock risk from Iran tensions could spike energy prices. Tail risk of sticky services inflation re-accelerating if housing costs don't normalize.</p>
+            </div>
+          </div>
+          <div class="debate-score">Cross-examination: Bull thesis survived <strong>4 of 5</strong> challenges</div>
+        </div>
+      </div>
+
+      <!-- Analysis 2 -->
+      <div class="analysis-card">
+        <div class="card-top">
+          <span class="market-name"><svg class="market-thumb" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="i2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a3a5c"/><stop offset="100%" stop-color="#2d6a9f"/></linearGradient></defs><rect fill="url(#i2)" width="36" height="36" rx="7"/><text x="18" y="24" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="16">📉</text></svg>US recession declared by Q4 2026?</span>
+          <span class="rec-pill buy-no">BUY NO</span>
+        </div>
+        <div class="meta-row">
+          <span>Edge: <span class="val" style="color:var(--yes)">+7¢</span></span>
+          <span>Confidence: <span class="val">68%</span></span>
+          <span>Agents: <span class="val">14</span></span>
+        </div>
+        <div class="edge-viz">
+          <div class="edge-bar">
+            <div class="edge-fill" style="left:27%;width:7%"></div>
+            <div class="market-marker" style="left:34%"></div>
+            <div class="ai-marker" style="left:27%"></div>
+          </div>
+          <div class="edge-labels">
+            <span>0%</span>
+            <span class="ai-label">AI 27¢</span>
+            <span>Market 34¢</span>
+            <span>100%</span>
+          </div>
+        </div>
+        <div class="consensus-row">
+          <div class="agent-dot bearish">P</div>
+          <div class="agent-dot bearish">M</div>
+          <div class="agent-dot bearish">N</div>
+          <div class="agent-dot bearish">H</div>
+          <div class="agent-dot bearish">S</div>
+          <div class="agent-dot bearish">So</div>
+          <div class="agent-dot bearish">Na</div>
+          <div class="agent-dot bearish">Mi</div>
+          <div class="agent-dot bearish">Pr</div>
+          <div class="agent-dot bullish">Ca</div>
+          <div class="agent-dot bullish">TR</div>
+          <div class="agent-dot neutral">MR</div>
+          <div class="agent-dot neutral">BN</div>
+          <div class="agent-dot neutral">Co</div>
+        </div>
+      </div>
+
+      <!-- Analysis 3: NO TRADE -->
+      <div class="analysis-card">
+        <div class="card-top">
+          <span class="market-name"><svg class="market-thumb" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="i3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2d4a3e"/><stop offset="100%" stop-color="#1a6b5a"/></linearGradient></defs><rect fill="url(#i3)" width="36" height="36" rx="7"/><text x="18" y="24" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="16">🕊️</text></svg>US–Iran permanent peace deal by Dec 2026?</span>
+          <span class="rec-pill no-trade">NO TRADE</span>
+        </div>
+        <div class="meta-row">
+          <span>Edge: <span class="val">~0¢</span></span>
+          <span>Confidence: <span class="val">34%</span></span>
+          <span>Agents: <span class="val">14</span></span>
+          <span class="recurring-badge"><span class="dot"></span> Daily</span>
+        </div>
+        <div class="edge-viz">
+          <div class="edge-bar">
+            <div class="market-marker" style="left:41%"></div>
+            <div class="ai-marker" style="left:39%"></div>
+          </div>
+          <div class="edge-labels">
+            <span>0%</span>
+            <span>AI ≈ Market (no edge)</span>
+            <span>100%</span>
+          </div>
+        </div>
+        <div class="consensus-row">
+          <div class="agent-dot bullish">P</div>
+          <div class="agent-dot bullish">N</div>
+          <div class="agent-dot bullish">S</div>
+          <div class="agent-dot bearish">M</div>
+          <div class="agent-dot bearish">H</div>
+          <div class="agent-dot bearish">TR</div>
+          <div class="agent-dot bearish">Ca</div>
+          <div class="agent-dot neutral">So</div>
+          <div class="agent-dot neutral">Na</div>
+          <div class="agent-dot neutral">Mi</div>
+          <div class="agent-dot neutral">Pr</div>
+          <div class="agent-dot neutral">MR</div>
+          <div class="agent-dot neutral">BN</div>
+          <div class="agent-dot neutral">Co</div>
+        </div>
+        <div class="debate-summary">
+          <h4>Why No Trade</h4>
+          <div class="debate-sides">
+            <div class="debate-side bull">
+              <h5>Bull Case (3 agents)</h5>
+              <p>Diplomatic channels active. Both sides signaling willingness. Economic pressure mounting on Iran.</p>
+            </div>
+            <div class="debate-side bear">
+              <h5>Bear Case (4 agents)</h5>
+              <p>Historical failure rate of similar negotiations is 80%+. Domestic politics in both countries oppose concessions. Strait of Hormuz tensions escalating.</p>
+            </div>
+          </div>
+          <div class="debate-score">High disagreement - <strong>7 agents neutral</strong>, insufficient conviction for a recommendation</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Credit Usage</h3>
+        <div class="credit-usage">
+          <div class="credit-row"><span class="lbl">Balance</span><span class="val">47 / 200</span></div>
+          <div class="credit-meter"><div class="fill" style="width:76.5%"></div></div>
+          <div class="credit-row"><span class="lbl">Used this month</span><span class="val">153</span></div>
+          <div class="credit-row"><span class="lbl">Recurring active</span><span class="val">3</span></div>
+          <div class="credit-row"><span class="lbl">Resets</span><span class="val">Jun 1</span></div>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Agent Accuracy (30d)</h3>
+        <div class="agent-perf-item"><span class="name">Polling Intel</span><div class="bar"><div class="fill" style="width:88%"></div></div><span class="accuracy">88%</span></div>
+        <div class="agent-perf-item"><span class="name">Historical Pattern</span><div class="bar"><div class="fill" style="width:82%"></div></div><span class="accuracy">82%</span></div>
+        <div class="agent-perf-item"><span class="name">News Impact</span><div class="bar"><div class="fill" style="width:79%"></div></div><span class="accuracy">79%</span></div>
+        <div class="agent-perf-item"><span class="name">Momentum</span><div class="bar"><div class="fill" style="width:76%"></div></div><span class="accuracy">76%</span></div>
+        <div class="agent-perf-item"><span class="name">Sentiment</span><div class="bar"><div class="fill" style="width:71%"></div></div><span class="accuracy">71%</span></div>
+        <div class="agent-perf-item"><span class="name">Tail Risk</span><div class="bar"><div class="fill" style="width:64%"></div></div><span class="accuracy">64%</span></div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Upcoming Deliveries</h3>
+        <div class="upcoming-item"><span class="market">Fed Rate Cut</span><span class="time">in 2h 14m</span></div>
+        <div class="upcoming-item"><span class="market">Iran Peace Deal</span><span class="time">in 8h 30m</span></div>
+        <div class="upcoming-item"><span class="market">BTC $150K</span><span class="time">Tomorrow 9am</span></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){const t=localStorage.getItem('tw-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)})})();
+</script>
+<script>
+(function(){
+  const tiers=['free','starter','pro','elite'];
+  const tierData={free:{label:'Free',credits:'3/5'},starter:{label:'Starter',credits:'38/50'},pro:{label:'Pro',credits:'47/200'},elite:{label:'Elite',credits:'∞'}};
+  const sw=document.createElement('div');
+  sw.className='tier-switcher';
+  sw.innerHTML='<div class="tier-sw-label">Viewing as:</div><div class="tier-sw-btns">'+tiers.map(t=>'<button data-t="'+t+'">'+tierData[t].label+'</button>').join('')+'</div>';
+  document.body.appendChild(sw);
+  const saved=localStorage.getItem('tw-tier')||'pro';
+  setTier(saved);
+  sw.querySelectorAll('button').forEach(btn=>{btn.addEventListener('click',()=>{setTier(btn.dataset.t)})});
+  function setTier(tier){
+    document.documentElement.setAttribute('data-tier',tier);
+    localStorage.setItem('tw-tier',tier);
+    sw.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.t===tier));
+    const cb=document.querySelector('.credit-badge');
+    if(cb){const d=tierData[tier];const ct=cb.querySelector('.credit-text');if(ct)ct.textContent=tier==='elite'?'∞ credits':d.credits+' credits';}
+    document.querySelectorAll('.gated-row').forEach(r=>{
+      const lock=r.querySelector('.lock');
+      if(lock){
+        if(tier==='free')r.childNodes[1].textContent=' Recurring analysis · ';
+        else if(tier==='elite')r.childNodes[1].textContent=' Recurring analysis · included ';
+        else r.childNodes[1].textContent=' Recurring analysis · 1 credit per run ';
+      }
+    });
+    const cu=document.querySelector('.credit-usage');
+    if(cu){
+      const vals={free:{bal:'3 / 5',used:'2',pct:'40%'},starter:{bal:'38 / 50',used:'12',pct:'24%'},pro:{bal:'47 / 200',used:'153',pct:'76.5%'},elite:{bal:'∞',used:'47',pct:'100%'}};
+      const v=vals[tier];const rows=cu.querySelectorAll('.credit-row .val');
+      if(rows[0])rows[0].textContent=v.bal;if(rows[1])rows[1].textContent=v.used;
+      const fill=cu.querySelector('.credit-meter .fill');if(fill)fill.style.width=v.pct;
+    }
+  }
+})();
+</script>
+</body>
+</html>

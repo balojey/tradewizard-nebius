@@ -1,0 +1,21 @@
+version: 1
+applications:
+  - appRoot: tradewizard-frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm use 20
+            - npm ci
+        build:
+          commands:
+            - env | grep -e NEXT_PUBLIC_ >> .env.production
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .next/cache/**/*

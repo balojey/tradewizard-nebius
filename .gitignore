@@ -1,0 +1,13 @@
+__pycache__
+node_modules/
+dist/
+cdk.out/
+.env
+.env.dev
+.env.prod
+.env.local
+.env.*.local
+.hypothesis
+cdk-outputs.json
+cdk-outputs-dev.json
+cdk-outputs-prod.json

@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-tier="pro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subscription - TradeWizard</title>
+<style id="tier-switcher-css">
+.tier-switcher{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.5rem .75rem;display:flex;align-items:center;gap:.75rem;box-shadow:0 8px 32px oklch(0% 0 0 / .3);backdrop-filter:blur(8px)}
+.tier-sw-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.tier-sw-btns{display:flex;gap:.25rem}
+.tier-sw-btns button{font-size:.7rem;padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s;white-space:nowrap}
+.tier-sw-btns button:hover{border-color:var(--muted);color:var(--fg)}
+.tier-sw-btns button.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.tier-sw-btns button[data-t="elite"].active{background:oklch(58% 0.18 295);border-color:oklch(58% 0.18 295)}
+.tier-gate-starter{position:relative}
+.tier-gate-pro{position:relative}
+.tier-lock-overlay{display:none;position:absolute;inset:0;background:oklch(14% 0.015 260 / .85);border-radius:inherit;z-index:2;align-items:center;justify-content:center;flex-direction:column;gap:.5rem;padding:1rem;text-align:center;backdrop-filter:blur(2px)}
+.tier-lock-overlay .lock-icon{font-size:1.25rem;opacity:.7}
+.tier-lock-overlay .lock-text{font-size:.75rem;color:var(--fg);font-weight:500}
+.tier-lock-overlay .lock-cta{font-size:.7rem;color:var(--accent);font-weight:600;text-decoration:none;padding:.3rem .75rem;border:1px solid var(--accent);border-radius:6px;transition:all .15s}
+.tier-lock-overlay .lock-cta:hover{background:var(--accent);color:#fff}
+[data-theme="light"] .tier-lock-overlay{background:oklch(98% 0.003 260 / .9)}
+[data-tier="free"] .recurring-badge{display:none}
+[data-tier="free"] .gated-row{display:flex}
+[data-tier="free"] .debate-summary{position:relative;max-height:60px;overflow:hidden}
+[data-tier="free"] .debate-summary::after{content:'';position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(transparent,var(--surface));pointer-events:none}
+[data-tier="free"] .interval-chip:not([data-i="once"]){opacity:.4;pointer-events:none}
+[data-tier="free"] .interval-chip[data-i="once"]{opacity:1;pointer-events:auto}
+[data-tier="free"] .upgrade-prompt{display:flex}
+[data-tier="free"] .running-card{display:none}
+[data-tier="free"] .analysis-card:nth-child(n+4){display:none}
+[data-tier="free"] .history-card:nth-child(n+3){display:none}
+[data-tier="free"] .perf-section{position:relative;max-height:80px;overflow:hidden}
+[data-tier="free"] .perf-section::after{content:'';position:absolute;bottom:0;left:0;right:0;height:60px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
+[data-tier="free"] .webhook-section .tier-lock-overlay{display:flex}
+[data-tier="free"] .push-toggle .tier-lock-overlay{display:flex}
+[data-tier="free"] .email-toggle .tier-lock-overlay{display:flex}
+[data-tier="free"] .priority-badge{display:none}
+[data-tier="starter"] .gated-row{display:flex}
+[data-tier="starter"] .gated-row .upgrade-link{display:none}
+[data-tier="starter"] .recurring-badge{display:inline-flex}
+[data-tier="starter"] .interval-chip[data-i="1h"],
+[data-tier="starter"] .interval-chip[data-i="4h"],
+[data-tier="starter"] .interval-chip[data-i="12h"]{opacity:.4;pointer-events:none}
+[data-tier="starter"] .interval-chip[data-i="1d"],
+[data-tier="starter"] .interval-chip[data-i="once"]{opacity:1;pointer-events:auto}
+[data-tier="starter"] .upgrade-prompt{display:none}
+[data-tier="starter"] .upgrade-prompt-pro{display:flex}
+[data-tier="starter"] .webhook-section .tier-lock-overlay{display:flex}
+[data-tier="starter"] .priority-badge{display:none}
+[data-tier="pro"] .gated-row{display:flex}
+[data-tier="pro"] .gated-row .upgrade-link{display:none}
+[data-tier="pro"] .upgrade-prompt{display:none}
+[data-tier="pro"] .upgrade-prompt-pro{display:none}
+[data-tier="pro"] .tier-lock-overlay{display:none}
+[data-tier="elite"] .gated-row{display:flex}
+[data-tier="elite"] .gated-row .upgrade-link{display:none}
+[data-tier="elite"] .upgrade-prompt{display:none}
+[data-tier="elite"] .upgrade-prompt-pro{display:none}
+[data-tier="elite"] .tier-lock-overlay{display:none}
+[data-tier="elite"] .elite-badge{display:inline-flex}
+[data-tier="elite"] .priority-badge{display:inline-flex}
+.elite-badge{display:none;align-items:center;gap:.25rem;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;color:oklch(58% 0.18 295);background:oklch(58% 0.18 295 / .1);padding:.2rem .5rem;border-radius:4px;font-weight:600}
+.priority-badge{display:none;align-items:center;gap:.25rem;font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;color:var(--warning);background:oklch(78% 0.14 85 / .1);padding:.2rem .5rem;border-radius:4px;font-weight:600}
+.upgrade-prompt,.upgrade-prompt-pro{display:none;align-items:center;gap:1rem;background:linear-gradient(135deg,oklch(58% 0.18 295 / .1),oklch(62% 0.20 260 / .06));border:1px solid oklch(58% 0.18 295 / .25);border-radius:var(--radius,12px);padding:1rem 1.5rem;margin-bottom:1.25rem;position:relative;overflow:hidden}
+.upgrade-prompt::before,.upgrade-prompt-pro::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,oklch(58% 0.18 295 / .04) 50%,transparent 100%);animation:upgradeShimmer 3s ease-in-out infinite;pointer-events:none}
+@keyframes upgradeShimmer{0%,100%{transform:translateX(-100%)}50%{transform:translateX(100%)}}
+.upgrade-prompt .prompt-icon,.upgrade-prompt-pro .prompt-icon{font-size:1.5rem;width:2.25rem;height:2.25rem;display:flex;align-items:center;justify-content:center;background:oklch(58% 0.18 295 / .15);border-radius:8px;flex-shrink:0}
+.upgrade-prompt .prompt-text,.upgrade-prompt-pro .prompt-text{flex:1;font-size:.8rem;color:var(--fg);line-height:1.4}
+.upgrade-prompt .prompt-text strong,.upgrade-prompt-pro .prompt-text strong{color:oklch(68% 0.16 295)}
+.upgrade-prompt .prompt-cta,.upgrade-prompt-pro .prompt-cta{font-size:.75rem;font-weight:600;color:#fff;background:linear-gradient(135deg,oklch(58% 0.18 295),oklch(52% 0.20 270));padding:.5rem 1.125rem;border-radius:8px;text-decoration:none;white-space:nowrap;transition:transform .15s,box-shadow .15s;box-shadow:0 2px 8px oklch(58% 0.18 295 / .3)}
+.upgrade-prompt .prompt-cta:hover,.upgrade-prompt-pro .prompt-cta:hover{transform:translateY(-1px);box-shadow:0 4px 12px oklch(58% 0.18 295 / .4)}
+@media(max-width:600px){
+  .tier-switcher{bottom:1rem;padding:.4rem .5rem;gap:.5rem}
+  .tier-sw-label{display:none}
+  .tier-sw-btns button{padding:.25rem .5rem;font-size:.65rem}
+}
+</style>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(14% 0.015 260);
+  --surface:oklch(19% 0.012 260);
+  --surface-2:oklch(24% 0.010 260);
+  --fg:oklch(97% 0.005 260);
+  --muted:oklch(62% 0.012 260);
+  --border:oklch(30% 0.010 260);
+  --accent:oklch(62% 0.20 260);
+  --ai:oklch(58% 0.18 295);
+  --yes:oklch(72% 0.16 155);
+  --no:oklch(65% 0.18 25);
+  --warning:oklch(78% 0.14 85);
+  --font-display:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --radius:12px;
+  --max-w:1200px;
+  --nav-bg:oklch(14% 0.015 260 / .85);
+}
+[data-theme="light"]{
+  --bg:oklch(98% 0.003 260);
+  --surface:oklch(100% 0 0);
+  --surface-2:oklch(95% 0.004 260);
+  --fg:oklch(18% 0.015 260);
+  --muted:oklch(45% 0.012 260);
+  --border:oklch(88% 0.006 260);
+  --accent:oklch(52% 0.20 260);
+  --ai:oklch(48% 0.18 295);
+  --yes:oklch(45% 0.14 155);
+  --no:oklch(55% 0.18 25);
+  --warning:oklch(55% 0.14 85);
+  --nav-bg:oklch(98% 0.003 260 / .85);
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--fg);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 clamp(1rem,4vw,2rem)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-weight:700;font-size:1.125rem;display:flex;align-items:center;gap:.5rem}
+.nav-logo .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--ai);box-shadow:0 0 6px var(--ai)}
+.nav-links{display:flex;gap:1.5rem;font-size:.8125rem}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover,.nav-links a.active{color:var(--fg)}
+.nav-right{display:flex;align-items:center;gap:1rem}
+.credit-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);background:oklch(62% 0.20 260 / .1);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;transition:transform .15s}
+.wallet-badge{font-family:var(--font-mono);font-size:.75rem;color:var(--fg);background:var(--surface);border:1px solid var(--border);padding:.25rem .625rem;border-radius:6px;position:relative;cursor:pointer;display:flex;align-items:center;gap:.5rem}
+.wallet-sub{font-size:.6rem;color:var(--muted)}
+.wallet-detail{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem;min-width:180px;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2);display:flex;flex-direction:column;gap:.375rem;z-index:10}
+.wallet-badge:hover .wallet-detail{opacity:1;pointer-events:auto}
+.wd-row{display:flex;justify-content:space-between;font-size:.7rem}
+.wd-lbl{color:var(--muted)}
+.wd-val{font-weight:600}
+.wd-avail .wd-val{color:var(--yes)}
+.credit-badge:hover .topup{opacity:1;pointer-events:auto}
+.credit-badge.pulse{animation:creditPulse .4s ease}
+@keyframes creditPulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
+.topup{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;font-size:.7rem;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;box-shadow:0 4px 12px oklch(0% 0 0 / .2)}
+.topup a{color:var(--accent);font-weight:600;text-decoration:none}
+.topup a:hover{text-decoration:underline}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;display:grid;place-items:center;transition:border-color .15s}
+.theme-toggle:hover{border-color:var(--muted)}
+.theme-toggle svg{width:16px;height:16px}
+[data-theme="light"] .theme-toggle .icon-moon{display:none}
+[data-theme="dark"] .theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-sun{display:block}
+
+.page{max-width:var(--max-w);margin:0 auto;padding:2rem clamp(1rem,4vw,2rem)}
+.page h1{font-family:var(--font-display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.5rem}
+.page .page-sub{font-size:.8rem;color:var(--muted);margin-bottom:2rem}
+
+/* Current plan card */
+.current-plan{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.current-plan .plan-info h3{font-size:1rem;font-weight:600;margin-bottom:.25rem}
+.current-plan .plan-info .plan-name{color:var(--ai);font-weight:700}
+.current-plan .plan-info p{font-size:.75rem;color:var(--muted)}
+.current-plan .credit-status{text-align:right}
+.current-plan .credit-status .big{font-family:var(--font-mono);font-size:1.75rem;font-weight:700;font-variant-numeric:tabular-nums}
+.current-plan .credit-status .sub{font-size:.7rem;color:var(--muted)}
+.credit-bar{width:200px;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-top:.5rem}
+.credit-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--ai));border-radius:3px}
+
+/* Plans grid */
+.plans-section h2{font-family:var(--font-display);font-size:1.125rem;font-weight:700;margin-bottom:1.25rem}
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:1rem;margin-bottom:2.5rem}
+.plan-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;display:flex;flex-direction:column;transition:border-color .15s}
+.plan-card.current{border-color:var(--ai)}
+.plan-card.popular{border-color:var(--accent)}
+.plan-card .plan-badge{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:.75rem;height:1rem}
+.plan-card .plan-badge.pop{color:var(--accent)}
+.plan-card .plan-badge.cur{color:var(--ai)}
+.plan-card h4{font-size:1rem;font-weight:600;margin-bottom:.25rem}
+.plan-card .price{font-family:var(--font-mono);font-size:1.5rem;font-weight:700;margin-bottom:.125rem;font-variant-numeric:tabular-nums}
+.plan-card .price .period{font-size:.75rem;font-weight:400;color:var(--muted)}
+.plan-card .credits-included{font-size:.75rem;color:var(--ai);margin-bottom:1rem}
+.plan-card ul{list-style:none;flex:1;margin-bottom:1.25rem}
+.plan-card ul li{font-size:.75rem;color:var(--muted);padding:.3rem 0;display:flex;align-items:center;gap:.5rem}
+.plan-card ul li::before{content:'✓';color:var(--yes);font-size:.7rem;font-weight:700}
+.plan-card ul li.disabled::before{content:'-';color:var(--muted)}
+.plan-card .plan-btn{width:100%;padding:.625rem;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--fg);transition:all .15s}
+.plan-card .plan-btn:hover{border-color:var(--muted)}
+.plan-card .plan-btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.plan-card .plan-btn.current-btn{background:var(--ai);border-color:var(--ai);color:var(--bg);cursor:default}
+
+/* Credit packs */
+.packs-section h2{font-family:var(--font-display);font-size:1.125rem;font-weight:700;margin-bottom:.375rem}
+.packs-section .packs-sub{font-size:.8rem;color:var(--muted);margin-bottom:1.25rem}
+.packs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(180px,100%),1fr));gap:1rem;margin-bottom:2.5rem}
+.pack-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;text-align:center;cursor:pointer;transition:border-color .15s}
+.pack-card:hover{border-color:var(--accent)}
+.pack-card .pack-amount{font-family:var(--font-mono);font-size:1.5rem;font-weight:700;color:var(--accent);margin-bottom:.25rem}
+.pack-card .pack-label{font-size:.7rem;color:var(--muted);margin-bottom:.75rem}
+.pack-card .pack-price{font-size:.875rem;font-weight:600}
+.pack-card .pack-unit{font-size:.65rem;color:var(--muted);margin-top:.125rem}
+
+/* Billing history */
+.billing-section h2{font-family:var(--font-display);font-size:1.125rem;font-weight:700;margin-bottom:1rem}
+.billing-table{width:100%;border-collapse:collapse;min-width:400px}
+.billing-section{overflow-x:auto}
+.billing-table th{font-size:.6875rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:.625rem 0;border-bottom:1px solid var(--border);font-weight:500}
+.billing-table td{padding:.75rem 0;border-bottom:1px solid oklch(30% 0.010 260 / .4);font-size:.8rem}
+.billing-table .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:.75rem}
+.billing-table .status{font-size:.65rem;font-weight:600;padding:.15rem .4rem;border-radius:3px}
+.billing-table .status.paid{background:oklch(72% 0.16 155 / .1);color:var(--yes)}
+
+@media(max-width:768px){
+  .nav-links{display:none}
+  .current-plan{flex-direction:column;align-items:flex-start}
+  .current-plan .credit-status{text-align:left}
+}
+@media(max-width:430px){
+  .page{padding:1.25rem 1rem}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo"><span class="ai-dot"></span> TradeWizard</a>
+    <div class="nav-links">
+      <a href="markets.html">Markets</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="portfolio-manager.html">PM</a>
+      <a href="insights.html">Insights</a>
+      <a href="subscription.html" class="active">Plan</a>
+      <a href="settings.html">Settings</a>
+    </div>
+    <div class="nav-right">
+      <span class="wallet-badge"><span class="wallet-text">$1,240</span><span class="wallet-sub">$790 avail</span><span class="wallet-detail"><span class="wd-row"><span class="wd-lbl">Wallet</span><span class="wd-val">$1,240.00</span></span><span class="wd-row"><span class="wd-lbl">Committed</span><span class="wd-val">$450.00</span></span><span class="wd-row wd-avail"><span class="wd-lbl">Available</span><span class="wd-val">$790.00</span></span></span></span>
+      <span class="credit-badge"><span class="credit-text">47/200 credits</span><span class="topup"><a href="subscription.html">+ Top up</a></span></span>
+      <button class="theme-toggle" aria-label="Toggle theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+      <div class="avatar"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+  <h1>Subscription & Credits</h1>
+  <p class="page-sub">Manage your plan, buy credit packs, and view billing history</p>
+
+  <!-- Current plan -->
+  <div class="current-plan">
+    <div class="plan-info">
+      <h3>Current plan: <span class="plan-name">Pro</span></h3>
+      <p>200 credits/month · All intervals · All notification channels · Webhook delivery</p>
+    </div>
+    <div class="credit-status">
+      <div class="big">47</div>
+      <div class="sub">credits remaining (resets Jun 1)</div>
+      <div class="credit-bar"><div class="fill" style="width:23.5%"></div></div>
+    </div>
+  </div>
+
+  <!-- Plan comparison -->
+  <div class="plans-section">
+    <h2>Plans</h2>
+    <div class="plans-grid">
+      <div class="plan-card">
+        <div class="plan-badge">&nbsp;</div>
+        <h4>Free</h4>
+        <div class="price">$0<span class="period">/mo</span></div>
+        <div class="credits-included">5 credits/month</div>
+        <ul>
+          <li>One-time analysis only</li>
+          <li>In-app notifications</li>
+          <li>Basic market data</li>
+          <li class="disabled">Portfolio Manager</li>
+          <li class="disabled">Persona customization</li>
+          <li class="disabled">Recurring analysis</li>
+          <li class="disabled">Webhook delivery</li>
+        </ul>
+        <button class="plan-btn">Downgrade</button>
+      </div>
+
+      <div class="plan-card">
+        <div class="plan-badge">&nbsp;</div>
+        <h4>Starter</h4>
+        <div class="price">$19<span class="period">/mo</span></div>
+        <div class="credits-included">50 credits/month</div>
+        <ul>
+          <li>One-time + daily analysis</li>
+          <li>In-app + email + push</li>
+          <li>Full market data</li>
+          <li>Credit pack purchases</li>
+          <li class="disabled">Portfolio Manager</li>
+          <li class="disabled">Persona customization</li>
+          <li class="disabled">Webhook delivery</li>
+        </ul>
+        <button class="plan-btn">Downgrade</button>
+      </div>
+
+      <div class="plan-card current">
+        <div class="plan-badge cur">Current plan</div>
+        <h4>Pro</h4>
+        <div class="price">$49<span class="period">/mo</span></div>
+        <div class="credits-included">200 credits/month</div>
+        <ul>
+          <li>All analysis intervals</li>
+          <li>All notification channels</li>
+          <li>Webhook delivery</li>
+          <li>Portfolio Manager (3 markets)</li>
+          <li class="disabled">Persona customization (defaults only)</li>
+          <li>Priority processing</li>
+        </ul>
+        <button class="plan-btn current-btn">Current Plan</button>
+      </div>
+
+      <div class="plan-card popular">
+        <div class="plan-badge pop">Most powerful</div>
+        <h4>Elite</h4>
+        <div class="price">$149<span class="period">/mo</span></div>
+        <div class="credits-included">Unlimited credits</div>
+        <ul>
+          <li>Unlimited analyses</li>
+          <li>All channels + webhook</li>
+          <li>Portfolio Manager (10 markets)</li>
+          <li>Persona customization (full tuning)</li>
+          <li>Fastest processing</li>
+          <li>Dedicated support</li>
+        </ul>
+        <button class="plan-btn primary">Upgrade</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credit packs -->
+  <div class="packs-section">
+    <h2>Credit Packs</h2>
+    <p class="packs-sub">Top up without changing your plan. Credits never expire.</p>
+    <div class="packs-grid">
+      <div class="pack-card">
+        <div class="pack-amount">10</div>
+        <div class="pack-label">credits</div>
+        <div class="pack-price">$5</div>
+        <div class="pack-unit">$0.50 / credit</div>
+      </div>
+      <div class="pack-card">
+        <div class="pack-amount">25</div>
+        <div class="pack-label">credits</div>
+        <div class="pack-price">$10</div>
+        <div class="pack-unit">$0.40 / credit</div>
+      </div>
+      <div class="pack-card">
+        <div class="pack-amount">50</div>
+        <div class="pack-label">credits</div>
+        <div class="pack-price">$18</div>
+        <div class="pack-unit">$0.36 / credit</div>
+      </div>
+      <div class="pack-card">
+        <div class="pack-amount">100</div>
+        <div class="pack-label">credits</div>
+        <div class="pack-price">$30</div>
+        <div class="pack-unit">$0.30 / credit</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Billing history -->
+  <div class="billing-section">
+    <h2>Billing History</h2>
+    <table class="billing-table">
+      <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">May 1, 2026</td><td>Pro plan - monthly</td><td class="mono">$49.00</td><td><span class="status paid">Paid</span></td></tr>
+        <tr><td class="mono">Apr 18, 2026</td><td>Credit pack - 25 credits</td><td class="mono">$10.00</td><td><span class="status paid">Paid</span></td></tr>
+        <tr><td class="mono">Apr 1, 2026</td><td>Pro plan - monthly</td><td class="mono">$49.00</td><td><span class="status paid">Paid</span></td></tr>
+        <tr><td class="mono">Mar 1, 2026</td><td>Pro plan - monthly</td><td class="mono">$49.00</td><td><span class="status paid">Paid</span></td></tr>
+        <tr><td class="mono">Feb 15, 2026</td><td>Upgrade: Starter → Pro</td><td class="mono">$24.50</td><td><span class="status paid">Paid</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Cancel subscription -->
+  <div style="margin-top:2rem;padding-top:2rem;border-top:1px solid var(--border)">
+    <button onclick="showConfirm('cancel')" style="background:none;border:1px solid var(--no);color:var(--no);padding:.5rem 1.25rem;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;transition:opacity .15s">Cancel Subscription</button>
+  </div>
+</div>
+
+<!-- Confirmation modal -->
+<div id="confirmModal" style="position:fixed;inset:0;background:oklch(0% 0 0 / .6);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:400px;padding:2rem;position:relative">
+    <button onclick="closeConfirm()" style="position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.25rem">&times;</button>
+    <h3 id="confirmTitle" style="font-family:var(--font-display);font-size:1.125rem;font-weight:700;margin-bottom:.5rem"></h3>
+    <p id="confirmDesc" style="font-size:.8rem;color:var(--muted);line-height:1.6;margin-bottom:1.5rem"></p>
+    <div style="display:flex;gap:.75rem;justify-content:flex-end">
+      <button onclick="closeConfirm()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:.5rem 1.25rem;font-size:.8rem;color:var(--fg);cursor:pointer">Keep Plan</button>
+      <button id="confirmAction" style="background:var(--no);border:none;border-radius:8px;padding:.5rem 1.25rem;font-size:.8rem;font-weight:600;color:var(--bg);cursor:pointer"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showConfirm(type){
+  const modal=document.getElementById('confirmModal');
+  const title=document.getElementById('confirmTitle');
+  const desc=document.getElementById('confirmDesc');
+  const btn=document.getElementById('confirmAction');
+  if(type==='cancel'){
+    title.textContent='Cancel your subscription?';
+    desc.textContent='Your Pro plan will remain active until Jun 1, 2026. After that, you\'ll be moved to the Free plan (5 credits/month). Unused credits will be lost. Active recurring analyses will be paused.';
+    btn.textContent='Cancel Subscription';
+  }else{
+    title.textContent='Downgrade to '+type+'?';
+    desc.textContent='You\'ll keep your current plan until the end of this billing cycle (Jun 1). After that, your credit allowance and features will change to match the '+type+' plan.';
+    btn.textContent='Confirm Downgrade';
+  }
+  modal.style.display='flex';
+}
+function closeConfirm(){document.getElementById('confirmModal').style.display='none'}
+document.querySelectorAll('.plan-btn').forEach(function(b){
+  if(b.textContent==='Downgrade'){
+    b.addEventListener('click',function(){
+      var plan=this.closest('.plan-card').querySelector('h4').textContent;
+      showConfirm(plan);
+    });
+  }
+});
+(function(){const t=localStorage.getItem('tw-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);document.querySelector('.theme-toggle').addEventListener('click',function(){const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('tw-theme',n)})})();
+</script>
+<script>
+(function(){
+  const tiers=['free','starter','pro','elite'];
+  const tierData={free:{label:'Free',credits:'3/5'},starter:{label:'Starter',credits:'38/50'},pro:{label:'Pro',credits:'47/200'},elite:{label:'Elite',credits:'∞'}};
+  const sw=document.createElement('div');
+  sw.className='tier-switcher';
+  sw.innerHTML='<div class="tier-sw-label">Viewing as:</div><div class="tier-sw-btns">'+tiers.map(t=>'<button data-t="'+t+'">'+tierData[t].label+'</button>').join('')+'</div>';
+  document.body.appendChild(sw);
+  const saved=localStorage.getItem('tw-tier')||'pro';
+  setTier(saved);
+  sw.querySelectorAll('button').forEach(btn=>{btn.addEventListener('click',()=>{setTier(btn.dataset.t)})});
+  function setTier(tier){
+    document.documentElement.setAttribute('data-tier',tier);
+    localStorage.setItem('tw-tier',tier);
+    sw.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.t===tier));
+    const cb=document.querySelector('.credit-badge');
+    if(cb){const d=tierData[tier];const ct=cb.querySelector('.credit-text');if(ct)ct.textContent=tier==='elite'?'∞ credits':d.credits+' credits';}
+    document.querySelectorAll('.gated-row').forEach(r=>{
+      const lock=r.querySelector('.lock');
+      if(lock){
+        if(tier==='free')r.childNodes[1].textContent=' Recurring analysis · ';
+        else if(tier==='elite')r.childNodes[1].textContent=' Recurring analysis · included ';
+        else r.childNodes[1].textContent=' Recurring analysis · 1 credit per run ';
+      }
+    });
+    const cu=document.querySelector('.credit-usage');
+    if(cu){
+      const vals={free:{bal:'3 / 5',used:'2',pct:'40%'},starter:{bal:'38 / 50',used:'12',pct:'24%'},pro:{bal:'47 / 200',used:'153',pct:'76.5%'},elite:{bal:'∞',used:'47',pct:'100%'}};
+      const v=vals[tier];const rows=cu.querySelectorAll('.credit-row .val');
+      if(rows[0])rows[0].textContent=v.bal;if(rows[1])rows[1].textContent=v.used;
+      const fill=cu.querySelector('.credit-meter .fill');if(fill)fill.style.width=v.pct;
+    }
+  }
+})();
+</script>
+<script>
+// Sync plan card highlighting with tier switcher
+(function(){
+  const planMap={free:0,starter:1,pro:2,elite:3};
+  const planInfo={free:{name:'Free',desc:'5 credits/month · One-time analysis only · In-app notifications',credits:'3',total:'5'},starter:{name:'Starter',desc:'50 credits/month · Daily recurring · In-app + email + push',credits:'38',total:'50'},pro:{name:'Pro',desc:'200 credits/month · All intervals · All notification channels · Webhook delivery',credits:'47',total:'200'},elite:{name:'Elite',desc:'Unlimited credits · All channels + webhook · Fastest processing · Dedicated support',credits:'∞',total:'∞'}};
+  const observer=new MutationObserver(function(){
+    const tier=document.documentElement.getAttribute('data-tier')||'pro';
+    const cards=document.querySelectorAll('.plan-card');
+    cards.forEach((c,i)=>{c.classList.remove('current');c.querySelector('.plan-badge').classList.remove('cur');c.querySelector('.plan-badge').textContent='\u00a0';const btn=c.querySelector('.plan-btn');btn.classList.remove('current-btn');btn.textContent=i<planMap[tier]?'Downgrade':i>planMap[tier]?'Upgrade':'Current Plan'});
+    const idx=planMap[tier];
+    if(cards[idx]){cards[idx].classList.add('current');cards[idx].querySelector('.plan-badge').classList.add('cur');cards[idx].querySelector('.plan-badge').textContent='Current plan';cards[idx].querySelector('.plan-btn').classList.add('current-btn')}
+    const info=planInfo[tier];
+    document.querySelector('.plan-name').textContent=info.name;
+    document.querySelector('.current-plan p').textContent=info.desc;
+    const big=document.querySelector('.credit-status .big');
+    const sub=document.querySelector('.credit-status .sub');
+    const fill=document.querySelector('.credit-bar .fill');
+    if(tier==='elite'){big.textContent='∞';sub.textContent='unlimited credits';fill.style.width='100%'}
+    else{big.textContent=info.credits;sub.textContent='credits remaining (resets Jun 1)';fill.style.width=(parseInt(info.credits)/parseInt(info.total)*100)+'%'}
+  });
+  observer.observe(document.documentElement,{attributes:true,attributeFilter:['data-tier']});
+  // Trigger initial sync
+  setTimeout(()=>{document.documentElement.setAttribute('data-tier',document.documentElement.getAttribute('data-tier')||'pro')},50);
+})();
+</script>
+</body>
+</html>

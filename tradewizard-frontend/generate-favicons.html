@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TradeWizard Favicon Generator</title>
+    <style>
+        body { 
+            font-family: system-ui, sans-serif; 
+            padding: 20px; 
+            background: #111; 
+            color: white; 
+        }
+        .favicon-preview {
+            display: inline-block;
+            margin: 10px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #333;
+            margin: 5px;
+            background: white;
+        }
+        button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <h1>TradeWizard Favicon Generator</h1>
+    <p>This tool generates the missing PNG favicon files for TradeWizard.</p>
+    
+    <div id="previews"></div>
+    
+    <button onclick="generateAll()">Generate All Favicons</button>
+    
+    <script>
+        const sizes = [16, 32, 180, 192, 512];
+        
+        function createFavicon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Background with rounded corners
+            const cornerRadius = size * 0.15;
+            ctx.fillStyle = '#111827';
+            roundRect(ctx, 0, 0, size, size, cornerRadius);
+            ctx.fill();
+            
+            // Border
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, 0.5, 0.5, size-1, size-1, cornerRadius);
+            ctx.stroke();
+            
+            // Letter T
+            ctx.fillStyle = '#818cf8';
+            ctx.font = `bold ${size * 0.6}px system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('T', size/2, size/2);
+            
+            return canvas;
+        }
+        
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+        
+        function downloadCanvas(canvas, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        function generateAll() {
+            sizes.forEach(size => {
+                const canvas = createFavicon(size);
+                let filename;
+                
+                if (size === 16) filename = 'favicon-16x16.png';
+                else if (size === 32) filename = 'favicon-32x32.png';
+                else if (size === 180) filename = 'apple-touch-icon.png';
+                else if (size === 192) filename = 'favicon-192x192.png';
+                else if (size === 512) filename = 'favicon-512x512.png';
+                
+                setTimeout(() => downloadCanvas(canvas, filename), size * 10);
+            });
+        }
+        
+        // Generate previews
+        function generatePreviews() {
+            const container = document.getElementById('previews');
+            sizes.forEach(size => {
+                const div = document.createElement('div');
+                div.className = 'favicon-preview';
+                
+                const canvas = createFavicon(size);
+                const label = document.createElement('div');
+                label.textContent = `${size}x${size}`;
+                
+                div.appendChild(canvas);
+                div.appendChild(label);
+                container.appendChild(div);
+            });
+        }
+        
+        generatePreviews();
+    </script>
+</body>
+</html>
