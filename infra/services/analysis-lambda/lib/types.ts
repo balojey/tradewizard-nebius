@@ -14,11 +14,20 @@ export interface AgentSignal {
   timestamp: string; // ISO 8601
 }
 
-/** Signal fusion output - weighted aggregation of agent signals */
+/** Signal fusion output - market-anchored aggregation of agent signals */
 export interface FusedSignal {
+  /** Final P(YES) after market anchoring and shrinkage. */
   weightedFairProbability: number;
+  /** Unshrunk ensemble estimate, useful for observability/replay. */
+  rawFairProbability?: number;
+  /** Market prior used for anchoring. */
+  marketProbability?: number;
+  /** Shrinkage factor applied to the ensemble's log-odds adjustment (0..1). */
+  shrinkage?: number;
   fusionConfidence: number;
   signalAlignment: number;
+  /** Dispersion of directional views, normalized to 0..1. */
+  signalDisagreement?: number;
   conflictMap: Array<{ agent1: string; agent2: string; divergence: number }>;
 }
 
@@ -81,6 +90,14 @@ export interface TradeRecommendation {
     agentsUsed: string[];
     marketQuestion: string;
     disagreementIndex?: number;
+    /** Deterministic risk/reward check result. */
+    riskRewardRatio?: number;
+    /** Annualized or raw price volatility used for level generation. */
+    volatility?: number;
+    /** Market resolution date (ISO 8601) if available. */
+    marketEndDate?: string;
+    /** Whether the divergence circuit breaker blocked the trade. */
+    divergenceGuardTriggered?: boolean;
   };
   _analysisDetail?: unknown;
 }

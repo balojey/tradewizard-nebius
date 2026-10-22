@@ -7,9 +7,6 @@
  * Run this script after installing sharp: npm install --save-dev sharp
  */
 
-const fs = require('fs');
-const path = require('path');
-
 console.log('TradeWizard Favicon Generation Helper');
 console.log('=====================================');
 console.log('');

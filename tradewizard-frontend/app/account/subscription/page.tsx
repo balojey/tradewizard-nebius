@@ -1,9 +1,20 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { Loader2, AlertTriangle, Info, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarClock,
+  Check,
+  CheckCircle2,
+  CreditCard,
+  Info,
+  Loader2,
+  RefreshCw,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { AppShell } from '@/components/shell/AppShell';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -16,6 +27,7 @@ import {
   useManualRenew,
 } from '@/hooks/useWalletSubscription';
 import { useCurrentPlan } from '@/hooks/useCurrentPlan';
+import { cn } from '@/utils/classNames';
 import { type Plan, planAtLeast } from '@/constants/plans';
 import { usePaymentHistory } from './usePaymentHistory';
 import {
@@ -225,7 +237,7 @@ function SuccessToast({ message, onDismiss }: { message: string; onDismiss: () =
         className="text-muted hover:text-fg text-xs transition-colors"
         aria-label="Dismiss"
       >
-        ✕
+        <X className="h-4 w-4" aria-hidden="true" />
       </button>
     </div>
   );
@@ -459,149 +471,165 @@ export default function SubscriptionPage() {
 
   return (
     <AppShell>
-      <div className="flex flex-col gap-6 sm:gap-8">
-        {/* Success toast (inline, auto-dismiss) */}
+      <div className="w-full">
         {successMessage && (
-          <SuccessToast message={successMessage} onDismiss={dismissSuccess} />
+          <div className="mb-5">
+            <SuccessToast message={successMessage} onDismiss={dismissSuccess} />
+          </div>
         )}
 
-        {/* Error/warning/info modal */}
         {errorModal && (
           <ErrorModal data={errorModal} onClose={() => setErrorModal(null)} />
         )}
 
-        {/* Page header */}
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold font-display tracking-tight">
-            Subscription &amp; Credits
+        <header className="border-b border-border pb-6">
+          <h1 className="font-display text-[clamp(1.9rem,3.8vw,2.75rem)] font-bold leading-none tracking-[-0.04em] text-fg">
+            Subscription &amp; credits
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Manage your plan, buy credit packs, and view billing history
+          <p className="mt-2 text-sm text-muted">
+            Plans, credit packs, and every payment in one place.
           </p>
-        </div>
+        </header>
 
-        {/* Current plan summary card */}
         {isSubLoading ? (
-          <Card className="p-4 sm:p-6 animate-pulse">
-            <div className="h-6 w-48 bg-surface-2 rounded" />
-            <div className="h-4 w-64 bg-surface-2 rounded mt-2" />
-          </Card>
+          <div className="mt-5 animate-pulse rounded-2xl border border-border bg-surface p-4 sm:p-5">
+            <div className="h-6 w-48 rounded bg-surface-2" />
+            <div className="mt-2 h-4 w-64 rounded bg-surface-2" />
+            <div className="mt-4 h-2 w-full rounded-full bg-surface-2" />
+          </div>
         ) : subscription ? (
-          <Card className="p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-base font-semibold">Current plan:</h2>
-                  <span className="text-ai font-bold capitalize">
+          <section className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className="flex flex-col gap-5 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent">
+                  <CreditCard className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[0.62rem] text-muted">Current plan</span>
+                    <Badge tone="accent" size="sm" className="capitalize">
+                      {subscription.plan}
+                    </Badge>
+                    {isOnTrial && (
+                      <Badge tone="accent" size="sm">
+                        Free trial
+                      </Badge>
+                    )}
+                    {subscription.status === 'active' && !isOnTrial && (
+                      <Badge tone="yes" size="sm">
+                        Active
+                      </Badge>
+                    )}
+                    {subscription.status === 'cancelled' && (
+                      <Badge tone="warning" size="sm">
+                        Cancelled
+                      </Badge>
+                    )}
+                    {subscription.status === 'grace_period' && (
+                      <Badge tone="no" size="sm">
+                        Grace period
+                      </Badge>
+                    )}
+                  </div>
+                  <h2 className="mt-1 font-display text-2xl font-bold capitalize leading-none text-fg">
                     {subscription.plan}
-                  </span>
-                  {isOnTrial && (
-                    <Badge tone="accent" size="sm">
-                      Free Trial
-                    </Badge>
-                  )}
-                  {subscription.status === 'active' && !isOnTrial && (
-                    <Badge tone="yes" size="sm">
-                      Active
-                    </Badge>
-                  )}
-                  {subscription.status === 'cancelled' && (
-                    <Badge tone="warning" size="sm">
-                      Cancelled
-                    </Badge>
-                  )}
-                  {subscription.status === 'grace_period' && (
-                    <Badge tone="no" size="sm">
-                      Grace Period
-                    </Badge>
+                  </h2>
+                  <p className="mt-1.5 text-xs text-muted">
+                    {isOnTrial && subscription.trialEnd
+                      ? `Free trial ends ${formatDate(subscription.trialEnd)}`
+                      : subscription.plan === 'elite'
+                        ? 'Unlimited credits · all intervals · all notification channels'
+                        : `${subscription.creditsMonthlyLimit} credits/month · ${
+                            currentPlan === 'free'
+                              ? 'one-time analysis only'
+                              : currentPlan === 'starter'
+                                ? 'daily recurring'
+                                : 'all intervals'
+                          }`}
+                  </p>
+                  {subscription.billingCycleEnd && (
+                    <p className="mt-1.5 font-mono text-[0.6rem] text-muted">
+                      Resets {formatDate(subscription.billingCycleEnd)}
+                    </p>
                   )}
                 </div>
-                <p className="text-xs text-muted">
-                  {isOnTrial && subscription.trialEnd
-                    ? `Free trial ends ${formatDate(subscription.trialEnd)}`
-                    : subscription.plan === 'elite'
-                    ? 'Unlimited credits · All intervals · All notification channels'
-                    : `${subscription.creditsMonthlyLimit} credits/month · ${
-                        currentPlan === 'free'
-                          ? 'One-time analysis only'
-                          : currentPlan === 'starter'
-                          ? 'Daily recurring'
-                          : 'All intervals'
-                      }`}
-                </p>
               </div>
-              <div className="flex flex-col items-start sm:items-end gap-1">
-                <div className="font-mono text-2xl font-bold tabular-nums">
-                  {subscription.plan === 'elite'
-                    ? '∞'
-                    : subscription.creditsRemaining}
-                </div>
-                <div className="text-xs text-muted">
-                  {subscription.plan === 'elite'
-                    ? 'unlimited credits'
-                    : `of ${subscription.creditsMonthlyLimit} credits remaining`}
+
+              <div className="w-full shrink-0 lg:w-64">
+                <div className="flex items-baseline justify-between gap-2 lg:justify-end">
+                  <span className="font-mono text-3xl font-bold leading-none tabular-nums text-fg">
+                    {subscription.plan === 'elite' ? '∞' : subscription.creditsRemaining}
+                  </span>
+                  <span className="text-[0.6rem] text-muted">
+                    {subscription.plan === 'elite'
+                      ? 'unlimited credits'
+                      : `of ${subscription.creditsMonthlyLimit} credits`}
+                  </span>
                 </div>
                 {subscription.plan !== 'elite' && (
-                  <div className="w-full sm:w-48 h-1.5 bg-surface-2 rounded-full overflow-hidden mt-1">
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
                     <div
-                      className="h-full bg-gradient-to-r from-accent to-ai rounded-full transition-all"
+                      className="h-full rounded-full bg-gradient-to-r from-accent to-ai transition-all"
                       style={{ width: `${100 - usagePercent}%` }}
                     />
                   </div>
                 )}
-                {subscription.billingCycleEnd && (
-                  <span className="text-[11px] text-muted mt-0.5">
-                    Resets {formatDate(subscription.billingCycleEnd)}
-                  </span>
+                {subscription.plan !== 'elite' && (
+                  <p className="mt-1 text-right text-[0.58rem] text-muted">
+                    {Math.round(100 - usagePercent)}% remaining
+                  </p>
                 )}
               </div>
             </div>
-          </Card>
+          </section>
         ) : null}
 
-        {/* Grace period renewal banner */}
         {subscription?.status === 'grace_period' && (
-          <Card className="p-4 sm:p-5 border-no/40 bg-no/5">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex items-start gap-3 flex-1">
-                <AlertTriangle className="w-5 h-5 text-no shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-no">
-                    Your subscription renewal failed
-                  </p>
-                  <p className="text-xs text-muted mt-1">
-                    We couldn&apos;t automatically renew your {subscription.plan} plan.
-                    {subscription.renewalPrice
-                      ? ` Please ensure you have at least $${subscription.renewalPrice.toFixed(2)} USD in your Trading Wallet and renew manually.`
-                      : ' Please renew manually to keep your plan active.'}
-                    {' '}If not renewed during the grace period, your account will be downgraded to the Free plan.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 shrink-0">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleManualRenew}
-                  disabled={manualRenew.isPending}
-                  loading={manualRenew.isPending}
-                  aria-label="Renew subscription now"
-                >
-                  Renew Now
-                  {subscription.renewalPrice ? ` · $${subscription.renewalPrice}` : ''}
-                </Button>
-                {manualRenew.isPending && (
-                  <TransactionProgress step={planTxStep} />
-                )}
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-no/30 bg-no/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-no" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium text-no">
+                  Your subscription renewal failed
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  We couldn&apos;t automatically renew your {subscription.plan} plan.
+                  {subscription.renewalPrice
+                    ? ` Keep at least $${subscription.renewalPrice.toFixed(2)} in your Trading Wallet and renew manually.`
+                    : ' Please renew manually to keep your plan active.'}{' '}
+                  If not renewed during the grace period, your account moves to Free.
+                </p>
               </div>
             </div>
-          </Card>
+            <div className="flex shrink-0 flex-col gap-2">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleManualRenew}
+                disabled={manualRenew.isPending}
+                loading={manualRenew.isPending}
+                aria-label="Renew subscription now"
+              >
+                Renew now
+                {subscription.renewalPrice ? ` · $${subscription.renewalPrice}` : ''}
+              </Button>
+              {manualRenew.isPending && <TransactionProgress step={planTxStep} />}
+            </div>
+          </div>
         )}
 
-        {/* Plan cards grid */}
-        <section>
-          <h2 className="text-lg font-bold font-display mb-4">Plans</h2>
-          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <section className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5 sm:px-5">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">Plans</h2>
+              <p className="text-[0.6rem] text-muted">
+                Change your monthly allowance and features.
+              </p>
+            </div>
+            <span className="hidden text-[0.6rem] text-muted sm:inline">Billed monthly</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-px bg-border/60 sm:grid-cols-2 xl:grid-cols-4">
             {PLANS.map((planInfo) => {
               const action = getPlanAction(currentPlan, planInfo.planId);
               const isCurrent = action === 'current';
@@ -612,66 +640,61 @@ export default function SubscriptionPage() {
                 !isCurrent;
 
               return (
-                <Card
+                <div
                   key={planInfo.planId}
-                  className={`p-4 sm:p-5 flex flex-col ${
-                    isCurrent ? 'border-ai' : ''
-                  } ${planInfo.planId === 'elite' ? 'border-accent' : ''}`}
+                  className={cn(
+                    'relative flex flex-col bg-surface p-4 sm:p-5',
+                    isCurrent && 'bg-accent/[0.05]'
+                  )}
                 >
-                  {/* Badge */}
-                  <div className="h-5 mb-3">
-                    {isCurrent && isOnTrial && (
+                  {isCurrent && (
+                    <span
+                      className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-accent"
+                      aria-hidden="true"
+                    />
+                  )}
+
+                  <div className="flex min-h-5 flex-wrap items-center gap-2">
+                    {isCurrent && (
                       <Badge tone="accent" size="sm">
-                        Trial active
-                      </Badge>
-                    )}
-                    {isCurrent && !isOnTrial && (
-                      <Badge tone="ai" size="sm">
-                        Current plan
+                        {isOnTrial ? 'Trial active' : 'Current plan'}
                       </Badge>
                     )}
                     {planInfo.planId === 'elite' && !isCurrent && (
-                      <Badge tone="accent" size="sm">
+                      <Badge tone="warning" size="sm">
                         Most powerful
                       </Badge>
                     )}
-                    {canTrial && !isCurrent && planInfo.planId !== 'elite' && (
+                    {canTrial && (
                       <Badge tone="yes" size="sm">
                         30-day free trial
                       </Badge>
                     )}
                   </div>
 
-                  {/* Plan name */}
-                  <h3 className="text-base font-semibold">{planInfo.name}</h3>
-
-                  {/* Price */}
-                  <div className="font-mono text-2xl font-bold mt-1 tabular-nums">
+                  <h3 className="mt-3 text-sm font-semibold text-fg">{planInfo.name}</h3>
+                  <div className="mt-1 font-mono text-2xl font-bold tabular-nums text-fg">
                     ${planInfo.price}
                     <span className="text-sm font-normal text-muted">/mo</span>
                   </div>
+                  <p className="mt-1 text-[0.65rem] text-accent">{planInfo.credits}</p>
 
-                  {/* Credits */}
-                  <p className="text-xs text-ai mt-1 mb-4">{planInfo.credits}</p>
-
-                  {/* Features */}
-                  <ul className="flex-1 space-y-1.5 mb-5">
+                  <ul className="mt-3 flex-1 space-y-1.5">
                     {planInfo.features.map((feature) => (
                       <li
                         key={feature}
-                        className="text-xs text-muted flex items-center gap-2"
+                        className="flex items-start gap-2 text-[0.7rem] leading-relaxed text-muted"
                       >
-                        <span className="text-yes text-[10px] font-bold">✓</span>
+                        <Check className="mt-0.5 h-3 w-3 shrink-0 text-yes" aria-hidden="true" />
                         {feature}
                       </li>
                     ))}
                   </ul>
 
-                  {/* Action buttons */}
-                  <div className="flex flex-col gap-2">
+                  <div className="mt-4">
                     {canTrial ? (
                       <Button
-                        variant="ai"
+                        variant="primary"
                         size="md"
                         className="w-full"
                         disabled={startTrial.isPending}
@@ -679,16 +702,12 @@ export default function SubscriptionPage() {
                         onClick={() => handleStartTrial(planInfo.planId)}
                         aria-label={`Start 30-day free trial of ${planInfo.name}`}
                       >
-                        Start Free Trial
+                        Start free trial
                       </Button>
                     ) : (
                       <Button
                         variant={
-                          isCurrent
-                            ? 'ai'
-                            : action === 'upgrade'
-                            ? 'primary'
-                            : 'secondary'
+                          isCurrent ? 'secondary' : action === 'upgrade' ? 'primary' : 'secondary'
                         }
                         size="md"
                         className="w-full"
@@ -702,103 +721,145 @@ export default function SubscriptionPage() {
                         }
                       >
                         {isCurrent
-                          ? 'Current Plan'
+                          ? 'Current plan'
                           : action === 'upgrade'
-                          ? 'Upgrade'
-                          : 'Downgrade'}
+                            ? 'Upgrade'
+                            : 'Downgrade'}
                       </Button>
                     )}
-                    {/* Transaction progress for plan change */}
+
                     {!isCurrent && subscribePlan.isPending && (
                       <TransactionProgress step={planTxStep} />
                     )}
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
         </section>
 
-        {/* Credit packs section */}
-        <section>
-          <h2 className="text-lg font-bold font-display mb-1">Credit Packs</h2>
-          <p className="text-sm text-muted mb-4">
-            Top up without changing your plan. Credits never expire.
-          </p>
-          <div className="grid grid-cols-1 xs:grid-cols-3 gap-3 sm:gap-4 max-w-md">
-            {CREDIT_PACKS.map((pack) => {
-              const isPurchasing = purchasingPack === pack.packId;
-              return (
-                <Card
-                  key={pack.packId}
-                  className={`p-4 sm:p-5 text-center cursor-pointer hover:border-accent transition-colors ${
-                    isPurchasing ? 'border-accent' : ''
-                  }`}
-                >
+        <div className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5 sm:px-5">
+              <div>
+                <h2 className="text-sm font-semibold text-fg">Credit packs</h2>
+                <p className="text-[0.6rem] text-muted">
+                  Top up without changing your plan. Credits never expire.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-px bg-border/60 xs:grid-cols-3">
+              {CREDIT_PACKS.map((pack) => {
+                const isPurchasing = purchasingPack === pack.packId;
+
+                return (
                   <button
-                    className="w-full flex flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg rounded"
+                    key={pack.packId}
+                    type="button"
                     onClick={() => handlePurchasePack(pack.packId)}
                     disabled={isPurchasing || purchaseCreditPack.isPending}
                     aria-label={`Purchase ${pack.credits} credits for $${pack.price}`}
+                    className={cn(
+                      'bg-surface p-4 text-left transition-colors hover:bg-surface-2/40 disabled:cursor-not-allowed disabled:opacity-60',
+                      isPurchasing && 'bg-accent/[0.05]'
+                    )}
                   >
-                    <span className="font-mono text-2xl font-bold text-accent">
-                      {pack.credits}
-                    </span>
-                    <span className="text-xs text-muted">credits</span>
-                    <span className="text-base font-semibold mt-2">
-                      ${pack.price}
-                    </span>
-                    <span className="text-[11px] text-muted">
-                      ${(pack.price / pack.credits).toFixed(2)} / credit
-                    </span>
-                    {isPurchasing && (
-                      <TransactionProgress step={packTxStep} />
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-mono text-2xl font-bold text-accent">
+                        {pack.credits}
+                      </span>
+                      <span className="text-sm font-semibold text-fg">${pack.price}</span>
+                    </div>
+                    <p className="mt-0.5 text-[0.6rem] text-muted">
+                      credits · ${(pack.price / pack.credits).toFixed(2)} each
+                    </p>
+                    {isPurchasing ? (
+                      <div className="mt-2">
+                        <TransactionProgress step={packTxStep} />
+                      </div>
+                    ) : (
+                      <span className="mt-2 inline-flex items-center gap-1 text-[0.65rem] font-medium text-accent">
+                        Buy pack
+                        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
                     )}
                   </button>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
+                );
+              })}
+            </div>
+          </section>
 
-        {/* Billing history */}
+          <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3.5">
+              <CalendarClock className="h-4 w-4 text-muted" aria-hidden="true" />
+              <div>
+                <h2 className="text-sm font-semibold text-fg">Manage</h2>
+                <p className="text-[0.6rem] text-muted">Billing and renewal</p>
+              </div>
+            </div>
+
+            <div className="p-4">
+              {subscription ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3 text-[0.65rem]">
+                    <span className="text-muted">Next renewal</span>
+                    <span className="font-mono text-fg">
+                      {formatDate(subscription.billingCycleEnd)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-[0.65rem]">
+                    <span className="text-muted">Payment</span>
+                    <span className="text-fg">Trading wallet</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-[0.65rem]">
+                    <span className="text-muted">Plan</span>
+                    <span className="capitalize text-fg">{subscription.plan}</span>
+                  </div>
+
+                  {isPaidPlan && subscription.status !== 'cancelled' ? (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setShowCancelModal(true)}
+                      aria-label="Cancel subscription"
+                      className="mt-2 w-full"
+                    >
+                      Cancel subscription
+                    </Button>
+                  ) : (
+                    <p className="mt-2 border-t border-border/60 pt-3 text-[0.6rem] leading-relaxed text-muted">
+                      {subscription.status === 'cancelled'
+                        ? `Your plan stays active until ${formatDate(subscription.billingCycleEnd)}.`
+                        : 'No paid subscription is active.'}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[0.65rem] leading-relaxed text-muted">
+                  No active subscription. Choose a plan above to get started.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+
         <BillingHistorySection />
 
-        {/* Cancel subscription */}
-        {subscription &&
-          isPaidPlan &&
-          subscription.status !== 'cancelled' && (
-            <section className="pt-4 border-t border-border">
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setShowCancelModal(true)}
-                aria-label="Cancel subscription"
-              >
-                Cancel Subscription
-              </Button>
-            </section>
-          )}
-
-        {/* Downgrade confirmation modal */}
         <Modal
           open={!!downgradeTarget}
           onClose={() => setDowngradeTarget(null)}
           title={`Downgrade to ${downgradeTarget?.name}?`}
           size="sm"
         >
-          <p className="text-sm text-muted mb-6">
+          <p className="mb-6 text-sm text-muted">
             You&apos;ll keep your current plan until the end of this billing
-            cycle. After that, your credit allowance and features will change to
+            cycle. After that, your credit allowance and features change to
             match the {downgradeTarget?.name} plan.
           </p>
-          <div className="flex gap-3 justify-end">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setDowngradeTarget(null)}
-            >
-              Keep Plan
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" size="md" onClick={() => setDowngradeTarget(null)}>
+              Keep plan
             </Button>
             <Button
               variant="danger"
@@ -806,30 +867,25 @@ export default function SubscriptionPage() {
               onClick={handleConfirmDowngrade}
               loading={subscribePlan.isPending}
             >
-              Confirm Downgrade
+              Confirm downgrade
             </Button>
           </div>
         </Modal>
 
-        {/* Cancel subscription confirmation modal */}
         <Modal
           open={showCancelModal}
           onClose={() => setShowCancelModal(false)}
           title="Cancel your subscription?"
           size="sm"
         >
-          <p className="text-sm text-muted mb-6">
-            Your plan will remain active until the end of the current billing
-            cycle. After that, you&apos;ll be moved to the Free plan (20
-            credits/month). Unused credits will be lost.
+          <p className="mb-6 text-sm text-muted">
+            Your plan remains active until the end of the current billing cycle.
+            After that, you move to the Free plan (20 credits/month). Unused
+            credits are lost.
           </p>
-          <div className="flex gap-3 justify-end">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setShowCancelModal(false)}
-            >
-              Keep Plan
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" size="md" onClick={() => setShowCancelModal(false)}>
+              Keep plan
             </Button>
             <Button
               variant="danger"
@@ -837,7 +893,7 @@ export default function SubscriptionPage() {
               onClick={handleCancelSubscription}
               loading={cancelSubscription.isPending}
             >
-              Cancel Subscription
+              Cancel subscription
             </Button>
           </div>
         </Modal>
@@ -857,60 +913,68 @@ function BillingHistorySection() {
   const transactions = data?.pages.flatMap((page) => page.transactions) ?? [];
 
   return (
-    <section>
-      <h2 className="text-lg font-bold font-display mb-4">Billing History</h2>
+    <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5 sm:px-5">
+        <div>
+          <h2 className="text-sm font-semibold text-fg">Billing history</h2>
+          <p className="text-[0.6rem] text-muted">Payments from your Trading wallet.</p>
+        </div>
+        {transactions.length > 0 && (
+          <span className="font-mono text-[0.6rem] text-muted">
+            {transactions.length} records
+          </span>
+        )}
+      </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted py-4">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading billing history...
+        <div className="animate-pulse divide-y divide-border/60" aria-hidden="true">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-4 px-4 py-3.5">
+              <div className="h-3 w-24 rounded bg-surface-2" />
+              <div className="h-3 w-40 rounded bg-surface-2" />
+              <div className="ml-auto h-3 w-16 rounded bg-surface-2" />
+            </div>
+          ))}
         </div>
       )}
 
       {error && (
-        <Card className="p-4">
-          <p className="text-sm text-no">Failed to load billing history.</p>
-        </Card>
+        <p className="px-4 py-6 text-center text-sm text-no">
+          Failed to load billing history.
+        </p>
       )}
 
       {!isLoading && transactions.length === 0 && (
-        <p className="text-sm text-muted py-4">No billing history yet.</p>
+        <p className="px-4 py-6 text-center text-sm text-muted">
+          No billing history yet.
+        </p>
       )}
 
       {transactions.length > 0 && (
-        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <Card className="overflow-hidden">
-            {/* Desktop table */}
-            <table className="w-full text-sm hidden sm:table min-w-[500px]">
+        <>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[500px] text-sm">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted uppercase tracking-wide">
-                    Date
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted uppercase tracking-wide">
-                    Description
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted uppercase tracking-wide">
-                    Amount
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted uppercase tracking-wide">
-                    Status
-                  </th>
+                <tr className="border-b border-border/60 text-left text-[0.62rem] text-muted">
+                  <th className="px-4 py-2.5 font-medium first:pl-5">Date</th>
+                  <th className="px-4 py-2.5 font-medium">Description</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Amount</th>
+                  <th className="px-4 py-2.5 text-right font-medium last:pr-5">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/40">
+              <tbody className="divide-y divide-border/60">
                 {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-surface-2/50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                  <tr key={tx.id} className="transition-colors hover:bg-surface-2/40">
+                    <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted first:pl-5">
                       {formatDate(tx.createdAt)}
                     </td>
-                    <td className="px-4 py-3 text-fg">
+                    <td className="px-4 py-3 text-xs text-fg">
                       {tx.transactionType.replace(/_/g, ' ')}
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                    <td className="px-4 py-3 text-right font-mono text-xs tabular-nums text-fg">
                       ${tx.amountUsdc.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right last:pr-5">
                       <Badge tone="yes" size="sm">
                         Paid
                       </Badge>
@@ -919,47 +983,46 @@ function BillingHistorySection() {
                 ))}
               </tbody>
             </table>
+          </div>
 
-            {/* Mobile stacked layout */}
-            <div className="sm:hidden divide-y divide-border/40">
-              {transactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="px-4 py-3 flex items-center justify-between gap-3"
-                >
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-sm text-fg truncate">
-                      {tx.transactionType.replace(/_/g, ' ')}
-                    </span>
-                    <span className="text-xs text-muted font-mono tabular-nums">
-                      {formatDate(tx.createdAt)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono text-sm font-semibold tabular-nums">
-                      ${tx.amountUsdc.toFixed(2)}
-                    </span>
-                    <Badge tone="yes" size="sm">
-                      Paid
-                    </Badge>
-                  </div>
+          <div className="divide-y divide-border/60 sm:hidden">
+            {transactions.map((tx) => (
+              <div
+                key={tx.id}
+                className="flex items-center justify-between gap-3 px-4 py-3"
+              >
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-sm text-fg">
+                    {tx.transactionType.replace(/_/g, ' ')}
+                  </span>
+                  <span className="font-mono text-xs tabular-nums text-muted">
+                    {formatDate(tx.createdAt)}
+                  </span>
                 </div>
-              ))}
-            </div>
-
-            {hasNextPage && (
-              <div className="px-4 py-3 border-t border-border">
-                <button
-                  onClick={() => fetchNextPage()}
-                  disabled={isFetchingNextPage}
-                  className="text-sm text-accent hover:text-accent/80 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg rounded"
-                >
-                  {isFetchingNextPage ? 'Loading...' : 'Load more'}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="font-mono text-sm font-semibold tabular-nums text-fg">
+                    ${tx.amountUsdc.toFixed(2)}
+                  </span>
+                  <Badge tone="yes" size="sm">
+                    Paid
+                  </Badge>
+                </div>
               </div>
-            )}
-          </Card>
-        </div>
+            ))}
+          </div>
+
+          {hasNextPage && (
+            <div className="border-t border-border/60 px-4 py-3">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="rounded text-sm text-accent transition-colors hover:text-fg disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              >
+                {isFetchingNextPage ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

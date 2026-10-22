@@ -55,7 +55,6 @@ const QUICK_AMOUNTS = [10, 25, 50, 100];
 
 export const TradeExecution = forwardRef(function TradeExecution(
   {
-    marketSlug,
     initialSide,
     tokenIds,
     currentPrice = 0.5,

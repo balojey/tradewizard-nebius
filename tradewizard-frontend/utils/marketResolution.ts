@@ -4,21 +4,6 @@
 
 import type { PolymarketMarket } from "@/hooks/useMarkets";
 
-interface CLOBMarketToken {
-  outcome: string;
-  price: number;
-  token_id: string;
-  winner: boolean;
-}
-
-interface CLOBMarket {
-  closed: boolean;
-  condition_id: string;
-  tokens: CLOBMarketToken[];
-  end_date_iso: string;
-  question: string;
-}
-
 /**
  * Fetches resolution data for closed markets from the CLOB API
  */

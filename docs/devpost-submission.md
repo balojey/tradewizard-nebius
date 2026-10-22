@@ -22,7 +22,7 @@ TradeWizard is two products that share a brain.
 
 **Autonomous Portfolio Manager (Pro and Elite).** A user can opt into autonomous execution on a specific market by activating a session with a chosen persona (Sniper, Scalper, Contrarian, Catalyst Hunter, Hedge Architect, Momentum Rider), an investment amount, and pre-approved guardrails. The Portfolio Manager Lambda consumes recurring analyses for that market - it never triggers its own - and decides entry, sizing, stop-loss, and take-profit per trade. Orders are placed via the Polymarket CLOB API. A Position Guard monitors every open position for regime shifts and stale markets. A Risk Engine enforces loss limits, cooldowns, and a kill switch that fails closed. The user can pause, resume, stop, or kill all sessions at any time, and every trade, exit, and risk event fans out across notification channels in real time.
 
-Around these sit the platform pieces a real product needs: passwordless Cognito Magic Link auth, on-chain USDC.e billing on Polygon with auto-renewal via ERC-20 allowances, a market-level analysis pool that prevents redundant compute, a credit system with an immutable audit trail, and a Next.js 16 / React 19 frontend that surfaces all of it through a clean trading-terminal UI.
+Around these sit the platform pieces a real product needs: passwordless Cognito Magic Link auth, on-chain pUSD (Polymarket USD) billing on Polygon with legacy USDC.e read compatibility and auto-renewal via ERC-20 allowances, a market-level analysis pool that prevents redundant compute, a credit system with an immutable audit trail, and a Next.js 16 / React 19 frontend that surfaces all of it through a clean trading-terminal UI.
 
 The inference layer runs on **Nebius Token Factory**. Every agentic stage - web research, the fourteen parallel analysts, the adversarial debate, risk philosophy, and the Portfolio Manager's decision - resolves through a provider abstraction to an open model served by Token Factory. **NVIDIA Nemotron 3 Super**, an open-source NVIDIA model, is the agentic workhorse for tool-heavy research and news agents. The orchestration, persistence, and trade execution layers run on a serverless deployment substrate; they are deliberately separate from the inference provider, so the intelligence layer is not coupled to a single model vendor.
 
@@ -66,10 +66,10 @@ The 11-stage pipeline processes data through a sequence of parallel and serial s
 3. **Web Research** (agentic) - A Strands Agent with news and search tools autonomously gathers real-time context. 60-second timeout, max 10 searches + 5 scrapes.
 4. **Agent Selection** (deterministic) - All 14 agents are activated. No conditional filtering.
 5. **Parallel Intelligence Agents** (agentic) - 14 agents execute in parallel via `Promise.all`, each resolving to a capability-routed model on Nebius Token Factory. Each produces a Zod-validated `AgentSignal`: direction (YES/NO/NEUTRAL), confidence (0–1), fair probability (0–1), key drivers, and risk factors. 120-second per-agent timeout. If an agent fails to produce valid output, it is excluded from downstream stages.
-6. **Signal Fusion** (deterministic, no LLM) - Weighted aggregation of all valid agent signals. Weights = type weight × confidence × historical accuracy score. Computes: weighted fair probability, fusion confidence, signal alignment, and a conflict map (all agent pairs diverging > 30%). If max divergence exceeds 70%, fusion confidence is halved.
+6. **Signal Fusion** (deterministic, no LLM) - Market-anchored log-odds aggregation. The ensemble's deviation from the current market price is shrunk by a configurable factor (`FUSION_SHRINKAGE`, default 0.15), so the fused probability stays tethered to the market instead of drifting with model enthusiasm. Agent weights are Brier-calibrated from historical accuracy; the stage also computes fusion confidence, signal alignment, and a conflict map (all agent pairs diverging > 30%).
 7. **Thesis Construction** (agentic) - Kimi K3 generates competing bull and bear theses from the fused signal. Each thesis includes fair probability, edge, core argument, catalysts, and failure conditions.
 8. **Cross-Examination** (agentic) - Kimi K3 runs 5 adversarial tests against each thesis (10 total): evidence, causality, timing, liquidity, tail risk. Each test produces a survived/weakened/refuted outcome with a numeric score.
-9. **Consensus Engine** (deterministic, no LLM) - Computes weighted consensus probability from bull/bear fair probabilities weighted by debate scores and per-agent accuracy. Computes disagreement index (stddev of agent fair probabilities). **If disagreement > 30%, consensus fails → forced NO_TRADE.** Determines action: LONG_YES, LONG_NO, or NO_TRADE.
+9. **Consensus Engine** (deterministic, no LLM) - Uses the anchored fused probability as the probability source; the bull/bear role-play theses only modify confidence. Computes a disagreement index (stddev of agent fair probabilities). **If disagreement > 30% or confidence < 20%, consensus fails → forced NO_TRADE.** A divergence circuit breaker blocks implausible edges (> 15%) rather than fading the market. Determines action: LONG_YES, LONG_NO, or NO_TRADE.
 10. **Risk Philosophy** (agentic) - Three agents (aggressive, conservative, neutral) run in parallel on Kimi K3. Provide position-sizing perspectives - Kelly criterion, hedging, spreads - without influencing probability estimates.
 11. **Recommendation** (agentic) - Kimi K3 synthesizes all upstream context into a final `TradeRecommendation`. Validated through Zod schema and price-ordering constraints. **If EV ≤ 0, the recommendation is rejected → forced NO_TRADE.** Falls back to a structured NO_TRADE explanation on any parse failure.
 
@@ -145,7 +145,7 @@ The goal is not to prevent users from following recommendations - that would def
 - **Compute**: Lambda on Node.js 20 throughout. No long-lived servers. No NAT Gateway. Aurora is reachable on a public endpoint with SSL enforcement, scales to 0.5 ACU at idle, and auto-scales under load. Baseline infrastructure runs around fifteen to twenty dollars a month - the architecture is shaped to make scaling a revenue decision, not a survival one.
 - **AI runtime**: Nebius Token Factory, called through the Strands Agents SDK in TypeScript. Two agentic Lambdas - `Analysis_Lambda` runs the 11-stage intelligence workflow, `Portfolio_Lambda` runs the persona-driven trade decision. Every model call goes through `services/shared/ai-provider.ts`, which resolves a logical capability (`fast`, `analytical`, `agentic`, `reasoning`, `deep_reasoning`, `non_tool`, `default`) to a configured Token Factory model ID. Tool-capable agents are spread across Nemotron 3 Super (agentic), Qwen3-30B (fast), Qwen3-235B (analytical), GPT-OSS 120B (reasoning), and DeepSeek-V4-Pro (deep reasoning). Non-tool stages - thesis, cross-examination, risk philosophy, recommendation - use Kimi K3. Web research uses Nemotron 3 Super because it needs tools and runs alone before the agent league. The Portfolio Manager uses MiniMax M3. Model IDs and max-token limits are env-driven per environment, so routing changes do not require a code change.
 - **Frontend**: Next.js 16 App Router on AWS Amplify Hosting. React 19, TypeScript strict, Tailwind 4, TanStack Query, WebSocket client with exponential backoff and ping keepalive. Magic SDK plus viem for on-chain operations. Polymarket CLOB client for order placement.
-- **Payments**: On-chain USDC.e on Polygon. Subscriptions and credit packs are settled by transaction hash verification using viem; auto-renewal works through a pre-approved ERC-20 allowance and `transferFrom`. No card processor in the loop.
+- **Payments**: On-chain pUSD (Polymarket USD) on Polygon, with legacy USDC.e read compatibility during the migration. Subscriptions and credit packs are settled by transaction hash verification using viem; auto-renewal works through a pre-approved ERC-20 allowance and `transferFrom`. No card processor in the loop.
 
 ### Nebius Token Factory integration
 
@@ -173,11 +173,11 @@ Each agent emits an `AgentSignal` - a typed record with direction, confidence, f
 
 This is the part that distinguishes TradeWizard from a chat-bot recommending trades. There are three deterministic gates between raw agent output and what reaches the user.
 
-**Gate 1: Signal Fusion (no LLM).** Agent signals are aggregated through weighted fusion. Weights respond to agent type, confidence, data freshness, and historical accuracy from the leaderboard. Divergence is measured directly - when the spread between fair-probability estimates is extreme, a divergence penalty drops fusion confidence. The fusion stage produces a single fair probability with a conflict map, not a vote.
+**Gate 1: Signal Fusion (no LLM).** Agent signals are aggregated through market-anchored log-odds fusion. The ensemble's deviation from the current market price is shrunk by a configurable factor (`FUSION_SHRINKAGE`, default 0.15), which keeps the fused probability tethered to the market instead of drifting with model enthusiasm. Weights respond to agent type, confidence, data freshness, and Brier-calibrated historical accuracy. Divergence is measured directly - when the spread between fair-probability estimates is extreme, a divergence penalty drops fusion confidence. The fusion stage produces a single fair probability with a conflict map, not a vote.
 
 **Gate 2: Adversarial Debate.** A thesis-construction agent generates competing bull and bear cases from the fused signal. A cross-examination agent then runs five adversarial tests against each thesis - evidence, causality, timing, liquidity, tail risk - for ten tests in total. Each test produces a survived/weakened/refuted outcome and a numeric score, so the debate output is a structured object, not prose.
 
-**Gate 3: Consensus Engine (no LLM).** A weighted consensus probability is computed from the bull and bear fair probabilities, weighted by debate scores and per-agent leaderboard accuracy. We compute a disagreement index - the standard deviation of agent fair probabilities - and **if disagreement exceeds 30%, consensus fails**. The system refuses to recommend. The recommendation stage receives the failure flag and is forced to emit `NO_TRADE` with a structured explanation. The same is true for negative expected value: if EV is non-positive, the recommendation is rejected and replaced with `NO_TRADE`. These are not LLM behaviors we hope for. They are deterministic checks in the pipeline that the LLM cannot override.
+**Gate 3: Consensus Engine (no LLM).** The anchored fused probability is the probability source; the bull and bear role-play theses only modify confidence. We compute a disagreement index - the standard deviation of agent fair probabilities - and a confidence floor. **If disagreement exceeds 30% or confidence falls below 20%, consensus fails.** A divergence circuit breaker blocks implausible edges above 15% instead of fading the market. The system refuses to recommend. The recommendation stage receives the failure flag and is forced to emit `NO_TRADE` with a structured explanation. The same is true for negative expected value: if EV is non-positive, the recommendation is rejected and replaced with `NO_TRADE`. These are not LLM behaviors we hope for. They are deterministic checks in the pipeline that the LLM cannot override.
 
 The risk-philosophy agents (aggressive, conservative, neutral) run *after* consensus, in parallel. They contribute position-sizing perspectives - Kelly criterion, capital preservation, market-neutral structures - but they do not influence probability estimates. Sizing and probability are kept architecturally separate so a single risk view cannot bias the underlying belief.
 
@@ -231,14 +231,14 @@ When a recommendation is marked **failure**, agent scoring kicks in. Every agent
 - **Dissenting agents** - those who signaled against the recommendation - receive `+1 correct`. They were right to dissent.
 - **Neutral agents** are excluded from scoring entirely. Taking no side earns no credit and no blame.
 
-This is not a cosmetic leaderboard. The accuracy data feeds directly back into the next analysis through `fetchAgentPerformanceWeights`, which runs at the start of every workflow. The function queries per-market accuracy first (minimum 2 scored signals per agent, at least 3 agents qualified), falling back to global accuracy over the last 30 days if per-market data is insufficient.
+This is not a cosmetic leaderboard. The calibration data feeds directly back into the next analysis through `fetchAgentPerformanceWeights`, which runs at the start of every workflow. The function queries per-market calibration first (minimum 2 scored signals per agent, at least 3 agents qualified), falling back to global calibration over the last 30 days if per-market data is insufficient.
 
-The weight formula normalizes accuracy into a **0.5–2.0 range**:
-- An agent at 0% accuracy gets weight 0.5 (half influence on signal fusion).
-- An agent at 50% accuracy gets weight 1.0 (neutral - no bonus, no penalty).
-- An agent at 100% accuracy gets weight 2.0 (double influence).
+The weight formula is **Brier-calibrated**, blended with directional accuracy:
+- Brier score is `mean((P(YES) - realized_outcome)^2)`. A coin-flip forecaster scores 0.25, so Brier skill is `1 - Brier / 0.25`. Perfect calibration maps to a 2.0 weight; coin-flip calibration maps to ~1.0; worse-than-coin-flip is demoted toward 0.4.
+- Directional accuracy maps into a 0.5–2.0 weight.
+- The final weight is `0.7 × Brier weight + 0.3 × accuracy weight`.
 
-This means a consistently wrong agent doesn't just appear lower on a dashboard - it is mathematically demoted in real time. Its fair-probability estimate counts for half as much in the weighted fusion. Conversely, an agent that dissented correctly across multiple failed recommendations rises in influence. The system self-corrects toward the agents that were right when it mattered.
+This means a consistently miscalibrated agent doesn't just appear lower on a dashboard - it is mathematically demoted in real time. Its fair-probability estimate counts for less in the fusion. Conversely, an agent that is both right and well-calibrated rises in influence. The system self-corrects toward the agents that were right and honest about their uncertainty.
 
 If insufficient performance data exists (cold start, new market category), all agents fall back to the default weight of 1.0 - the system does not hallucinate confidence in its own track record.
 
@@ -294,7 +294,7 @@ The same shape extends to delivery. SNS topic fan-out triggers WebSocket, email,
 ## Accomplishments that we're proud of
 
 - **A multi-agent system that is allowed to refuse.** When disagreement is above 30% or expected value is non-positive, TradeWizard returns `NO_TRADE` with a structured explanation and does not bill the user. Most "AI trading" products are constitutionally incapable of saying "we don't know." Ours is built around it.
-- **Three deterministic gates around the LLMs.** Signal fusion and the consensus engine are non-LLM stages. Schema validation and EV rejection are non-LLM stages. The model's job is to produce signals; the pipeline's job is to decide whether anything happens.
+- **Three deterministic gates around the LLMs.** Signal fusion and the consensus engine are non-LLM stages. Schema validation and EV rejection are non-LLM stages. The model's job is to produce signals; the pipeline's job is to decide whether anything happens. Fusion is market-anchored with conservative shrinkage, and agent weights are Brier-calibrated from resolved outcomes rather than assigned by intuition.
 - **Bounded-autonomy execution.** A kill switch that fails closed, mandatory SL/TP, hard loss limits, cross-session caps, cooldowns, capital conservation, mutual exclusion between executor and guard, and token-ID resolution by outcome. The Portfolio Manager's perimeter is small and provable.
 - **A market-level analysis pool with per-user delivery accounting.** Costs scale with markets analyzed, not with users requesting. Users only pay for analyses they actually receive, exactly once.
 - **Closed-loop learning.** Every recommendation is scored against eventual recommendation resolution. Every agent has a leaderboard. Memory feeds back into signal weighting. The system gets better with every recommendation that resolves, not just with model upgrades.
@@ -313,17 +313,20 @@ The same shape extends to delivery. SNS topic fan-out triggers WebSocket, email,
 
 ## What changed during the submission period
 
-TradeWizard's product surface and deterministic execution layers predate this hackathon. The submission-period work was the inference port and the supporting operations:
+TradeWizard's product surface and deterministic execution layers predate this hackathon. The submission-period work covered the inference port, the analysis calibration pass, and the product surface:
 
 - Extracted the provider boundary into `infra/services/shared/ai-provider.ts`, so the analysis and portfolio pipelines resolve models through a capability mapping instead of vendor-specific constructors.
 - Added the Nebius Token Factory registry: seven capability buckets, env-driven model IDs, per-capability token limits, and a hard invariant that tool-using agents cannot map to the non-tool model.
 - Integrated Token Factory through Strands' `OpenAIModel` with the Chat Completions surface and a configurable base URL.
 - Added Secrets Manager-backed key loading with an in-process cache, plus cold-start validation that fails when a required model ID is missing.
 - Added `infra/scripts/validate-nebius.ts` to check model availability, tool calling, and JSON extraction before deployment.
-- Kept the deterministic gates, risk engine, executor, and kill switch unchanged. The inference port was not allowed to change the safety properties of the system.
+- Rebuilt signal fusion around market-anchored log-odds with conservative shrinkage and Brier-calibrated agent weights. Rebuilt consensus around the anchored probability, with a confidence floor and a divergence circuit breaker that blocks implausible edges.
+- Redesigned the frontend around the product's core narrative: a responsive landing experience with animated pipeline/product demos, a cleaner market-detail flow, a redesigned portfolio/autopilot surface, and mobile navigation.
+- Added the Remotion compositions used to produce the demo videos.
+- Kept the deterministic gates, risk engine, executor, and kill switch unchanged. The inference port and the calibration pass were not allowed to weaken the safety properties of the system.
 - Rewrote the primary docs, environment templates, and deployment guidance around the Nebius configuration.
 
-The design constraint throughout was simple: the provider should be replaceable without weakening the parts of the system that users actually depend on.
+The design constraint throughout was simple: the provider should be replaceable without weakening the parts of the system that users actually depend on, and the probability pipeline should stay accountable to the market it is trying to beat.
 
 ## Feedback on Nebius Token Factory
 

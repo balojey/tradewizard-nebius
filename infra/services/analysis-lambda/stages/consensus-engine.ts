@@ -1,9 +1,15 @@
 /**
  * Deterministic consensus engine stage - no LLM calls, fully pure.
  *
- * Calculates weighted consensus probability from bull/bear theses and
- * the fused signal, determines disagreement, and produces a trade action
- * based on edge vs liquidity-adjusted threshold.
+ * Consensus probability comes from the market-anchored fused signal. The
+ * bull/bear theses are role-play, not independent forecasts, so they are NOT
+ * averaged into the probability. Cross-examination is used only as a
+ * confidence modifier.
+ *
+ * A divergence circuit breaker refuses to act when the model disagrees with
+ * the market by more than MAX_ACTIONABLE_DIVERGENCE. In liquid prediction
+ * markets, an extreme disagreement is more often model error than a tradable
+ * mispricing.
  *
  * Validates: Requirements 9.4, 9.5, 9.6, 9.7, 9.8
  */
@@ -23,10 +29,12 @@ export interface ConsensusEngineOutput {
   action: TradeAction;
   consensusResult: ConsensusResult;
   edge: number;
+  /** True when the edge was too large to be credible and action was blocked. */
+  divergenceGuardTriggered?: boolean;
 }
 
-/** Minimum edge threshold for low/medium liquidity markets */
-const MIN_EDGE_THRESHOLD = 0.05;
+/** Minimum edge threshold for low/medium liquidity markets. */
+const MIN_EDGE_THRESHOLD = 0.07;
 
 /** Multiplier applied to edge threshold when liquidity risk is high */
 const HIGH_LIQUIDITY_MULTIPLIER = 1.5;
@@ -34,28 +42,28 @@ const HIGH_LIQUIDITY_MULTIPLIER = 1.5;
 /** Disagreement index threshold above which consensus fails */
 const DISAGREEMENT_THRESHOLD = 0.30;
 
+/** Minimum fusion confidence required to act. */
+const MIN_CONSENSUS_CONFIDENCE = 0.20;
+
 /**
- * Compute deterministic consensus from theses, cross-exam scores, and fused signal.
- *
- * Blends thesis-weighted probability (60%) with signal fusion probability (40%).
- * Marks consensus as failed when disagreement index exceeds 0.30.
- *
- * @param bullThesis - Bull thesis with fairProbability in [0, 1].
- * @param bearThesis - Bear thesis with fairProbability in [0, 1].
- * @param crossExam - Cross-examination result with bullScore and bearScore in [-5, 5].
- * @param fusedSignal - Valid output from fuseSignals().
- * @returns ConsensusResult with probability, confidence, disagreementIndex, and failed flag.
- *
- * Preconditions:
- *   - Both theses have fairProbability in [0, 1].
- *   - crossExam has bullScore and bearScore in [-5, 5].
- *   - fusedSignal is a valid FusedSignal from fuseSignals().
+ * Maximum credible disagreement with the market. A larger edge is treated as
+ * model risk, not opportunity. This is the single most important guardrail:
+ * the previous pipeline recommended LONG_NO at a 0.48 edge on a 0.81 market.
+ */
+export const MAX_ACTIONABLE_DIVERGENCE = 0.15;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Compute deterministic consensus from the market-anchored fused signal.
  *
  * Postconditions:
  *   - probability is in [0, 1].
- *   - failed = true if disagreementIndex > 0.30.
- *   - probability = 60% thesis-weighted + 40% signal fusion.
- *   - confidence decreases with disagreement.
+ *   - failed = true if disagreement > 0.30 or confidence < 0.20.
+ *   - probability equals the fused signal's anchored probability.
+ *   - confidence is reduced by thesis divergence and cross-exam imbalance.
  */
 export function calculateConsensus(
   bullThesis: Thesis,
@@ -63,44 +71,48 @@ export function calculateConsensus(
   crossExam: CrossExamResult,
   fusedSignal: FusedSignal,
 ): ConsensusResult {
-  // Weight theses by cross-examination scores.
-  // Normalize scores from [-5, 5] to [0, 1].
-  const bullWeight = Math.max(0.0, (crossExam.bullScore + 5) / 10);
-  const bearWeight = Math.max(0.0, (crossExam.bearScore + 5) / 10);
-  const totalThesisWeight = bullWeight + bearWeight;
-
-  let thesisWeightedProb = 0.5;
-  if (totalThesisWeight > 0) {
-    thesisWeightedProb =
-      (bullThesis.fairProbability * bullWeight +
-        bearThesis.fairProbability * bearWeight) /
-      totalThesisWeight;
-  }
-
-  // Blend thesis probability with fused signal (60% thesis, 40% signal fusion).
-  const consensusProbability =
-    thesisWeightedProb * 0.6 +
-    fusedSignal.weightedFairProbability * 0.4;
-
-  // Disagreement index: population standard deviation of all probability estimates.
-  const allProbs = [
-    bullThesis.fairProbability,
-    bearThesis.fairProbability,
+  const consensusProbability = clamp(
     fusedSignal.weightedFairProbability,
-  ];
-  const mean = allProbs.reduce((sum, p) => sum + p, 0) / allProbs.length;
-  const variance =
-    allProbs.reduce((sum, p) => sum + (p - mean) ** 2, 0) / allProbs.length;
-  const disagreementIndex = Math.sqrt(variance);
-
-  // When disagreement > 0.30, mark consensus as failed.
-  const failed = disagreementIndex > DISAGREEMENT_THRESHOLD;
-
-  // Confidence narrows with disagreement.
-  const confidence = Math.max(
-    0.0,
-    fusedSignal.fusionConfidence * (1 - disagreementIndex),
+    0,
+    1,
   );
+
+  // Prefer the engine's native disagreement measure. Fall back to alignment
+  // for older fused-signal objects.
+  const disagreementIndex = clamp(
+    fusedSignal.signalDisagreement !== undefined
+      ? fusedSignal.signalDisagreement
+      : 1 - fusedSignal.signalAlignment,
+    0,
+    1,
+  );
+
+  // The stronger thesis is the one that survived cross-examination better.
+  // It is still a role-play estimate, so it only affects confidence.
+  const strongerThesis =
+    crossExam.bearScore > crossExam.bullScore ? bearThesis : bullThesis;
+  const thesisDivergence = clamp(
+    Math.abs(strongerThesis.fairProbability - consensusProbability),
+    0,
+    1,
+  );
+  const thesisConfidenceFactor = 1 - 0.3 * thesisDivergence;
+
+  // Balanced cross-examination means both cases were tested equally well;
+  // a lopsided result is less trustworthy as a confidence signal.
+  const crossExamBalance = 1 - Math.abs(crossExam.bullScore - crossExam.bearScore) / 10;
+  const crossExamFactor = 0.85 + 0.15 * clamp(crossExamBalance, 0, 1);
+
+  const confidence = clamp(
+    fusedSignal.fusionConfidence * thesisConfidenceFactor * crossExamFactor,
+    0,
+    1,
+  );
+
+  // Fail when the ensemble disagrees too much or is simply not confident.
+  const failed =
+    disagreementIndex > DISAGREEMENT_THRESHOLD ||
+    confidence < MIN_CONSENSUS_CONFIDENCE;
 
   return {
     probability: consensusProbability,
@@ -121,16 +133,10 @@ export function calculateConsensus(
  * @param liquidityRisk - Liquidity risk level.
  * @returns Trade action: LONG_YES, LONG_NO, or NO_TRADE.
  *
- * Preconditions:
- *   - Both probabilities in [0, 1].
- *   - liquidityRisk is one of "low", "medium", "high".
- *
  * Postconditions:
  *   - Returns NO_TRADE if consensusFailed is true.
- *   - Edge threshold is 0.05 for low/medium, 0.075 for high liquidity risk.
- *   - Returns LONG_YES when edge > threshold.
- *   - Returns LONG_NO when edge < -threshold.
- *   - Returns NO_TRADE otherwise.
+ *   - Returns NO_TRADE if |edge| > MAX_ACTIONABLE_DIVERGENCE.
+ *   - Edge threshold is 0.07 for low/medium, 0.105 for high liquidity risk.
  */
 export function determineAction(
   consensusProbability: number,
@@ -144,6 +150,12 @@ export function determineAction(
   }
 
   const edge = consensusProbability - marketProbability;
+
+  // A disagreement this large is not a signal - it is a warning that the
+  // model or its inputs are wrong. Protect capital instead of fading the crowd.
+  if (Math.abs(edge) > MAX_ACTIONABLE_DIVERGENCE) {
+    return 'NO_TRADE';
+  }
 
   // High liquidity risk increases the minimum edge threshold by 50%.
   const adjustedThreshold =
@@ -167,14 +179,6 @@ export function determineAction(
  *
  * Combines calculateConsensus and determineAction into a single pipeline
  * that produces the complete ConsensusEngineOutput.
- *
- * @param fusedSignal - Output from the signal fusion stage.
- * @param bullThesis - Bull thesis from thesis construction.
- * @param bearThesis - Bear thesis from thesis construction.
- * @param crossExam - Cross-examination scores.
- * @param marketProbability - Current market probability in [0, 1].
- * @param liquidityRisk - Liquidity risk level for this market.
- * @returns ConsensusEngineOutput with action, consensusResult, and edge.
  */
 export function runConsensusEngine(
   fusedSignal: FusedSignal,
@@ -192,6 +196,9 @@ export function runConsensusEngine(
   );
 
   const edge = consensusResult.probability - marketProbability;
+  const divergenceGuardTriggered =
+    !consensusResult.failed &&
+    Math.abs(edge) > MAX_ACTIONABLE_DIVERGENCE;
 
   const action = determineAction(
     consensusResult.probability,
@@ -204,5 +211,6 @@ export function runConsensusEngine(
     action,
     consensusResult,
     edge,
+    divergenceGuardTriggered,
   };
 }

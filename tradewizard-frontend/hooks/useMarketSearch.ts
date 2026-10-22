@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "./useDebounce";
 import type { PolymarketMarket } from "./useMarkets";

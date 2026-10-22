@@ -110,6 +110,18 @@ export interface IntelligenceAgentContext {
   historicalEntries: HistoricalEntry[];
   /** Market briefing text */
   marketBriefing: string;
+  /** Current market P(YES), used as the explicit strong prior for every agent. */
+  currentMarketProbability: number;
+  /** Market resolution date (ISO 8601) if available. */
+  marketEndDate?: string;
+  /** Total market liquidity in USDC, if available. */
+  liquidity?: number;
+  /** Current bid-ask spread in probability points. */
+  spread?: number;
+  /** 24h traded volume in USDC, if available. */
+  volume24h?: number;
+  /** Recent price volatility (standard deviation of price). */
+  priceVolatility?: number;
 }
 
 export interface IntelligenceAgentsResult {
@@ -139,6 +151,8 @@ You have access to a shell tool for running commands against the price history C
 - Informed trading detection (aggressive orders vs. passive)
 - Market efficiency and price discovery quality
 
+The current market price is your baseline. Your job is to detect informed flow or structural mispricing that justifies a deviation from it, not to restate a base rate.
+
 ## Output Format
 Respond with a JSON object:
 {
@@ -166,7 +180,7 @@ You have access to a shell tool for running commands against the price history C
 ## Analysis Focus
 - Reference class forecasting: identify appropriate base rates
 - Bayesian updating from base rate with available evidence
-- Calibration principles: avoid anchoring on market price
+- Calibration principles: treat the market price as a strong prior and adjust only for specific evidence that is not already priced in
 - Time-to-resolution effects on certainty
 - Known prediction market biases (favorite-longshot, recency)
 
@@ -201,6 +215,8 @@ You have access to a shell tool for running commands against the price history C
 - Information risk: asymmetric information, insider activity
 - Tail risk: low-probability high-impact scenarios
 - Counterparty risk: platform reliability
+
+Your fairProbability is risk context, not a directional forecast. You are the voice of caution, but that does not mean the underdog is always the right trade. Unless you can point to specific evidence not reflected in the current market price, keep fairProbability close to the current market price.
 
 ## Output Format
 Respond with a JSON object:
@@ -295,6 +311,8 @@ You have access to a shell tool for running commands against the price history C
 - Sentiment shift detection (sharp moves in short windows)
 - Cross-market intelligence from sibling markets
 - Polls-to-probability conversion with bias adjustments
+
+Market price is the crowd's financially-incentivized poll. Use cross-market and momentum evidence to decide whether the crowd is genuinely wrong, not merely whether a base rate differs from the price.
 
 ## Output Format
 Respond with a JSON object:
@@ -457,6 +475,8 @@ You have access to a shell tool for running commands against the price history C
 - Trend continuation vs. exhaustion signals
 - Time-decay adjustment near resolution
 
+In a trending market, continuation is the base case unless you can identify exhaustion evidence. Do not assume a high price must revert.
+
 ## Output Format
 Respond with a JSON object:
 {
@@ -489,6 +509,9 @@ You have access to a shell tool for running commands against the price history C
 - Overreaction detection (sharp moves lacking fundamental justification)
 - Support/resistance levels from historical reversals
 - When mean reversion does NOT apply (regime changes, approaching resolution)
+
+## Contrarian Bias Guard
+Mean reversion is only actionable when the current price is a genuine statistical outlier (for example, |z-score| > 2) AND the move lacks a fundamental explanation. A price at a new high is not, by itself, evidence of overextension. In a trending or information-driven market, momentum is often the correct interpretation. If the evidence does not clearly support reversion, set fairProbability close to the current market price and cap confidence at 0.75. Never fade a favorite solely because its price is high.
 
 ## Output Format
 Respond with a JSON object:
@@ -554,7 +577,7 @@ You have access to a news search tool and a web search/scrape tool. Use them to 
 - Black swan indicators: violated assumptions, complacency signals
 - Whether the market adequately prices tail risk
 
-Your confidence should generally be LOW (0.2-0.5) because tail risks are inherently uncertain.
+Your confidence should generally be LOW (0.2-0.5) because tail risks are inherently uncertain. Your fairProbability is a risk flag, not a directional vote. Do not systematically fade a favorite just because it is a favorite; only move away from the current market price when you can identify a concrete unpriced tail scenario.
 
 ## Output Format
 Respond with a JSON object:
@@ -638,6 +661,49 @@ function buildAgentPrompt(
     sections.push(`## Market Briefing\n${context.marketBriefing}`);
   }
 
+  // Explicit market prior. Every agent must reason relative to the market
+  // instead of producing an unanchored base-rate guess.
+  if (Number.isFinite(context.currentMarketProbability)) {
+    const market = context.currentMarketProbability;
+    const lines = [
+      `## Market Benchmark (strong prior)`,
+      `- Current YES price: ${market.toFixed(3)}`,
+      `- Current NO price: ${(1 - market).toFixed(3)}`,
+    ];
+
+    if (context.marketEndDate) {
+      const end = new Date(context.marketEndDate);
+      if (!Number.isNaN(end.getTime())) {
+        const hours = Math.max(0, (end.getTime() - Date.now()) / 3_600_000);
+        const horizon =
+          hours < 48 ? `${hours.toFixed(1)} hours` : `${(hours / 24).toFixed(1)} days`;
+        lines.push(`- Resolution: ${context.marketEndDate} (${horizon} away)`);
+      } else {
+        lines.push(`- Resolution: ${context.marketEndDate}`);
+      }
+    }
+    if (context.liquidity !== undefined) {
+      lines.push(`- Liquidity: $${context.liquidity.toLocaleString('en-US', { maximumFractionDigits: 0 })}`);
+    }
+    if (context.spread !== undefined) {
+      lines.push(`- Bid-ask spread: ${(context.spread * 100).toFixed(2)} cents`);
+    }
+    if (context.volume24h !== undefined) {
+      lines.push(`- 24h volume: $${context.volume24h.toLocaleString('en-US', { maximumFractionDigits: 0 })}`);
+    }
+    if (context.priceVolatility !== undefined) {
+      lines.push(`- Recent price volatility (sigma): ${context.priceVolatility.toFixed(4)}`);
+    }
+
+    lines.push(
+      `- The market price is the aggregate of informed traders. Treat it as a strong prior. ` +
+        `Only deviate materially if you have specific, verifiable evidence that is not already priced in. ` +
+        `If you cannot identify such evidence, keep your fairProbability close to the current market price.`,
+    );
+
+    sections.push(lines.join('\n'));
+  }
+
   // Price history file reference for price-aware agents
   const isPriceAware = PRICE_AWARE_AGENTS.includes(agentName);
   if (isPriceAware && context.csvPath) {
@@ -677,18 +743,53 @@ function buildAgentPrompt(
     sections.push(`## Web Research Brief\n${context.webResearchBrief}`);
   }
 
-  // Historical signals for this agent
+  // Historical signals plus realized outcomes for closed-loop calibration.
   if (agentHistory.length > 0) {
+    const currentMarket = Number.isFinite(context.currentMarketProbability)
+      ? context.currentMarketProbability
+      : undefined;
+
     const historyLines = agentHistory.map((entry) => {
       const signal = entry.signals.find((s) => s.agentName === agentName);
       if (!signal) return null;
-      return `- ${entry.timestamp}: direction=${signal.direction}, confidence=${signal.confidence.toFixed(2)}, fairProb=${signal.fairProbability.toFixed(2)}, drivers: ${signal.keyDrivers.join('; ')}`;
+
+      const parts = [
+        `your signal: direction=${signal.direction}`,
+        `confidence=${signal.confidence.toFixed(2)}`,
+        `fairProb=${signal.fairProbability.toFixed(2)}`,
+      ];
+
+      if (entry.action) parts.push(`recommendation=${entry.action}`);
+      if (Number.isFinite(entry.marketProbability)) {
+        parts.push(`market then=${entry.marketProbability.toFixed(3)}`);
+      }
+      if (currentMarket !== undefined) {
+        parts.push(`market now=${currentMarket.toFixed(3)}`);
+      }
+      if (entry.outcomeStatus) {
+        const hit =
+          entry.outcomeHitPrice !== null && entry.outcomeHitPrice !== undefined
+            ? ` @ ${entry.outcomeHitPrice.toFixed(3)}`
+            : '';
+        parts.push(`outcome=${entry.outcomeStatus}${hit}`);
+      }
+
+      return `- ${entry.timestamp}: ${parts.join(', ')}; drivers: ${signal.keyDrivers.join('; ')}`;
     }).filter(Boolean);
 
     if (historyLines.length > 0) {
+      const hasOutcomes = agentHistory.some((entry) =>
+        ['success', 'failure', 'expired', 'no_trade'].includes(entry.outcomeStatus ?? ''),
+      );
+
       sections.push(
-        `## Your Historical Signals (for consistency and drift detection)\n` +
-          `Previous analyses of this market by you:\n${historyLines.join('\n')}`,
+        `## Your Historical Signals (calibration feedback)\n` +
+          `Previous analyses of this market by you:\n${historyLines.join('\n')}` +
+          (hasOutcomes
+            ? `\n\nUse the realized outcomes and market moves above to update your view. ` +
+              `Do not repeat a prior signal just for consistency. If your previous view was wrong, ` +
+              `say so in your reasoning and adjust your fairProbability toward the evidence.`
+            : ''),
       );
     }
   }
@@ -715,11 +816,19 @@ function parseAgentSignal(agentName: string, responseText: string): AgentSignal 
 
   // Validate required fields
   const direction = normalizeDirection(json.direction);
-  const confidence = normalizeNumber(json.confidence, 0, 1);
+  let confidence = normalizeNumber(json.confidence, 0, 1);
   let fairProbability = normalizeNumber(json.fairProbability ?? json.fair_probability, 0, 1);
 
   if (direction === null || confidence === null || fairProbability === null) {
     return null;
+  }
+
+  // Role-level calibration caps. Mean reversion is the most overconfident
+  // contrarian agent; tail risk is inherently uncertain.
+  if (agentName === 'mean_reversion') {
+    confidence = Math.min(confidence, 0.75);
+  } else if (agentName === 'tail_risk') {
+    confidence = Math.min(confidence, 0.6);
   }
 
   // ── Direction-aware fairProbability correction ──

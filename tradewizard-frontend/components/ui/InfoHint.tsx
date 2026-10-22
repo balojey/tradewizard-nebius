@@ -62,7 +62,7 @@ export function InfoHint({ children, label = "More information", className }: In
       {open && (
         <span
           role="tooltip"
-          className="absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-border bg-surface p-3 text-left text-xs font-normal leading-relaxed text-muted shadow-lg"
+          className="absolute left-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface p-3 text-left text-xs font-normal leading-relaxed text-muted shadow-lg"
         >
           {children}
         </span>

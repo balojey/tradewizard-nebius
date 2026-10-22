@@ -9,7 +9,13 @@
 import { readdir, rm } from 'fs/promises';
 import { join } from 'path';
 import type { AnalysisPayload, TradeRecommendation } from './lib/types';
-import { prepareData, fetchMarketInfo, type MarketBriefing } from './stages/data-preparation';
+import {
+  prepareData,
+  fetchMarketInfo,
+  computePriceVolatility,
+  deriveLiquidityRisk,
+  type MarketBriefing,
+} from './stages/data-preparation';
 import { fetchHistoricalContext, fetchAgentPerformanceWeights } from './stages/historical-context';
 import { runWebResearch } from './stages/web-research';
 import { runIntelligenceAgents, ALL_AGENT_NAMES } from './stages/intelligence-agents';
@@ -280,6 +286,12 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       conditionId: payload.marketId,
       tokenId: marketInfo?.tokenId || '',
       question: marketInfo?.question || '',
+      endDate: marketInfo?.endDate,
+      liquidity: marketInfo?.liquidity,
+      spread: marketInfo?.spread,
+      bestBid: marketInfo?.bestBid,
+      bestAsk: marketInfo?.bestAsk,
+      volume24h: marketInfo?.volume24h,
     };
 
     // Run data preparation and historical context in parallel
@@ -290,6 +302,28 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
     ]);
     totalLlmCalls += 0; // No LLM calls in these stages
     await publishProgress(payload.userId, payload.requestId, payload.marketId, 2);
+
+    // ── Deterministic market context (used as the fusion prior and by agents) ─
+    const pricePoints = dataResult.priceHistory.points;
+    const lastTradePrice =
+      pricePoints.length > 0 ? pricePoints[pricePoints.length - 1].price : undefined;
+    const midpoint =
+      marketInfo?.bestBid !== undefined && marketInfo?.bestAsk !== undefined
+        ? (marketInfo.bestBid + marketInfo.bestAsk) / 2
+        : undefined;
+    // Prefer the live order-book midpoint; fall back to the last traded price.
+    const marketProbability = midpoint ?? lastTradePrice ?? 0.5;
+    const priceVolatility = computePriceVolatility(pricePoints);
+    const liquidityRisk = deriveLiquidityRisk({
+      liquidity: marketInfo?.liquidity,
+      spread: marketInfo?.spread,
+    });
+
+    console.log(
+      `[Analysis_Lambda] Market prior P(YES)=${marketProbability.toFixed(3)}, ` +
+      `volatility=${priceVolatility.toFixed(4)}, liquidityRisk=${liquidityRisk}, ` +
+      `endDate=${marketInfo?.endDate ?? 'unknown'}`,
+    );
 
     // ── Stage 3: Web Research Agent ──────────────────────────────────────────
     await publishProgress(payload.userId, payload.requestId, payload.marketId, 3);
@@ -308,6 +342,12 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       relatedMarketsSummary: dataResult.relatedMarkets.summary,
       webResearchBrief: webResearch.brief,
       historicalEntries,
+      currentMarketProbability: marketProbability,
+      marketEndDate: marketInfo?.endDate,
+      liquidity: marketInfo?.liquidity,
+      spread: marketInfo?.spread,
+      volume24h: marketInfo?.volume24h,
+      priceVolatility,
       marketBriefing: `Market ID: ${payload.marketId}\nPrice Summary: ${dataResult.priceHistory.summary}\nRelated Markets: ${dataResult.relatedMarkets.summary}`,
     };
 
@@ -326,7 +366,11 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
 
     // ── Stage 6: Signal Fusion (pure deterministic - no LLM) ─────────────────
     await publishProgress(payload.userId, payload.requestId, payload.marketId, 6);
-    const fusedSignal = fuseSignals(agentsResult.signals, agentPerformanceWeights);
+    const fusedSignal = fuseSignals(
+      agentsResult.signals,
+      agentPerformanceWeights,
+      marketProbability,
+    );
 
     // ── Stage 7: Thesis Construction ─────────────────────────────────────────
     await publishProgress(payload.userId, payload.requestId, payload.marketId, 7);
@@ -348,10 +392,6 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
 
     // ── Stage 9: Consensus Engine (pure deterministic - no LLM) ──────────────
     await publishProgress(payload.userId, payload.requestId, payload.marketId, 9);
-    // Market probability derived from price data or default 0.5
-    const marketProbability = dataResult.priceHistory.points.length > 0
-      ? dataResult.priceHistory.points[dataResult.priceHistory.points.length - 1].price
-      : 0.5;
 
     const consensusOutput = runConsensusEngine(
       fusedSignal,
@@ -359,7 +399,7 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       thesisResult.bearThesis,
       crossExamResult.crossExamResult,
       marketProbability,
-      'medium', // Default liquidity risk - could be derived from order book data
+      liquidityRisk,
     );
 
     // If consensus failed or NO_TRADE, we still run risk philosophy and recommendation
@@ -389,6 +429,11 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       agentsUsed: [...ALL_AGENT_NAMES],
       totalLlmCalls,
       executionStartTime: startTime,
+      volatility: priceVolatility,
+      marketEndDate: marketInfo?.endDate,
+      liquidityRisk,
+      liquidity: marketInfo?.liquidity,
+      spread: marketInfo?.spread,
     });
     totalLlmCalls += 1;
 

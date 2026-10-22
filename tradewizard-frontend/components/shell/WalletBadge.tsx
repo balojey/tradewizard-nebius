@@ -71,9 +71,8 @@ export function WalletBadge() {
       <button
         onClick={copyAddress}
         className={cn(
-          'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono',
-          'border transition-colors duration-150',
-          'bg-surface-2 border-border text-muted hover:text-fg hover:border-accent/40',
+          'flex items-center gap-1.5 rounded-lg border border-border/70 bg-surface-2/50 px-2.5 py-1.5 text-[0.68rem] font-mono text-muted',
+          'transition-colors duration-150 hover:border-accent/40 hover:text-fg',
           copied && 'border-yes/40 text-yes'
         )}
         aria-label={copied ? 'Address copied' : `Copy wallet address ${abbreviated}`}
@@ -95,7 +94,7 @@ export function WalletBadge() {
             'animate-in fade-in-0 slide-in-from-top-1 duration-150'
           )}
         >
-          <h4 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
+          <h4 className="mb-3 text-xs font-medium text-muted">
             Wallet
           </h4>
           <div className="space-y-2">

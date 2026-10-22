@@ -23,7 +23,7 @@ export function ScrollToTop({ threshold = 400 }: ScrollToTopProps) {
   return (
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      className="fixed bottom-6 right-6 z-40 w-10 h-10 rounded-full bg-accent text-bg shadow-lg grid place-items-center transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 animate-in fade-in duration-200"
+      className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-6 z-40 grid h-10 w-10 place-items-center rounded-full bg-accent text-bg shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 animate-in fade-in duration-200 md:bottom-6"
       aria-label="Scroll to top"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

@@ -373,6 +373,9 @@ export class ComputeStack extends cdk.Stack {
         DB_SECRET_ARN: dbSecret.secretArn,
         DB_HOST: dbEndpoint,
         ANALYSIS_HISTORY_DEPTH: this.node.tryGetContext('analysisHistoryDepth') ?? process.env.ANALYSIS_HISTORY_DEPTH ?? '5',
+        // Fraction of the ensemble's log-odds deviation from market that is
+        // allowed through fusion. Lower = more market-anchored. 0.15 default.
+        FUSION_SHRINKAGE: process.env.FUSION_SHRINKAGE ?? '0.15',
         BEDROCK_MAX_TOKENS: process.env.BEDROCK_MAX_TOKENS ?? '30000',
         NEWS_TOOL_MAX_CALLS: process.env.NEWS_TOOL_MAX_CALLS ?? '5',
         SEARCH_TOOL_MAX_CALLS: process.env.SEARCH_TOOL_MAX_CALLS ?? '10',

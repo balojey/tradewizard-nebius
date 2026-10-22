@@ -340,8 +340,25 @@ CREATE TABLE IF NOT EXISTS agent_performance (
   accuracy_pct NUMERIC(5, 2) NOT NULL DEFAULT 50.00,
   avg_confidence NUMERIC(5, 4) NOT NULL DEFAULT 0.5000,
   avg_execution_time_ms INTEGER,
+  -- Probability calibration (Brier and log loss) against realized direction.
+  brier_score NUMERIC(8, 6),
+  log_loss NUMERIC(8, 6),
+  calibration_samples INTEGER NOT NULL DEFAULT 0,
   last_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Add calibration columns idempotently for existing deployments.
+DO $$ BEGIN
+  ALTER TABLE agent_performance ADD COLUMN brier_score NUMERIC(8, 6);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE agent_performance ADD COLUMN log_loss NUMERIC(8, 6);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE agent_performance ADD COLUMN calibration_samples INTEGER NOT NULL DEFAULT 0;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 -- ============================================================================
 -- DEVICE ENDPOINTS (Push Notification Registration)

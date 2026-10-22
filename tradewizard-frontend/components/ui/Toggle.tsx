@@ -9,6 +9,8 @@ export interface ToggleProps {
   label?: string;
   description?: string;
   disabled?: boolean;
+  /** Place the switch after the label instead of before it. */
+  layout?: 'start' | 'end';
   children?: ReactNode;
 }
 
@@ -18,10 +20,16 @@ export function Toggle({
   label,
   description,
   disabled = false,
+  layout = 'start',
   children,
 }: ToggleProps) {
   return (
-    <div className="flex items-start gap-3">
+    <div
+      className={cn(
+        'flex items-start gap-3',
+        layout === 'end' && 'w-full flex-row-reverse justify-between'
+      )}
+    >
       <button
         type="button"
         role="switch"
@@ -44,7 +52,12 @@ export function Toggle({
         />
       </button>
       {(label || description || children) && (
-        <div className="flex flex-col gap-0.5">
+        <div
+          className={cn(
+            'flex flex-col gap-0.5',
+            layout === 'end' && 'min-w-0 flex-1'
+          )}
+        >
           {label && (
             <span
               className={cn(

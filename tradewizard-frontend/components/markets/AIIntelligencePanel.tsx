@@ -17,7 +17,6 @@ interface AIIntelligencePanelProps {
  * confidence meter, thesis, edge viz, expandable sections.
  */
 export function AIIntelligencePanel({
-  marketId,
   analysis,
   onRequestAnalysis,
   onQuickBuy,

@@ -3,14 +3,25 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CreditCard, ChevronRight, LogOut } from 'lucide-react';
+import {
+  Bell,
+  Check,
+  ChevronRight,
+  Clock3,
+  CreditCard,
+  LogOut,
+  SlidersHorizontal,
+  Target,
+  X,
+} from 'lucide-react';
 import { AppShell } from '@/components/shell/AppShell';
-import { Card } from '@/components/ui/Card';
 import { Toggle } from '@/components/ui/Toggle';
 import { Slider } from '@/components/ui/Slider';
 import { TierGate } from '@/components/ui/TierGate';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
 import {
   useNotificationPreferences,
@@ -30,7 +41,6 @@ export default function SettingsPage() {
   const { signOut } = useAuth();
   const router = useRouter();
 
-  // Local form state
   const [channelInApp, setChannelInApp] = useState(true);
   const [channelEmail, setChannelEmail] = useState(false);
   const [channelPush, setChannelPush] = useState(false);
@@ -42,9 +52,10 @@ export default function SettingsPage() {
   const [probShiftEnabled, setProbShiftEnabled] = useState(false);
   const [minProbabilityShift, setMinProbabilityShift] = useState(5);
   const [webhookTesting, setWebhookTesting] = useState(false);
-  const [webhookTestResult, setWebhookTestResult] = useState<string | null>(null);
+  const [webhookTestResult, setWebhookTestResult] = useState<
+    { ok: boolean; message: string } | null
+  >(null);
 
-  // Sync form state from server data
   useEffect(() => {
     if (preferences) {
       setChannelInApp(preferences.channelInApp);
@@ -60,7 +71,6 @@ export default function SettingsPage() {
       const shift = preferences.minProbabilityShift;
       const hasShift = shift !== null && shift !== undefined && shift > 0;
       setProbShiftEnabled(hasShift);
-      // Convert from decimal (0.01-0.20) to percentage (1-20)
       setMinProbabilityShift(hasShift ? Math.round(shift * 100) : 5);
     }
   }, [preferences]);
@@ -93,11 +103,12 @@ export default function SettingsPage() {
         quietHoursEnd: quietHoursEnabled ? quietHoursEnd : null,
         minProbabilityShift: probShiftEnabled ? minProbabilityShift / 100 : null,
       });
-      setWebhookTestResult('✓ Webhook validated');
+      setWebhookTestResult({ ok: true, message: 'Webhook validated' });
     } catch (err) {
-      setWebhookTestResult(
-        err instanceof Error ? err.message : 'Webhook test failed'
-      );
+      setWebhookTestResult({
+        ok: false,
+        message: err instanceof Error ? err.message : 'Webhook test failed',
+      });
     } finally {
       setWebhookTesting(false);
     }
@@ -106,335 +117,449 @@ export default function SettingsPage() {
   if (prefsLoading) {
     return (
       <AppShell>
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-64 rounded bg-surface-2" />
-          <div className="h-4 w-96 rounded bg-surface-2" />
-          <div className="h-48 rounded-[12px] bg-surface-2" />
-          <div className="h-48 rounded-[12px] bg-surface-2" />
+        <div className="w-full animate-pulse" aria-hidden="true">
+          <div className="h-10 w-48 rounded bg-surface-2" />
+          <div className="mt-2 h-4 w-96 max-w-full rounded bg-surface-2" />
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="h-[560px] rounded-2xl bg-surface-2" />
+            <div className="space-y-4">
+              <div className="h-40 rounded-2xl bg-surface-2" />
+              <div className="h-48 rounded-2xl bg-surface-2" />
+              <div className="h-32 rounded-2xl bg-surface-2" />
+            </div>
+          </div>
         </div>
       </AppShell>
     );
   }
 
+  const canEmailPush = has('starter');
+  const canWebhook = has('pro');
+  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+  const creditsValue =
+    plan === 'elite'
+      ? '∞'
+      : subscription?.creditsRemaining != null
+        ? String(subscription.creditsRemaining)
+        : '-';
+  const creditsCaption =
+    plan === 'elite'
+      ? 'unlimited credits'
+      : subscription?.creditsRemaining != null
+        ? `of ${subscription.creditsMonthlyLimit} credits left`
+        : 'manage plan and credits';
+  const personaRisk = personaData?.persona.riskLevel;
+  const personaRiskTone =
+    personaRisk === 'aggressive'
+      ? 'no'
+      : personaRisk === 'conservative'
+        ? 'yes'
+        : 'warning';
+
   return (
     <AppShell>
-      <div className="max-w-[720px] mx-auto space-y-5 sm:space-y-6">
-        {/* Upgrade prompt for free users */}
+      <div className="w-full">
+        <header className="border-b border-border pb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="font-display text-[clamp(1.9rem,3.8vw,2.75rem)] font-bold leading-none tracking-[-0.04em] text-fg">
+                Settings
+              </h1>
+              <p className="mt-2 text-sm text-muted">
+                Delivery, alerts, and the defaults behind your trading.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 sm:justify-end">
+              {updatePreferences.isSuccess && (
+                <span className="inline-flex items-center gap-1 text-[0.65rem] font-medium text-yes">
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  Saved
+                </span>
+              )}
+              {updatePreferences.isError && (
+                <span className="text-[0.65rem] font-medium text-no">Save failed</span>
+              )}
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleSave}
+                loading={updatePreferences.isPending}
+                className="shrink-0"
+              >
+                Save preferences
+              </Button>
+            </div>
+          </div>
+        </header>
+
         {plan === 'free' && (
-          <UpgradePrompt
-            variant="free-to-starter"
-            message={
-              <>
-                You&apos;re on the <strong>Free plan</strong> - email, push, and
-                webhook delivery require Starter+
-              </>
-            }
-          />
+          <div className="mt-5">
+            <UpgradePrompt
+              variant="free-to-starter"
+              message={
+                <>
+                  You&apos;re on the <strong>Free plan</strong> - email, push, and
+                  webhook delivery require Starter+.
+                </>
+              }
+            />
+          </div>
         )}
 
         {plan === 'starter' && (
-          <UpgradePrompt
-            variant="starter-to-pro"
-            message={
-              <>
-                Upgrade to <strong>Pro</strong> to unlock webhook delivery and
-                Portfolio Manager
-              </>
-            }
-          />
+          <div className="mt-5">
+            <UpgradePrompt
+              variant="starter-to-pro"
+              message={
+                <>
+                  Upgrade to <strong>Pro</strong> to unlock webhook delivery and
+                  Portfolio Manager.
+                </>
+              }
+            />
+          </div>
         )}
 
-        {/* Page header */}
-        <div>
-          <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">
-            Settings
-          </h1>
-          <p className="text-sm text-muted mt-1">
-            Manage your subscription, delivery preferences, and trading persona
-          </p>
-        </div>
-
-        {/* Subscription & Plan */}
-        <Link href="/account/subscription" className="block group">
-          <Card className="p-5 transition-colors group-hover:border-accent/40">
-            <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-accent/10 text-accent">
-                <CreditCard size={20} />
+        <div className="mt-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          {/* Notification preferences */}
+          <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className="flex items-center gap-2.5 border-b border-border/60 px-4 py-4 sm:px-5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent">
+                <Bell className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-fg">Notification preferences</h2>
+                <p className="text-[0.6rem] text-muted">
+                  Where results go and when we stay quiet.
+                </p>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">
-                    Subscription &amp; Billing
-                  </span>
-                  <Badge tone="accent">
-                    {plan.charAt(0).toUpperCase() + plan.slice(1)}
+            </div>
+
+            <div className="divide-y divide-border/60">
+              {/* Delivery channels */}
+              <div className="p-4 sm:p-5">
+                <div className="mb-3">
+                  <h3 className="text-xs font-semibold text-fg">Delivery channels</h3>
+                  <p className="mt-0.5 text-[0.65rem] text-muted">
+                    Choose where analysis results are delivered.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-border/40">
+                  <div className="py-3 first:pt-0">
+                    <Toggle
+                      layout="end"
+                      checked={channelInApp}
+                      onChange={() => { }}
+                      disabled
+                      label="In-app notifications"
+                      description="Results appear in your notification center"
+                    >
+                      <span className="mt-1 inline-flex w-fit rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[0.55rem] text-muted">
+                        Always on
+                      </span>
+                    </Toggle>
+                  </div>
+
+                  <div className="py-3">
+                    <Toggle
+                      layout="end"
+                      checked={channelEmail}
+                      onChange={setChannelEmail}
+                      disabled={!canEmailPush}
+                      label="Email delivery"
+                      description="Full analysis sent to your inbox"
+                    >
+                      {!canEmailPush && (
+                        <span className="mt-1 inline-flex w-fit rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[0.55rem] text-muted">
+                          Starter+
+                        </span>
+                      )}
+                    </Toggle>
+                  </div>
+
+                  <div className="py-3">
+                    <Toggle
+                      layout="end"
+                      checked={channelPush}
+                      onChange={setChannelPush}
+                      disabled={!canEmailPush}
+                      label="Push notifications"
+                      description="Real-time alerts on mobile and desktop"
+                    >
+                      {!canEmailPush && (
+                        <span className="mt-1 inline-flex w-fit rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[0.55rem] text-muted">
+                          Starter+
+                        </span>
+                      )}
+                    </Toggle>
+                  </div>
+
+                  <div className="py-3 last:pb-0">
+                    <Toggle
+                      layout="end"
+                      checked={channelWebhook}
+                      onChange={setChannelWebhook}
+                      disabled={!canWebhook}
+                      label="Webhook delivery"
+                      description="POST analysis JSON to your endpoint"
+                    >
+                      {!canWebhook && (
+                        <span className="mt-1 inline-flex w-fit rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[0.55rem] text-muted">
+                          Pro
+                        </span>
+                      )}
+                    </Toggle>
+                  </div>
+                </div>
+
+                {channelWebhook && canWebhook && (
+                  <div className="mt-4 rounded-xl border border-border/60 bg-bg/40 p-3">
+                    <label
+                      htmlFor="webhook-url"
+                      className="mb-1.5 block text-[0.65rem] font-medium text-muted"
+                    >
+                      Webhook URL
+                    </label>
+                    <div className="flex flex-col gap-2 xs:flex-row">
+                      <input
+                        id="webhook-url"
+                        type="url"
+                        value={webhookUrl}
+                        onChange={(event) => setWebhookUrl(event.target.value)}
+                        placeholder="https://your-api.com/webhook/tradewizard"
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-2 font-mono text-xs text-fg placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg"
+                      />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleWebhookTest}
+                        loading={webhookTesting}
+                        disabled={!webhookUrl}
+                        className="shrink-0"
+                      >
+                        Test
+                      </Button>
+                    </div>
+                    {webhookTestResult && (
+                      <p
+                        className={`mt-2 flex items-center gap-1 text-[0.65rem] ${webhookTestResult.ok ? 'text-yes' : 'text-no'
+                          }`}
+                      >
+                        {webhookTestResult.ok ? (
+                          <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <X className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        )}
+                        {webhookTestResult.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Quiet hours */}
+              <div className="p-4 sm:p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <Clock3 className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
+                  <h3 className="text-xs font-semibold text-fg">Quiet hours</h3>
+                </div>
+                <Toggle
+                  layout="end"
+                  checked={quietHoursEnabled}
+                  onChange={setQuietHoursEnabled}
+                  label="Enable quiet hours"
+                  description="Only urgent alerts come through during this window"
+                />
+
+                {quietHoursEnabled && (
+                  <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-bg/40 p-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[0.65rem] text-muted" htmlFor="quiet-start">
+                        From
+                      </label>
+                      <input
+                        id="quiet-start"
+                        type="time"
+                        value={quietHoursStart}
+                        onChange={(event) => setQuietHoursStart(event.target.value)}
+                        className="rounded-lg border border-border bg-bg px-3 py-1.5 font-mono text-xs text-fg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[0.65rem] text-muted" htmlFor="quiet-end">
+                        To
+                      </label>
+                      <input
+                        id="quiet-end"
+                        type="time"
+                        value={quietHoursEnd}
+                        onChange={(event) => setQuietHoursEnd(event.target.value)}
+                        className="rounded-lg border border-border bg-bg px-3 py-1.5 font-mono text-xs text-fg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Alert thresholds */}
+              <div className="p-4 sm:p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
+                  <h3 className="text-xs font-semibold text-fg">Alert thresholds</h3>
+                </div>
+                <Toggle
+                  layout="end"
+                  checked={probShiftEnabled}
+                  onChange={setProbShiftEnabled}
+                  label="Probability shift alerts"
+                  description="Notify when a tracked market moves significantly"
+                />
+
+                {probShiftEnabled && (
+                  <div className="mt-4 rounded-xl border border-border/60 bg-bg/40 p-3">
+                    <Slider
+                      min={1}
+                      max={20}
+                      step={1}
+                      value={minProbabilityShift}
+                      onChange={setMinProbabilityShift}
+                      label="Minimum shift to trigger alert"
+                      format={(value) => `±${value}% probability change`}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Account rail */}
+          <aside className="space-y-4 lg:sticky lg:top-[72px]">
+            <Link
+              href="/account/subscription"
+              className="group block overflow-hidden rounded-2xl border border-border bg-surface transition-colors hover:border-accent/40"
+            >
+              <div className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-accent" aria-hidden="true" />
+                    <h2 className="text-sm font-semibold text-fg">Subscription</h2>
+                  </div>
+                  <Badge tone="accent" size="sm">
+                    {planLabel}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted mt-0.5">
-                  {plan === 'elite'
-                    ? 'Unlimited credits · All features unlocked'
-                    : subscription?.creditsRemaining != null
-                    ? `${subscription.creditsRemaining} credits remaining this month`
-                    : 'Manage your plan, credits, and payment method'}
+                <p className="mt-3 font-mono text-2xl font-bold leading-none tabular-nums text-fg">
+                  {creditsValue}
                 </p>
+                <p className="mt-1 text-[0.6rem] text-muted">{creditsCaption}</p>
+                <p className="mt-2 text-[0.6rem] text-muted">
+                  Manage your plan, credits, and payment method.
+                </p>
+                <span className="mt-3 inline-flex items-center gap-1 text-[0.65rem] font-medium text-accent">
+                  Manage plan
+                  <ChevronRight
+                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
+                </span>
               </div>
-              <ChevronRight
-                size={18}
-                className="shrink-0 text-muted group-hover:text-fg transition-colors"
-              />
-            </div>
-          </Card>
-        </Link>
+            </Link>
 
-        {/* Delivery Channels */}
-        <Card className="p-4 sm:p-6">
-          <h3 className="text-sm font-semibold mb-1">Delivery Channels</h3>
-          <p className="text-xs text-muted mb-4 sm:mb-5">
-            Choose where analysis results are delivered
-          </p>
+            <TierGate plan="pro" feature="Trading Persona">
+              <section className="overflow-hidden rounded-2xl border border-dashed border-accent/30 bg-surface">
+                <div className="flex items-center gap-2 border-b border-dashed border-accent/15 px-4 py-3.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white">
+                    <Target className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-semibold text-fg">Trading persona</h2>
+                    <p className="text-[0.6rem] text-muted">
+                      Governs how Autopilot trades
+                    </p>
+                  </div>
+                </div>
 
-          <div className="space-y-1 divide-y divide-border/40">
-            {/* In-app - always enabled */}
-            <div className="py-3">
-              <Toggle
-                checked={channelInApp}
-                onChange={() => {}}
-                disabled
-                label="In-app notifications"
-                description="Results appear in your notification center"
-              />
-            </div>
+                <div className="p-4">
+                  {personaLoading ? (
+                    <div className="space-y-2" aria-hidden="true">
+                      <Skeleton className="h-4 w-2/3" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-4/5" />
+                    </div>
+                  ) : personaData ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-fg">
+                          {personaData.persona.name}
+                        </span>
+                        <Badge tone={personaRiskTone} size="sm">
+                          {personaRisk}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-[0.65rem] leading-relaxed text-muted">
+                        {personaData.description?.tagline ??
+                          'Your selected entry, sizing, monitoring, and exit rules.'}
+                      </p>
+                      <Link
+                        href="/account/persona"
+                        className="mt-3 inline-flex items-center gap-1 text-[0.65rem] font-medium text-accent transition-colors hover:text-fg"
+                      >
+                        Change persona
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Link>
+                    </>
+                  ) : (
+                    <EmptyState
+                      icon={Target}
+                      title="No persona selected"
+                      description="Pick a strategy to govern how Autopilot trades for you."
+                      className="py-4"
+                      action={
+                        <Link
+                          href="/account/persona"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/15"
+                        >
+                          Select persona
+                        </Link>
+                      }
+                    />
+                  )}
+                </div>
+              </section>
+            </TierGate>
 
-            {/* Email */}
-            <div className="py-3">
-              <TierGate plan="starter" feature="Email delivery">
-                <Toggle
-                  checked={channelEmail}
-                  onChange={setChannelEmail}
-                  label="Email delivery"
-                  description="Full analysis sent to your inbox"
-                />
-              </TierGate>
-            </div>
-
-            {/* Push */}
-            <div className="py-3">
-              <TierGate plan="starter" feature="Push notifications">
-                <Toggle
-                  checked={channelPush}
-                  onChange={setChannelPush}
-                  label="Push notifications"
-                  description="Real-time alerts on mobile and desktop"
-                />
-              </TierGate>
-            </div>
-
-            {/* Webhook */}
-            <div className="py-3">
-              <TierGate plan="pro" feature="Webhook delivery">
-                <Toggle
-                  checked={channelWebhook}
-                  onChange={setChannelWebhook}
-                  label="Webhook delivery"
-                  description="POST analysis JSON to your endpoint for programmatic use"
-                />
-              </TierGate>
-            </div>
-          </div>
-
-          {/* Webhook URL input */}
-          {channelWebhook && has('pro') && (
-            <div className="mt-4 space-y-2">
-              <label className="text-xs text-muted font-medium">
-                Webhook URL
-              </label>
-              <div className="flex flex-col xs:flex-row gap-2">
-                <input
-                  type="url"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://your-api.com/webhook/tradewizard"
-                  className="flex-1 min-w-0 rounded-md border border-border bg-bg px-3 py-2 text-xs font-mono text-fg placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg"
-                />
+            <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+              <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-no/10 text-no">
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">Session</h2>
+                  <p className="text-[0.6rem] text-muted">This device</p>
+                </div>
+              </div>
+              <div className="p-4">
+                <p className="text-[0.65rem] leading-relaxed text-muted">
+                  Sign out of TradeWizard on this device. Your sessions and
+                  preferences stay saved.
+                </p>
                 <Button
-                  variant="secondary"
+                  variant="danger"
                   size="sm"
-                  onClick={handleWebhookTest}
-                  loading={webhookTesting}
-                  disabled={!webhookUrl}
-                  className="shrink-0"
+                  onClick={() => {
+                    signOut();
+                    router.push('/login');
+                  }}
+                  className="mt-3 w-full"
                 >
-                  Test
+                  Sign out
                 </Button>
               </div>
-              {webhookTestResult && (
-                <p
-                  className={`text-xs ${
-                    webhookTestResult.startsWith('✓')
-                      ? 'text-yes'
-                      : 'text-no'
-                  }`}
-                >
-                  {webhookTestResult}
-                </p>
-              )}
-            </div>
-          )}
-        </Card>
-
-        {/* Quiet Hours */}
-        <Card className="p-4 sm:p-6">
-          <h3 className="text-sm font-semibold mb-1">Quiet Hours</h3>
-          <p className="text-xs text-muted mb-4 sm:mb-5">
-            Pause non-critical notifications during these hours
-          </p>
-
-          <Toggle
-            checked={quietHoursEnabled}
-            onChange={setQuietHoursEnabled}
-            label="Enable quiet hours"
-            description="Only urgent alerts (large probability shifts) will come through"
-          />
-
-          {quietHoursEnabled && (
-            <div className="flex flex-wrap items-center gap-3 mt-4">
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted">From</label>
-                <input
-                  type="time"
-                  value={quietHoursStart}
-                  onChange={(e) => setQuietHoursStart(e.target.value)}
-                  className="rounded-md border border-border bg-bg px-3 py-1.5 text-xs font-mono text-fg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted">To</label>
-                <input
-                  type="time"
-                  value={quietHoursEnd}
-                  onChange={(e) => setQuietHoursEnd(e.target.value)}
-                  className="rounded-md border border-border bg-bg px-3 py-1.5 text-xs font-mono text-fg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg"
-                />
-              </div>
-            </div>
-          )}
-        </Card>
-
-        {/* Alert Thresholds */}
-        <Card className="p-4 sm:p-6">
-          <h3 className="text-sm font-semibold mb-1">Alert Thresholds</h3>
-          <p className="text-xs text-muted mb-4 sm:mb-5">
-            Only notify when probability shifts exceed your threshold
-          </p>
-
-          <Toggle
-            checked={probShiftEnabled}
-            onChange={setProbShiftEnabled}
-            label="Probability shift alerts"
-            description="Get notified when a tracked market moves significantly"
-          />
-
-          {probShiftEnabled && (
-            <div className="mt-4">
-              <Slider
-                min={1}
-                max={20}
-                step={1}
-                value={minProbabilityShift}
-                onChange={setMinProbabilityShift}
-                label="Minimum shift to trigger alert"
-                format={(v) => `±${v}% probability change`}
-              />
-            </div>
-          )}
-        </Card>
-
-        {/* Trading Persona */}
-        <TierGate plan="pro" feature="Trading Persona">
-          <Card className="p-4 sm:p-6">
-            <h3 className="text-sm font-semibold mb-1">Trading Persona</h3>
-            <p className="text-xs text-muted mb-4 sm:mb-5">
-              Your active persona governs how the Portfolio Manager trades on
-              your behalf
-            </p>
-
-            {personaLoading ? (
-              <div className="animate-pulse h-16 rounded-[12px] bg-surface-2" />
-            ) : personaData ? (
-              <div className="flex flex-col xs:flex-row items-start xs:items-center gap-3 xs:gap-4 rounded-[12px] border border-border bg-surface-2 p-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-ai/15 text-xl">
-                  🎯
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold">
-                    {personaData.persona.name}
-                  </div>
-                  <div className="text-xs text-muted mt-0.5 truncate">
-                    {personaData.persona.riskLevel.charAt(0).toUpperCase() +
-                      personaData.persona.riskLevel.slice(1)}{' '}
-                    · {personaData.description?.tagline ?? ''}
-                  </div>
-                </div>
-                <Link
-                  href="/account/persona"
-                  className="shrink-0 rounded-md border border-ai/30 px-3 py-1.5 text-xs font-semibold text-ai transition-colors hover:bg-ai/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                >
-                  Change Persona
-                </Link>
-              </div>
-            ) : (
-              <div className="flex flex-col xs:flex-row items-start xs:items-center gap-3 xs:gap-4 rounded-[12px] border border-border bg-surface-2 p-4">
-                <div className="flex-1 text-sm text-muted">
-                  No persona selected yet.
-                </div>
-                <Link
-                  href="/account/persona"
-                  className="shrink-0 rounded-md border border-ai/30 px-3 py-1.5 text-xs font-semibold text-ai transition-colors hover:bg-ai/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                >
-                  Select Persona
-                </Link>
-              </div>
-            )}
-          </Card>
-        </TierGate>
-
-        {/* Save button */}
-        <div className="flex justify-end">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleSave}
-            loading={updatePreferences.isPending}
-          >
-            Save Preferences
-          </Button>
+            </section>
+          </aside>
         </div>
-
-        {/* Sign Out */}
-        <Card className="p-4 sm:p-6">
-          <div className="flex flex-col xs:flex-row items-start xs:items-center gap-3 xs:gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-no/10 text-no">
-              <LogOut size={20} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="text-sm font-semibold">Sign Out</span>
-              <p className="text-xs text-muted mt-0.5">
-                Sign out of your TradeWizard account on this device
-              </p>
-            </div>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => {
-                signOut();
-                router.push('/login');
-              }}
-              className="shrink-0"
-            >
-              Sign Out
-            </Button>
-          </div>
-        </Card>
       </div>
     </AppShell>
   );

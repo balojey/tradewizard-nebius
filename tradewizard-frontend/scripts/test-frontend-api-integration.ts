@@ -6,16 +6,29 @@
  * Validates: Requirements 2.1, 8.2, 8.3
  */
 
+interface ProxyMarket {
+  id: string;
+  question?: string;
+  slug?: string;
+  liquidity?: string | number;
+  volume24hr?: string | number;
+  eventTitle?: string;
+  eventSlug?: string;
+  clobTokenIds?: string;
+  closed?: boolean;
+  [key: string]: unknown;
+}
+
 interface FrontendTestResult {
   name: string;
   passed: boolean;
   details: string;
-  data?: any;
+  data?: unknown;
 }
 
 const results: FrontendTestResult[] = [];
 
-function logTest(name: string, passed: boolean, details: string, data?: any) {
+function logTest(name: string, passed: boolean, details: string, data?: unknown) {
   results.push({ name, passed, details, data });
   const status = passed ? '✓' : '✗';
   console.log(`${status} ${name}`);
@@ -51,7 +64,7 @@ async function testFrontendAPI() {
         { status: response.status, statusText: response.statusText }
       );
     } else {
-      const markets = await response.json();
+      const markets = (await response.json()) as ProxyMarket[];
       
       logTest(
         'Load markets via API proxy',
@@ -76,18 +89,18 @@ async function testFrontendAPI() {
     console.log('-'.repeat(80));
     
     const page1Response = await fetch(`${API_BASE}/api/polymarket/markets?limit=10&offset=0&tag_id=2`);
-    const page1Markets = await page1Response.json();
+    const page1Markets = (await page1Response.json()) as ProxyMarket[];
     
     const page2Response = await fetch(`${API_BASE}/api/polymarket/markets?limit=10&offset=10&tag_id=2`);
-    const page2Markets = await page2Response.json();
+    const page2Markets = (await page2Response.json()) as ProxyMarket[];
     
     const page3Response = await fetch(`${API_BASE}/api/polymarket/markets?limit=10&offset=20&tag_id=2`);
-    const page3Markets = await page3Response.json();
+    const page3Markets = (await page3Response.json()) as ProxyMarket[];
     
     // Check if pages have different markets (allow some overlap due to over-fetching strategy)
-    const page1Ids = new Set(page1Markets.map((m: any) => m.id));
-    const page2Ids = new Set(page2Markets.map((m: any) => m.id));
-    const page3Ids = new Set(page3Markets.map((m: any) => m.id));
+    const page1Ids = new Set(page1Markets.map((m: ProxyMarket) => m.id));
+    const page2Ids = new Set(page2Markets.map((m: ProxyMarket) => m.id));
+    const page3Ids = new Set(page3Markets.map((m: ProxyMarket) => m.id));
     
     const page1Page2Overlap = [...page1Ids].filter(id => page2Ids.has(id)).length;
     const page2Page3Overlap = [...page2Ids].filter(id => page3Ids.has(id)).length;
@@ -117,10 +130,10 @@ async function testFrontendAPI() {
     console.log('-'.repeat(80));
     
     const politicsResponse = await fetch(`${API_BASE}/api/polymarket/markets?limit=20&offset=0&tag_id=2`);
-    const politicsMarkets = await politicsResponse.json();
+    const politicsMarkets = (await politicsResponse.json()) as ProxyMarket[];
     
     const sportsResponse = await fetch(`${API_BASE}/api/polymarket/markets?limit=20&offset=0&tag_id=3`);
-    const sportsMarkets = await sportsResponse.json();
+    const sportsMarkets = (await sportsResponse.json()) as ProxyMarket[];
     
     // Category filtering works if we get different markets for different categories
     // Note: The API filters by tag_id in the query, but individual markets may not include tags field
@@ -145,13 +158,13 @@ async function testFrontendAPI() {
     console.log('-'.repeat(80));
     
     const openMarketsResponse = await fetch(`${API_BASE}/api/polymarket/markets?limit=20&offset=0&tag_id=2&include_closed=false`);
-    const openMarkets = await openMarketsResponse.json();
+    const openMarkets = (await openMarketsResponse.json()) as ProxyMarket[];
     
     const closedMarketsResponse = await fetch(`${API_BASE}/api/polymarket/markets?limit=20&offset=0&tag_id=2&include_closed=true`);
-    const closedMarkets = await closedMarketsResponse.json();
+    const closedMarkets = (await closedMarketsResponse.json()) as ProxyMarket[];
     
-    const allOpenMarketsClosed = openMarkets.every((m: any) => m.closed !== true);
-    const hasClosedMarkets = closedMarkets.some((m: any) => m.closed === true);
+    const allOpenMarketsClosed = openMarkets.every((m: ProxyMarket) => m.closed !== true);
+    const hasClosedMarkets = closedMarkets.some((m: ProxyMarket) => m.closed === true);
     
     logTest(
       'Closed markets view test',
@@ -172,10 +185,10 @@ async function testFrontendAPI() {
     console.log('-'.repeat(80));
     
     const testResponse = await fetch(`${API_BASE}/api/polymarket/markets?limit=20&offset=0&tag_id=2`);
-    const testMarkets = await testResponse.json();
+    const testMarkets = (await testResponse.json()) as ProxyMarket[];
     
-    const marketsWithEvents = testMarkets.filter((m: any) => m.eventTitle);
-    const marketsWithoutEvents = testMarkets.filter((m: any) => !m.eventTitle);
+    const marketsWithEvents = testMarkets.filter((m: ProxyMarket) => m.eventTitle);
+    const marketsWithoutEvents = testMarkets.filter((m: ProxyMarket) => !m.eventTitle);
     
     logTest(
       'Event context enrichment',
@@ -198,13 +211,13 @@ async function testFrontendAPI() {
     console.log('-'.repeat(80));
     
     const structureResponse = await fetch(`${API_BASE}/api/polymarket/markets?limit=20&offset=0&tag_id=2`);
-    const structureMarkets = await structureResponse.json();
+    const structureMarkets = (await structureResponse.json()) as ProxyMarket[];
     
     const requiredFields = ['question', 'slug', 'liquidity', 'clobTokenIds', 'id'];
     const fieldCoverage = requiredFields.map(field => ({
       field,
-      coverage: structureMarkets.filter((m: any) => m[field] !== undefined && m[field] !== null).length,
-      percentage: ((structureMarkets.filter((m: any) => m[field] !== undefined && m[field] !== null).length / structureMarkets.length) * 100).toFixed(1),
+      coverage: structureMarkets.filter((m: ProxyMarket) => m[field] !== undefined && m[field] !== null).length,
+      percentage: ((structureMarkets.filter((m: ProxyMarket) => m[field] !== undefined && m[field] !== null).length / structureMarkets.length) * 100).toFixed(1),
     }));
     
     const allFieldsPresent = fieldCoverage.every(f => parseFloat(f.percentage) > 95);

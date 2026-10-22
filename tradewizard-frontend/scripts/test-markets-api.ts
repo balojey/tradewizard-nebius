@@ -5,11 +5,25 @@
 
 const GAMMA_API_URL = "https://gamma-api.polymarket.com";
 
+interface GammaMarket {
+  id: string;
+  question: string;
+  closed?: boolean;
+  acceptingOrders?: boolean;
+  clobTokenIds?: string;
+  outcomePrices?: string;
+  liquidity?: string;
+  tags?: Array<{ id: string | number }>;
+  events?: Array<{ title: string; slug: string }>;
+  endDate?: string;
+  endDateIso?: string;
+}
+
 interface TestResult {
   name: string;
   passed: boolean;
   error?: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 async function testDirectMarketsEndpoint(): Promise<TestResult> {
@@ -28,7 +42,7 @@ async function testDirectMarketsEndpoint(): Promise<TestResult> {
       };
     }
 
-    const markets = await response.json();
+    const markets = (await response.json()) as GammaMarket[];
 
     if (!Array.isArray(markets)) {
       return {
@@ -65,7 +79,7 @@ async function testEventContextEnrichment(): Promise<TestResult> {
     const url = `${GAMMA_API_URL}/markets?closed=false&order=volume24hr&ascending=false&limit=20&offset=0&tag_id=2`;
     
     const response = await fetch(url);
-    const markets = await response.json();
+    const markets = (await response.json()) as GammaMarket[];
 
     if (!Array.isArray(markets)) {
       return {
@@ -76,10 +90,10 @@ async function testEventContextEnrichment(): Promise<TestResult> {
     }
 
     const marketsWithEvents = markets.filter(
-      (m: any) => m.events && Array.isArray(m.events) && m.events.length > 0
+      (m: GammaMarket) => m.events && Array.isArray(m.events) && m.events.length > 0
     );
     const marketsWithoutEvents = markets.filter(
-      (m: any) => !m.events || !Array.isArray(m.events) || m.events.length === 0
+      (m: GammaMarket) => !m.events || !Array.isArray(m.events) || m.events.length === 0
     );
 
     return {
@@ -92,8 +106,8 @@ async function testEventContextEnrichment(): Promise<TestResult> {
         sampleWithEvent: marketsWithEvents[0] ? {
           marketId: marketsWithEvents[0].id,
           marketQuestion: marketsWithEvents[0].question,
-          eventTitle: marketsWithEvents[0].events[0].title,
-          eventSlug: marketsWithEvents[0].events[0].slug,
+          eventTitle: marketsWithEvents[0].events?.[0]?.title,
+          eventSlug: marketsWithEvents[0].events?.[0]?.slug,
         } : null,
         sampleWithoutEvent: marketsWithoutEvents[0] ? {
           marketId: marketsWithoutEvents[0].id,
@@ -115,7 +129,7 @@ async function testFilteringLogic(): Promise<TestResult> {
     const url = `${GAMMA_API_URL}/markets?closed=false&order=volume24hr&ascending=false&limit=50&offset=0&tag_id=2`;
     
     const response = await fetch(url);
-    const markets = await response.json();
+    const markets = (await response.json()) as GammaMarket[];
 
     if (!Array.isArray(markets)) {
       return {
@@ -129,7 +143,7 @@ async function testFilteringLogic(): Promise<TestResult> {
     const MIN_LIQUIDITY_NON_EVERGREEN_USD = 5000;
     const EVERGREEN_TAG_IDS = [2, 21, 120, 596, 1401, 100265, 100639];
 
-    const validMarkets = markets.filter((market: any) => {
+    const validMarkets = markets.filter((market: GammaMarket) => {
       if (!market.clobTokenIds) return false;
       if (market.closed === true) return false;
       if (market.acceptingOrders === false) return false;
@@ -147,7 +161,7 @@ async function testFilteringLogic(): Promise<TestResult> {
         }
       }
 
-      const marketTagIds = market.tags?.map((t: any) => parseInt(t.id)) || [];
+      const marketTagIds = market.tags?.map((t) => parseInt(String(t.id))) || [];
       const hasEvergreenTag = EVERGREEN_TAG_IDS.some((id) =>
         marketTagIds.includes(id)
       );
@@ -185,7 +199,7 @@ async function testClosedMarkets(): Promise<TestResult> {
     const url = `${GAMMA_API_URL}/markets?closed=true&order=volume24hr&ascending=false&limit=10&offset=0&tag_id=2`;
     
     const response = await fetch(url);
-    const markets = await response.json();
+    const markets = (await response.json()) as GammaMarket[];
 
     if (!Array.isArray(markets)) {
       return {
@@ -195,7 +209,7 @@ async function testClosedMarkets(): Promise<TestResult> {
       };
     }
 
-    const closedMarkets = markets.filter((m: any) => m.closed === true);
+    const closedMarkets = markets.filter((m: GammaMarket) => m.closed === true);
 
     return {
       name: "Closed Markets",

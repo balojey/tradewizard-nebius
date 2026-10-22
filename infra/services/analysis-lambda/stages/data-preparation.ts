@@ -71,6 +71,27 @@ export interface MarketBriefing {
   conditionId: string;
   tokenId: string;
   question: string;
+  /** Market resolution date (ISO 8601) if available. */
+  endDate?: string;
+  /** Total market liquidity in USDC, if available. */
+  liquidity?: number;
+  /** Current bid-ask spread in probability points. */
+  spread?: number;
+  bestBid?: number;
+  bestAsk?: number;
+  /** 24h traded volume in USDC, if available. */
+  volume24h?: number;
+}
+
+export interface MarketInfo {
+  tokenId: string;
+  question: string;
+  endDate?: string;
+  liquidity?: number;
+  spread?: number;
+  bestBid?: number;
+  bestAsk?: number;
+  volume24h?: number;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -201,6 +222,39 @@ export function generatePriceSummary(points: PricePoint[]): string {
   ];
 
   return summaryLines.join('\n');
+}
+
+/**
+ * Recent price volatility (population standard deviation of the last up to 30
+ * hourly points). Used to derive volatility-aware take-profit/stop-loss levels
+ * instead of letting the LLM invent arbitrary percentages.
+ */
+export function computePriceVolatility(points: PricePoint[]): number {
+  if (points.length < 2) return 0;
+
+  const windowSize = Math.max(10, Math.min(30, points.length));
+  const prices = points.slice(-windowSize).map((p) => p.price);
+  const mean = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+  const variance =
+    prices.reduce((sum, p) => sum + (p - mean) ** 2, 0) / prices.length;
+  return Math.sqrt(variance);
+}
+
+/**
+ * Derive a deterministic liquidity-risk level from spread and depth.
+ * The handler previously hardcoded this to "medium".
+ */
+export function deriveLiquidityRisk(
+  info: Pick<MarketInfo, 'liquidity' | 'spread'>,
+): 'low' | 'medium' | 'high' {
+  const { liquidity, spread } = info;
+
+  if (spread !== undefined && spread > 0.04) return 'high';
+  if (liquidity !== undefined && liquidity < 5_000) return 'high';
+  if (spread !== undefined && spread > 0.02) return 'medium';
+  if (liquidity !== undefined && liquidity < 20_000) return 'medium';
+  if (liquidity !== undefined && liquidity >= 20_000) return 'low';
+  return 'medium';
 }
 
 // ─── Related Markets ───────────────────────────────────────────────────────────
@@ -446,21 +500,91 @@ export async function fetchTokenIdForMarket(conditionId: string): Promise<string
   return result?.tokenId || null;
 }
 
-/**
- * Fetches market info (tokenId + question) from the CLOB API.
- * Used by the handler to resolve the briefing before calling prepareData.
- */
-export async function fetchMarketInfo(conditionId: string): Promise<{ tokenId: string; question: string } | null> {
-  try {
-    const url = `${CLOB_API_URL}/markets/${conditionId}`;
-    const response = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
-    if (!response.ok) return null;
+function parseOptionalNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
 
-    const data = (await response.json()) as Record<string, unknown>;
+function parseOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+
+/**
+ * Fetches market info (tokenId, question, end date, liquidity, spread) from
+ * the CLOB and Gamma APIs. Used by the handler to resolve the briefing before
+ * calling prepareData and to give agents deterministic market context.
+ */
+export async function fetchMarketInfo(conditionId: string): Promise<MarketInfo | null> {
+  const [clobResult, gammaResult] = await Promise.allSettled([
+    fetchWithTimeout(`${CLOB_API_URL}/markets/${conditionId}`, FETCH_TIMEOUT_MS),
+    fetchWithTimeout(
+      `${GAMMA_API_URL}/markets?condition_ids=${encodeURIComponent(conditionId)}&limit=1`,
+      10_000,
+    ),
+  ]);
+
+  // The CLOB response is required for the token ID.
+  if (clobResult.status !== 'fulfilled' || !clobResult.value.ok) {
+    return null;
+  }
+
+  try {
+    const data = (await clobResult.value.json()) as Record<string, unknown>;
     const tokens = data?.tokens as Array<{ token_id?: string }> | undefined;
     const tokenId = tokens && tokens.length > 0 ? (tokens[0].token_id || '') : '';
-    const question = (data?.question as string) || '';
-    return { tokenId, question };
+    if (!tokenId) return null;
+
+    let question = parseOptionalString(data?.question) || '';
+    let endDate = parseOptionalString(data?.end_date_iso);
+
+    let liquidity: number | undefined;
+    let spread: number | undefined;
+    let bestBid: number | undefined;
+    let bestAsk: number | undefined;
+    let volume24h: number | undefined;
+
+    if (gammaResult.status === 'fulfilled' && gammaResult.value.ok) {
+      try {
+        const gammaData = (await gammaResult.value.json()) as unknown;
+        const market = Array.isArray(gammaData)
+          ? (gammaData[0] as Record<string, unknown> | undefined)
+          : undefined;
+
+        if (market) {
+          question = parseOptionalString(market.question) || question;
+          endDate =
+            parseOptionalString(market.endDate) ||
+            parseOptionalString(market.endDateIso) ||
+            endDate;
+          liquidity =
+            parseOptionalNumber(market.liquidityNum) ??
+            parseOptionalNumber(market.liquidity);
+          spread = parseOptionalNumber(market.spread);
+          bestBid = parseOptionalNumber(market.bestBid);
+          bestAsk = parseOptionalNumber(market.bestAsk);
+          volume24h =
+            parseOptionalNumber(market.volume24hr) ??
+            parseOptionalNumber(market.volume24hrClob);
+        }
+      } catch {
+        // Gamma enrichment is best-effort.
+      }
+    }
+
+    return {
+      tokenId,
+      question,
+      endDate,
+      liquidity,
+      spread,
+      bestBid,
+      bestAsk,
+      volume24h,
+    };
   } catch {
     return null;
   }

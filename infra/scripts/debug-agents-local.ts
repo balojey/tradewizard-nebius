@@ -69,6 +69,11 @@ async function main(): Promise<void> {
     relatedMarketsSummary: '',
     webResearchBrief: 'Web research unavailable.',
     historicalEntries: [],
+    currentMarketProbability: 0.43,
+    marketEndDate: '2026-11-30T00:00:00Z',
+    liquidity: 25_000,
+    spread: 0.02,
+    priceVolatility: 0.03,
     marketBriefing:
       'Market ID: debug-market\nLiquidity: medium\nResolution: 2026-11-30',
   };

@@ -1,16 +1,23 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import {
+  AlertTriangle,
+  Bot,
+  ChevronRight,
+  History,
+  ListChecks,
+} from 'lucide-react';
 import { AppShell } from '@/components/shell/AppShell';
-import { Card } from '@/components/ui/Card';
-import { MetricStat } from '@/components/ui/MetricStat';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Tabs } from '@/components/ui/Tabs';
 import { ScrollToTop } from '@/components/ui/ScrollToTop';
 import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { usePortfolioSessions, type PortfolioSessionSummary } from '@/hooks/usePortfolioSessions';
 import { usePortfolioSession } from '@/hooks/usePortfolioSession';
 import { usePortfolioTrades, type PortfolioTrade } from '@/hooks/usePortfolioTrades';
@@ -31,8 +38,8 @@ type DetailTab = 'capital' | 'decisions' | 'trades';
 
 const DETAIL_TABS: { id: DetailTab; label: string }[] = [
   { id: 'capital', label: 'Capital' },
-  { id: 'decisions', label: 'Decision Log' },
-  { id: 'trades', label: 'Trade History' },
+  { id: 'decisions', label: 'Decisions' },
+  { id: 'trades', label: 'Trades' },
 ];
 
 const STATUS_BADGE_TONE: Record<string, 'yes' | 'accent' | 'warning' | 'muted' | 'no'> = {
@@ -46,10 +53,15 @@ const STATUS_BADGE_TONE: Record<string, 'yes' | 'accent' | 'warning' | 'muted' |
 const STATUS_LABEL: Record<string, string> = {
   active: 'Watching',
   paused: 'Cooldown',
-  exiting: 'Positioned',
+  exiting: 'Exiting',
   completed: 'Completed',
   terminated: 'Terminated',
 };
+
+function formatPnl(value: number): string {
+  if (Math.abs(value) < 0.005) return '$0.00';
+  return `${value > 0 ? '+' : '-'}$${Math.abs(value).toFixed(2)}`;
+}
 
 export default function PortfolioManagerPage() {
   const { plan, has } = useCurrentPlan();
@@ -67,7 +79,6 @@ export default function PortfolioManagerPage() {
 
   const sessions = sessionsData?.sessions ?? [];
 
-  // Derive display status from session state
   function getDisplayStatus(session: PortfolioSessionSummary): string {
     if (session.status === 'active' && session.amountInPositions > 0) return 'Positioned';
     if (session.status === 'active') return 'Watching';
@@ -79,13 +90,11 @@ export default function PortfolioManagerPage() {
     return STATUS_BADGE_TONE[session.status] ?? ('muted' as const);
   }
 
-  // Stats display values
-  const committedCapital = stats ? `$${stats.totalInvested.toFixed(2)}` : '$0.00';
+  const committedCapital = stats?.totalInvested ?? 0;
   const unrealizedPnl = stats?.totalUnrealizedPnl ?? 0;
-  const unrealizedPnlStr = `${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)}`;
   const realizedPnl = stats?.totalRealizedPnl ?? 0;
-  const realizedPnlStr = `${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(2)}`;
   const activeSessions = stats?.activeSessionCount ?? 0;
+  const maxSessions = plan === 'elite' ? 10 : 3;
 
   function handleKillSwitchConfirm() {
     killSwitch.mutate(
@@ -108,63 +117,61 @@ export default function PortfolioManagerPage() {
     }
   }
 
-  // If user doesn't have pro plan, show blurred preview with upgrade prompt
+  // If user doesn't have pro plan, show a blurred preview with upgrade prompt
   if (!has('pro')) {
     return (
       <AppShell>
-        <div className="flex flex-col gap-4 sm:gap-6 px-1 sm:px-0">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-semibold font-display">Portfolio Manager</h1>
-            <p className="text-xs sm:text-sm text-muted mt-1">
-              Autonomous AI trading sessions with real-time monitoring and controls.
+        <div className="w-full">
+          <header className="border-b border-border pb-6">
+            <h1 className="font-display text-[clamp(1.9rem,3.8vw,2.75rem)] font-bold leading-none tracking-[-0.04em] text-fg">
+              Portfolio Manager
+            </h1>
+            <p className="mt-2 text-sm text-muted">
+              Autonomous AI sessions with live risk controls and a full decision log.
             </p>
+          </header>
+
+          <div className="mt-5">
+            <UpgradePrompt
+              variant="starter-to-pro"
+              message="Upgrade to Pro to unlock autonomous AI trading sessions, real-time monitoring, and kill-switch controls."
+            />
           </div>
 
-          <UpgradePrompt
-            variant="starter-to-pro"
-            message="Upgrade to Pro to unlock the Portfolio Manager with autonomous AI trading sessions, real-time monitoring, and kill switch controls."
-          />
-
-          {/* Blurred preview of the dashboard */}
-          <div className="relative overflow-hidden rounded-[12px]">
-            <div className="pointer-events-none select-none blur-[6px] opacity-60" aria-hidden="true">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <Card className="p-3 sm:p-4">
-                  <MetricStat label="Committed Capital" value="$500.00" />
-                </Card>
-                <Card className="p-3 sm:p-4">
-                  <MetricStat label="Unrealized P&L" value="+$42.50" tone="profit" />
-                </Card>
-                <Card className="p-3 sm:p-4">
-                  <MetricStat label="Realized P&L" value="+$128.30" tone="profit" />
-                </Card>
-                <Card className="p-3 sm:p-4">
-                  <MetricStat label="Active Sessions" value="2" sub="of 3 max" />
-                </Card>
+          <div className="relative mt-5 overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className="pointer-events-none select-none opacity-60 blur-[6px]" aria-hidden="true">
+              <div className="grid grid-cols-2 divide-x divide-y divide-border/60 border-b border-border/60 sm:grid-cols-4 sm:divide-y-0">
+                {[
+                  ['Committed', '$500.00'],
+                  ['Unrealized P&L', '+$42.50'],
+                  ['Realized P&L', '+$128.30'],
+                  ['Active sessions', '2 of 3'],
+                ].map(([label, value]) => (
+                  <div key={label} className="px-4 py-3.5">
+                    <p className="text-[0.62rem] text-muted">{label}</p>
+                    <p className="mt-1 font-mono text-lg font-bold text-fg">{value}</p>
+                  </div>
+                ))}
               </div>
-
-              <div className="flex flex-col gap-3 mt-4 sm:mt-6">
-                <h2 className="text-sm font-medium text-muted">Sessions</h2>
-                <Card className="p-3 sm:p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <p className="text-sm font-medium text-fg truncate">Presidential Election 2028</p>
-                      <Badge tone="yes" size="sm">Watching</Badge>
+              <div className="divide-y divide-border/60">
+                {[
+                  ['Presidential Election 2028', 'Watching', '+$18.40'],
+                  ['Fed Rate Decision June', 'Positioned', '+$24.10'],
+                ].map(([title, status, pnl]) => (
+                  <div key={title} className="flex items-center justify-between gap-3 px-4 py-4">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <Bot className="h-4 w-4 text-accent" aria-hidden="true" />
+                      <span className="truncate text-sm font-medium text-fg">{title}</span>
+                      <Badge tone={status === 'Positioned' ? 'accent' : 'yes'} size="sm">
+                        {status}
+                      </Badge>
                     </div>
-                    <p className="text-sm font-mono font-medium text-yes shrink-0">+$18.40</p>
+                    <span className="font-mono text-sm text-yes">{pnl}</span>
                   </div>
-                </Card>
-                <Card className="p-3 sm:p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <p className="text-sm font-medium text-fg truncate">Fed Rate Decision June</p>
-                      <Badge tone="accent" size="sm">Positioned</Badge>
-                    </div>
-                    <p className="text-sm font-mono font-medium text-yes shrink-0">+$24.10</p>
-                  </div>
-                </Card>
+                ))}
               </div>
             </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-bg/30 via-transparent to-transparent" />
           </div>
         </div>
       </AppShell>
@@ -173,121 +180,137 @@ export default function PortfolioManagerPage() {
 
   return (
     <AppShell>
-      <div className="flex flex-col gap-4 sm:gap-6 px-1 sm:px-0">
-        {/* Kill Switch Active Banner */}
+      <div className="w-full">
         {killSwitchTriggered && (
-          <div className="flex items-center gap-2 sm:gap-3 rounded-[12px] border border-no/30 bg-no/10 px-3 sm:px-4 py-2.5 sm:py-3">
-            <span className="text-no text-xs sm:text-sm font-medium">
-              ⚠️ Kill Switch Activated - All sessions terminated and positions exited.
-            </span>
+          <div className="mb-5 flex items-center gap-2.5 rounded-xl border border-no/30 bg-no/[0.08] px-3.5 py-2.5 text-xs font-medium text-no">
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Kill switch activated - all sessions terminated and positions exited.
           </div>
         )}
 
-        {/* Page Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-semibold font-display truncate">Portfolio Manager</h1>
-            {personaData && (
-              <Badge tone="ai">{personaData.persona.name}</Badge>
-            )}
-          </div>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => setKillSwitchOpen(true)}
-            disabled={activeSessions === 0 || killSwitchTriggered}
-            aria-label="Kill Switch - terminate all sessions and exit all positions"
-            className="self-start sm:self-auto"
-          >
-            Kill Switch
-          </Button>
-        </div>
-
-        {/* Stats Bar */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="p-3 sm:p-4">
-            <MetricStat
-              label="Committed Capital"
-              value={committedCapital}
-            />
-          </Card>
-          <Card className="p-3 sm:p-4">
-            <MetricStat
-              label="Unrealized P&L"
-              value={unrealizedPnlStr}
-              tone={unrealizedPnl >= 0 ? 'profit' : 'loss'}
-            />
-          </Card>
-          <Card className="p-3 sm:p-4">
-            <MetricStat
-              label="Realized P&L"
-              value={realizedPnlStr}
-              tone={realizedPnl >= 0 ? 'profit' : 'loss'}
-            />
-          </Card>
-          <Card className="p-3 sm:p-4">
-            <MetricStat
-              label="Active Sessions"
-              value={String(activeSessions)}
-              sub={`of ${plan === 'elite' ? '10' : '3'} max`}
-            />
-          </Card>
-        </div>
-
-        {/* Sessions List */}
-        <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-muted">Sessions</h2>
-
-          {sessionsLoading || statsLoading ? (
-            <div className="text-sm text-muted text-center py-8">
-              Loading sessions...
-            </div>
-          ) : sessions.length === 0 ? (
-            <Card className="p-6 sm:p-8 text-center">
-              <p className="text-xs sm:text-sm text-muted">
-                No active sessions. Activate the Portfolio Manager from a market detail page.
-              </p>
-            </Card>
-          ) : (
-            sessions.map((session) => (
-              <div key={session.id}>
-                <SessionCard
-                  session={session}
-                  isSelected={selectedSessionId === session.id}
-                  onClick={() => handleSessionClick(session.id)}
-                  getDisplayStatus={getDisplayStatus}
-                  getStatusTone={getStatusTone}
-                />
-                {selectedSessionId === session.id && (
-                  <SessionDetailPanel
-                    sessionId={session.id}
-                    detailTab={detailTab}
-                    onTabChange={setDetailTab}
-                  />
+        <header className="border-b border-border pb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="font-display text-[clamp(1.9rem,3.8vw,2.75rem)] font-bold leading-none tracking-[-0.04em] text-fg">
+                  Portfolio Manager
+                </h1>
+                {personaData && (
+                  <Badge tone="accent" size="sm">
+                    {personaData.persona.name}
+                  </Badge>
                 )}
               </div>
-            ))
-          )}
+              <p className="mt-2 text-sm text-muted">
+                Autonomous sessions with live risk controls and every decision logged.
+              </p>
+            </div>
+
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setKillSwitchOpen(true)}
+              disabled={activeSessions === 0 || killSwitchTriggered}
+              aria-label="Kill switch - terminate all sessions and exit all positions"
+              className="self-start sm:self-auto"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+              Kill switch
+            </Button>
+          </div>
+        </header>
+
+        <div className="mt-5 grid grid-cols-2 divide-x divide-y divide-border/60 overflow-hidden rounded-2xl border border-border bg-surface sm:grid-cols-4 sm:divide-y-0">
+          <PmStat
+            label="Committed"
+            value={`$${committedCapital.toFixed(2)}`}
+            caption="across sessions"
+          />
+          <PmStat
+            label="Unrealized P&L"
+            value={formatPnl(unrealizedPnl)}
+            caption="open positions"
+            tone={unrealizedPnl > 0 ? 'yes' : unrealizedPnl < 0 ? 'no' : 'fg'}
+          />
+          <PmStat
+            label="Realized P&L"
+            value={formatPnl(realizedPnl)}
+            caption="closed outcomes"
+            tone={realizedPnl > 0 ? 'yes' : realizedPnl < 0 ? 'no' : 'fg'}
+          />
+          <PmStat
+            label="Active sessions"
+            value={String(activeSessions)}
+            caption={`of ${maxSessions} max`}
+          />
         </div>
 
-        {/* Kill Switch Confirmation Modal */}
+        <section className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5 sm:px-5">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">Sessions</h2>
+              <p className="text-[0.65rem] text-muted">
+                {sessions.length} total · {activeSessions} active
+              </p>
+            </div>
+            <span className="hidden text-[0.6rem] text-muted sm:inline">
+              Select a session for capital and decisions
+            </span>
+          </div>
+
+          {sessionsLoading || statsLoading ? (
+            <SessionsSkeleton />
+          ) : sessions.length === 0 ? (
+            <EmptyState
+              icon={Bot}
+              title="No sessions yet"
+              description="Activate Autopilot from a market detail page to start an autonomous session."
+              action={
+                <Link
+                  href="/markets"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-fg transition-colors hover:border-border-strong hover:bg-surface-2"
+                >
+                  Explore markets
+                </Link>
+              }
+            />
+          ) : (
+            <div>
+              {sessions.map((session) => (
+                <div key={session.id} className="border-b border-border/60 last:border-0">
+                  <SessionCard
+                    session={session}
+                    isSelected={selectedSessionId === session.id}
+                    onClick={() => handleSessionClick(session.id)}
+                    getDisplayStatus={getDisplayStatus}
+                    getStatusTone={getStatusTone}
+                  />
+                  {selectedSessionId === session.id && (
+                    <SessionDetailPanel
+                      sessionId={session.id}
+                      detailTab={detailTab}
+                      onTabChange={setDetailTab}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         <Modal
           open={killSwitchOpen}
           onClose={() => setKillSwitchOpen(false)}
-          title="Confirm Kill Switch"
+          title="Confirm kill switch"
           size="sm"
         >
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-muted">
-              This will immediately terminate all active sessions and exit all open positions
-              at market price. This action cannot be undone.
+            <p className="text-sm leading-relaxed text-muted">
+              This immediately terminates all active sessions and exits every open
+              position at market price. This cannot be undone.
             </p>
-            <div className="flex items-center gap-3 justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setKillSwitchOpen(false)}
-              >
+            <div className="flex items-center justify-end gap-2.5">
+              <Button variant="ghost" size="sm" onClick={() => setKillSwitchOpen(false)}>
                 Cancel
               </Button>
               <Button
@@ -296,7 +319,7 @@ export default function PortfolioManagerPage() {
                 onClick={handleKillSwitchConfirm}
                 loading={killSwitch.isPending}
               >
-                Confirm Kill Switch
+                Confirm kill switch
               </Button>
             </div>
           </div>
@@ -307,7 +330,35 @@ export default function PortfolioManagerPage() {
   );
 }
 
-/** Individual session card */
+function PmStat({
+  label,
+  value,
+  caption,
+  tone = 'fg',
+}: {
+  label: string;
+  value: string;
+  caption: string;
+  tone?: 'fg' | 'yes' | 'no';
+}) {
+  return (
+    <div className="px-4 py-3.5">
+      <p className="text-[0.62rem] text-muted">{label}</p>
+      <p
+        className={cn(
+          'mt-1 font-mono text-lg font-bold tabular-nums',
+          tone === 'yes' && 'text-yes',
+          tone === 'no' && 'text-no',
+          tone === 'fg' && 'text-fg'
+        )}
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 text-[0.55rem] text-muted">{caption}</p>
+    </div>
+  );
+}
+
 function SessionCard({
   session,
   isSelected,
@@ -325,121 +376,153 @@ function SessionCard({
   const resumeSession = useResumeSession();
   const stopSession = useStopSession();
 
-  // Fetch live token prices for this session's market
-  const { data: livePrices } = useQuery<{ yes: number; no: number } | null>({
-    queryKey: ['pm-live-price', session.marketId],
+  const { data: liveMarket } = useQuery<{
+    question: string;
+    yes: number | null;
+    no: number | null;
+  } | null>({
+    queryKey: ['pm-market', session.marketId],
     queryFn: async () => {
-      // First get the market's token IDs
-      const metaRes = await fetch(`/api/polymarket/market-by-condition?conditionId=${session.marketId}`);
+      const metaRes = await fetch(
+        `/api/polymarket/market-by-condition?conditionId=${session.marketId}`
+      );
       if (!metaRes.ok) return null;
       const market = await metaRes.json();
+      const question = market?.question ?? '';
       const clobTokenIds = market?.clobTokenIds;
-      if (!clobTokenIds) return null;
+      if (!clobTokenIds) return { question, yes: null, no: null };
+
       const tokenIds = JSON.parse(clobTokenIds);
-      if (!tokenIds[0]) return null;
-      // Fetch live prices
+      if (!tokenIds[0]) return { question, yes: null, no: null };
+
       const priceRes = await fetch('/api/polymarket/public-prices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tokenIds }),
       });
-      if (!priceRes.ok) return null;
+      if (!priceRes.ok) return { question, yes: null, no: null };
+
       const priceMap = await priceRes.json();
       const yesPrice = priceMap[tokenIds[0]]?.midPrice;
-      if (yesPrice == null) return null;
-      return { yes: Math.round(yesPrice * 100), no: Math.round((1 - yesPrice) * 100) };
+      if (yesPrice == null) return { question, yes: null, no: null };
+
+      return {
+        question,
+        yes: Math.round(yesPrice * 100),
+        no: Math.round((1 - yesPrice) * 100),
+      };
     },
-    enabled: !!session.marketId && session.status !== 'completed' && session.status !== 'terminated',
+    enabled: !!session.marketId,
     staleTime: 15_000,
     refetchInterval: 30_000,
   });
 
   const utilization =
     session.investmentAmount > 0
-      ? ((session.amountInPositions / session.investmentAmount) * 100).toFixed(0)
-      : '0';
+      ? Math.min((session.amountInPositions / session.investmentAmount) * 100, 100)
+      : 0;
 
   const totalPnl = session.unrealizedPnl + session.realizedPnl;
+  const marketTitle = liveMarket?.question || session.marketId;
 
   return (
-    <Card
-      className={cn(
-        'p-3 sm:p-4 cursor-pointer transition-colors hover:bg-surface-2',
-        isSelected && 'ring-1 ring-accent'
-      )}
-    >
-      <div onClick={onClick}>
-        {/* Mobile: stack vertically; Desktop: row layout */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-fg truncate max-w-[calc(100%-5rem)] sm:max-w-none" title={session.marketId}>
-                {session.marketId.length > 40
-                  ? session.marketId.slice(0, 37) + '…'
-                  : session.marketId}
-              </p>
-              <Badge tone={getStatusTone(session)} size="sm">
-                {getDisplayStatus(session)}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3 mt-1 text-[11px] sm:text-xs text-muted flex-wrap">
-              <span>{session.personaName}</span>
-              <span className="hidden sm:inline">·</span>
-              <span>${session.investmentAmount.toFixed(2)} invested</span>
-              <span className="hidden sm:inline">·</span>
-              <span>{utilization}% utilized</span>
-              {livePrices && (
-                <>
-                  <span className="hidden sm:inline">·</span>
-                  <span className="font-mono">
-                    <span className="text-yes">{livePrices.yes}¢</span>
-                    {' / '}
-                    <span className="text-no">{livePrices.no}¢</span>
-                  </span>
-                </>
-              )}
+    <div className={cn('transition-colors', isSelected && 'bg-surface-2/20')}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+        aria-expanded={isSelected}
+        className="cursor-pointer px-4 py-4 outline-none transition-colors hover:bg-surface-2/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-5"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent">
+              <Bot className="h-4 w-4" aria-hidden="true" />
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p
+                  className="max-w-full truncate text-sm font-semibold text-fg"
+                  title={marketTitle}
+                >
+                  {marketTitle}
+                </p>
+                <Badge tone={getStatusTone(session)} size="sm">
+                  {getDisplayStatus(session)}
+                </Badge>
+              </div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.62rem] text-muted">
+                <span>{session.personaName}</span>
+                <span aria-hidden="true">·</span>
+                <span>${session.investmentAmount.toFixed(2)} invested</span>
+                <span aria-hidden="true">·</span>
+                <span>{utilization.toFixed(0)}% utilized</span>
+                {liveMarket?.yes != null && liveMarket.no != null && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-mono">
+                      <span className="text-yes">{liveMarket.yes}¢</span>
+                      {' / '}
+                      <span className="text-no">{liveMarket.no}¢</span>
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-2 flex items-center gap-3">
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-yes transition-[width]"
+                    style={{ width: `${utilization}%` }}
+                  />
+                </div>
+                <span className="whitespace-nowrap font-mono text-[0.6rem] text-muted">
+                  ${session.amountInPositions.toFixed(0)} / $
+                  {session.investmentAmount.toFixed(0)}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+
+          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start">
             <div className="sm:text-right">
               <p
                 className={cn(
-                  'text-sm font-mono font-medium',
-                  totalPnl >= 0 ? 'text-yes' : 'text-no'
+                  'font-mono text-sm font-semibold',
+                  totalPnl > 0 ? 'text-yes' : totalPnl < 0 ? 'text-no' : 'text-fg'
                 )}
               >
-                {totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}
+                {formatPnl(totalPnl)}
               </p>
-              <p className="text-[10px] text-muted">P&L</p>
+              <p className="text-[0.55rem] text-muted">unrealized + realized</p>
             </div>
+            <ChevronRight
+              className={cn(
+                'h-4 w-4 text-muted transition-transform',
+                isSelected && 'rotate-90'
+              )}
+              aria-hidden="true"
+            />
           </div>
-        </div>
-
-        {/* Capital Utilization Progress Bar */}
-        <div className="flex items-center gap-3 mt-2.5">
-          <div className="flex-1 h-1 rounded-full overflow-hidden bg-surface-2 flex">
-            {session.amountInPositions > 0 && (
-              <div
-                className="h-full bg-yes rounded-full"
-                style={{ width: `${Math.min(Number(utilization), 100)}%` }}
-              />
-            )}
-          </div>
-          <span className="text-[10px] sm:text-[11px] text-muted font-mono whitespace-nowrap">
-            ${session.amountInPositions.toFixed(0)} / ${session.investmentAmount.toFixed(0)}
-          </span>
         </div>
       </div>
 
-      {/* Session Controls */}
       {(session.status === 'active' || session.status === 'paused') && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+        <div className="flex items-center gap-2 border-t border-border/40 px-4 pb-3.5 pt-2.5 sm:px-5">
           {session.status === 'active' && (
             <Button
               variant="secondary"
               size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
                 pauseSession.mutate(session.id);
               }}
               loading={pauseSession.isPending}
@@ -452,8 +535,8 @@ function SessionCard({
             <Button
               variant="secondary"
               size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
                 resumeSession.mutate(session.id);
               }}
               loading={resumeSession.isPending}
@@ -465,8 +548,8 @@ function SessionCard({
           <Button
             variant="danger"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={(event) => {
+              event.stopPropagation();
               stopSession.mutate(session.id);
             }}
             loading={stopSession.isPending}
@@ -476,11 +559,10 @@ function SessionCard({
           </Button>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
-/** Session detail panel with Capital / Decision Log / Trade History tabs */
 function SessionDetailPanel({
   sessionId,
   detailTab,
@@ -495,30 +577,49 @@ function SessionDetailPanel({
 
   if (sessionLoading) {
     return (
-      <Card className="p-3 sm:p-4 mt-2 sm:ml-4 border-l-2 border-accent">
-        <p className="text-sm text-muted">Loading session details...</p>
-      </Card>
+      <div className="border-t border-border/60 bg-bg/20 px-4 py-4 sm:px-5">
+        <div className="space-y-3" aria-hidden="true">
+          <Skeleton className="h-8 w-64 max-w-full" />
+          <Skeleton className="h-4 w-40 max-w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
     );
   }
 
   if (!session) return null;
 
   return (
-    <Card className="p-3 sm:p-4 mt-2 sm:ml-4 border-l-2 border-accent">
-      <Tabs tabs={DETAIL_TABS} active={detailTab} onChange={onTabChange} />
+    <div className="border-t border-border/60 bg-bg/20 px-4 py-4 sm:px-5">
+      <div className="flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-lg bg-surface-2 p-0.5">
+        {DETAIL_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onTabChange(tab.id)}
+            className={cn(
+              'whitespace-nowrap rounded-md px-2.5 py-1.5 text-[0.7rem] font-medium transition-colors',
+              detailTab === tab.id
+                ? 'bg-surface text-fg shadow-[var(--shadow-sm)]'
+                : 'text-muted hover:text-fg'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <div className="mt-3 sm:mt-4">
+      <div className="mt-4">
         {detailTab === 'capital' && <CapitalTab session={session} />}
         {detailTab === 'decisions' && <DecisionLogTab sessionId={sessionId} />}
         {detailTab === 'trades' && (
           <TradeHistoryTab trades={tradesData?.items ?? []} isLoading={tradesLoading} />
         )}
       </div>
-    </Card>
+    </div>
   );
 }
 
-/** Capital tab content */
 function CapitalTab({ session }: { session: ReturnType<typeof usePortfolioSession>['data'] }) {
   if (!session) return null;
 
@@ -528,49 +629,50 @@ function CapitalTab({ session }: { session: ReturnType<typeof usePortfolioSessio
   const available = session.capitalBreakdown.amountAvailable;
   const realized = session.stats.realizedPnl;
 
-  // Capital utilization segments
   const positionPct = total > 0 ? (inPositions / total) * 100 : 0;
   const pendingPct = total > 0 ? (pending / total) * 100 : 0;
   const availablePct = total > 0 ? (available / total) * 100 : 0;
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div>
-          <p className="text-[11px] sm:text-xs text-muted">In Positions</p>
-          <p className="text-xs sm:text-sm font-mono font-medium text-fg">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 overflow-hidden rounded-lg border border-border/60 sm:grid-cols-4 sm:divide-y-0">
+        <div className="px-3 py-2.5">
+          <p className="text-[0.6rem] text-muted">In positions</p>
+          <p className="mt-0.5 font-mono text-xs font-semibold text-fg">
             ${inPositions.toFixed(2)}
           </p>
         </div>
-        <div>
-          <p className="text-[11px] sm:text-xs text-muted">Pending Orders</p>
-          <p className="text-xs sm:text-sm font-mono font-medium text-fg">
+        <div className="px-3 py-2.5">
+          <p className="text-[0.6rem] text-muted">Pending orders</p>
+          <p className="mt-0.5 font-mono text-xs font-semibold text-fg">
             ${pending.toFixed(2)}
           </p>
         </div>
-        <div>
-          <p className="text-[11px] sm:text-xs text-muted">Available</p>
-          <p className="text-xs sm:text-sm font-mono font-medium text-fg">
+        <div className="px-3 py-2.5">
+          <p className="text-[0.6rem] text-muted">Available</p>
+          <p className="mt-0.5 font-mono text-xs font-semibold text-fg">
             ${available.toFixed(2)}
           </p>
         </div>
-        <div>
-          <p className="text-[11px] sm:text-xs text-muted">Realized P&L</p>
+        <div className="px-3 py-2.5">
+          <p className="text-[0.6rem] text-muted">Realized P&L</p>
           <p
             className={cn(
-              'text-xs sm:text-sm font-mono font-medium',
-              realized >= 0 ? 'text-yes' : 'text-no'
+              'mt-0.5 font-mono text-xs font-semibold',
+              realized > 0 ? 'text-yes' : realized < 0 ? 'text-no' : 'text-fg'
             )}
           >
-            {realized >= 0 ? '+' : ''}${realized.toFixed(2)}
+            {formatPnl(realized)}
           </p>
         </div>
       </div>
 
-      {/* Capital Utilization Bar */}
       <div>
-        <p className="text-[11px] sm:text-xs text-muted mb-1">Capital Utilization</p>
-        <div className="flex h-2 rounded-full overflow-hidden bg-surface-2">
+        <div className="mb-1.5 flex items-center justify-between text-[0.6rem] text-muted">
+          <span>Capital utilization</span>
+          <span className="font-mono">{positionPct.toFixed(0)}% deployed</span>
+        </div>
+        <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
           <div
             className="bg-accent"
             style={{ width: `${positionPct}%` }}
@@ -587,15 +689,18 @@ function CapitalTab({ session }: { session: ReturnType<typeof usePortfolioSessio
             title={`Available: ${availablePct.toFixed(1)}%`}
           />
         </div>
-        <div className="flex items-center gap-3 sm:gap-4 mt-1 text-[10px] text-muted flex-wrap">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-accent" /> Positions
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.6rem] text-muted">
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            Positions
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-warning" /> Pending
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+            Pending
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-muted/30" /> Available
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-muted/30" />
+            Available
           </span>
         </div>
       </div>
@@ -603,25 +708,37 @@ function CapitalTab({ session }: { session: ReturnType<typeof usePortfolioSessio
   );
 }
 
-/** Decision Log tab content */
 function DecisionLogTab({ sessionId }: { sessionId: string }) {
   const { data: decisionsData, isLoading } = usePortfolioDecisions(sessionId);
   const decisions = decisionsData?.items ?? [];
 
   if (isLoading) {
-    return <p className="text-sm text-muted">Loading decisions...</p>;
+    return (
+      <div className="space-y-2" aria-hidden="true">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    );
   }
 
   if (decisions.length === 0) {
-    return <p className="text-sm text-muted">No decisions recorded yet.</p>;
+    return (
+      <EmptyState
+        icon={History}
+        title="No decisions recorded yet"
+        description="Decisions appear once this session starts evaluating markets."
+        className="py-6"
+      />
+    );
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="divide-y divide-border/60">
       {decisions.map((decision) => (
         <div
           key={decision.id}
-          className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 py-2 border-b border-border last:border-0"
+          className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-3"
         >
           <Badge
             tone={
@@ -637,14 +754,15 @@ function DecisionLogTab({ sessionId }: { sessionId: string }) {
           >
             {decision.action.charAt(0).toUpperCase() + decision.action.slice(1)}
           </Badge>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs sm:text-sm text-fg">{decision.reasoning}</p>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-xs leading-relaxed text-fg">{decision.reasoning}</p>
             {decision.skipReason && (
-              <p className="text-[11px] sm:text-xs text-muted mt-0.5">
+              <p className="mt-0.5 text-[0.65rem] text-muted">
                 Skip reason: {decision.skipReason.replace(/_/g, ' ')}
               </p>
             )}
-            <div className="flex items-center gap-2 sm:gap-3 mt-1 text-[10px] sm:text-[11px] text-muted flex-wrap">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.6rem] text-muted">
               <span>
                 {new Date(decision.createdAt).toLocaleString(undefined, {
                   month: 'short',
@@ -654,13 +772,18 @@ function DecisionLogTab({ sessionId }: { sessionId: string }) {
                 })}
               </span>
               {decision.entryEvaluation.convictionScore > 0 && (
-                <span>Conviction: {decision.entryEvaluation.convictionScore.toFixed(1)}</span>
+                <span>
+                  Conviction {decision.entryEvaluation.convictionScore.toFixed(1)}
+                </span>
               )}
               {decision.positionStateAtDecision.hasPosition && (
                 <span>
-                  Position: {decision.positionStateAtDecision.direction}
+                  Position {decision.positionStateAtDecision.direction}
                   {decision.positionStateAtDecision.unrealizedPnl != null && (
-                    <> ({decision.positionStateAtDecision.unrealizedPnl >= 0 ? '+' : ''}${decision.positionStateAtDecision.unrealizedPnl.toFixed(2)})</>
+                    <>
+                      {' '}
+                      ({formatPnl(decision.positionStateAtDecision.unrealizedPnl)})
+                    </>
                   )}
                 </span>
               )}
@@ -672,7 +795,6 @@ function DecisionLogTab({ sessionId }: { sessionId: string }) {
   );
 }
 
-/** Trade History tab content */
 function TradeHistoryTab({
   trades,
   isLoading,
@@ -681,36 +803,48 @@ function TradeHistoryTab({
   isLoading: boolean;
 }) {
   if (isLoading) {
-    return <p className="text-sm text-muted">Loading trades...</p>;
+    return (
+      <div className="space-y-2" aria-hidden="true">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
   }
 
   if (trades.length === 0) {
-    return <p className="text-sm text-muted">No trades executed yet.</p>;
+    return (
+      <EmptyState
+        icon={ListChecks}
+        title="No trades executed yet"
+        description="Trades placed by this session will show up here."
+        className="py-6"
+      />
+    );
   }
 
   return (
     <>
-      {/* Desktop table view */}
-      <div className="hidden sm:block overflow-x-auto -mx-3 sm:mx-0">
-        <table className="w-full text-sm min-w-[600px]">
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[600px] text-sm">
           <thead>
-            <tr className="border-b border-border text-muted text-xs">
-              <th className="text-left py-2 px-2 font-medium">Type</th>
-              <th className="text-left py-2 px-2 font-medium">Side</th>
-              <th className="text-right py-2 px-2 font-medium">Size</th>
-              <th className="text-right py-2 px-2 font-medium">Price</th>
-              <th className="text-right py-2 px-2 font-medium">P&L</th>
-              <th className="text-left py-2 px-2 font-medium">Status</th>
-              <th className="text-left py-2 px-2 font-medium">Time</th>
+            <tr className="border-b border-border/60 text-left text-[0.62rem] text-muted">
+              <th className="px-2 py-2 font-medium first:pl-0">Type</th>
+              <th className="px-2 py-2 font-medium">Side</th>
+              <th className="px-2 py-2 text-right font-medium">Size</th>
+              <th className="px-2 py-2 text-right font-medium">Price</th>
+              <th className="px-2 py-2 text-right font-medium">P&L</th>
+              <th className="px-2 py-2 font-medium">Status</th>
+              <th className="px-2 py-2 font-medium last:pr-0">Time</th>
             </tr>
           </thead>
           <tbody>
             {trades.map((trade) => (
               <tr
                 key={trade.id}
-                className="border-b border-border hover:bg-surface-2 transition-colors"
+                className="border-b border-border/60 transition-colors last:border-0 hover:bg-surface-2/40"
               >
-                <td className="py-2 px-2">
+                <td className="px-2 py-2.5 first:pl-0">
                   <Badge
                     tone={
                       trade.tradePurpose === 'entry'
@@ -726,31 +860,29 @@ function TradeHistoryTab({
                     {trade.tradePurpose.replace('_', ' ')}
                   </Badge>
                 </td>
-                <td className="py-2 px-2">
-                  <span
-                    className={
-                      trade.side === 'BUY' ? 'text-yes' : 'text-no'
-                    }
-                  >
+                <td className="px-2 py-2.5">
+                  <span className={trade.side === 'BUY' ? 'text-yes' : 'text-no'}>
                     {trade.side} {trade.direction}
                   </span>
                 </td>
-                <td className="py-2 px-2 text-right font-mono text-fg">
+                <td className="px-2 py-2.5 text-right font-mono text-xs text-fg">
                   {trade.size.toFixed(2)}
                 </td>
-                <td className="py-2 px-2 text-right font-mono text-fg">
+                <td className="px-2 py-2.5 text-right font-mono text-xs text-fg">
                   {(trade.fillPrice ?? trade.price).toFixed(4)}
                 </td>
-                <td className="py-2 px-2 text-right font-mono">
+                <td className="px-2 py-2.5 text-right font-mono text-xs">
                   {trade.realizedPnl != null ? (
-                    <span className={trade.realizedPnl >= 0 ? 'text-yes' : 'text-no'}>
-                      {trade.realizedPnl >= 0 ? '+' : ''}${trade.realizedPnl.toFixed(2)}
+                    <span
+                      className={trade.realizedPnl >= 0 ? 'text-yes' : 'text-no'}
+                    >
+                      {formatPnl(trade.realizedPnl)}
                     </span>
                   ) : (
                     <span className="text-muted">-</span>
                   )}
                 </td>
-                <td className="py-2 px-2">
+                <td className="px-2 py-2.5">
                   <Badge
                     tone={
                       trade.status === 'filled'
@@ -764,7 +896,7 @@ function TradeHistoryTab({
                     {trade.status}
                   </Badge>
                 </td>
-                <td className="py-2 px-2 text-xs text-muted">
+                <td className="px-2 py-2.5 text-[0.6rem] text-muted last:pr-0">
                   {new Date(trade.createdAt).toLocaleString(undefined, {
                     month: 'short',
                     day: 'numeric',
@@ -778,13 +910,9 @@ function TradeHistoryTab({
         </table>
       </div>
 
-      {/* Mobile card view */}
-      <div className="flex flex-col gap-2 sm:hidden">
+      <div className="divide-y divide-border/60 sm:hidden">
         {trades.map((trade) => (
-          <div
-            key={trade.id}
-            className="flex flex-col gap-1.5 py-2.5 border-b border-border last:border-0"
-          >
+          <div key={trade.id} className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Badge
@@ -826,17 +954,24 @@ function TradeHistoryTab({
             <div className="flex items-center justify-between text-xs text-muted">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-fg">Size: {trade.size.toFixed(2)}</span>
-                <span className="font-mono text-fg">@ {(trade.fillPrice ?? trade.price).toFixed(4)}</span>
+                <span className="font-mono text-fg">
+                  @ {(trade.fillPrice ?? trade.price).toFixed(4)}
+                </span>
               </div>
               {trade.realizedPnl != null ? (
-                <span className={cn('font-mono font-medium', trade.realizedPnl >= 0 ? 'text-yes' : 'text-no')}>
-                  {trade.realizedPnl >= 0 ? '+' : ''}${trade.realizedPnl.toFixed(2)}
+                <span
+                  className={cn(
+                    'font-mono font-medium',
+                    trade.realizedPnl >= 0 ? 'text-yes' : 'text-no'
+                  )}
+                >
+                  {formatPnl(trade.realizedPnl)}
                 </span>
               ) : (
                 <span className="text-muted">-</span>
               )}
             </div>
-            <p className="text-[10px] text-muted">
+            <p className="text-[0.6rem] text-muted">
               {new Date(trade.createdAt).toLocaleString(undefined, {
                 month: 'short',
                 day: 'numeric',
@@ -848,5 +983,23 @@ function TradeHistoryTab({
         ))}
       </div>
     </>
+  );
+}
+
+function SessionsSkeleton() {
+  return (
+    <div className="divide-y divide-border/60" aria-hidden="true">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="flex items-center gap-4 px-4 py-4 sm:px-5">
+          <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-2" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-2/3" />
+            <Skeleton className="h-3 w-1/3" />
+            <Skeleton className="h-1 w-full" />
+          </div>
+          <Skeleton className="h-6 w-16 rounded-full" />
+        </div>
+      ))}
+    </div>
   );
 }

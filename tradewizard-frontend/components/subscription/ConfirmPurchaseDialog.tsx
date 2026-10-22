@@ -3,8 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { Loader2, CheckCircle, AlertCircle, X } from 'lucide-react';
 import Portal from '@/components/Portal';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/classNames';
-import { SUCCESS_STYLES, ERROR_STYLES } from '@/constants/ui';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,51 +103,45 @@ export default function ConfirmPurchaseDialog({
   return (
     <Portal>
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
         onClick={handleBackdropClick}
         aria-hidden="true"
       >
         <div
           ref={modalRef}
-          className="bg-gray-900 rounded-2xl p-6 max-w-md w-full border border-white/10 shadow-2xl animate-modal-fade-in"
+          className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 text-fg shadow-[var(--shadow-lg)] animate-modal-fade-in"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-purchase-title"
           tabIndex={-1}
         >
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
-            <h2
-              id="confirm-purchase-title"
-              className="text-lg font-bold text-white"
-            >
+          <div className="mb-5 flex items-center justify-between">
+            <h2 id="confirm-purchase-title" className="text-lg font-bold text-fg">
               Confirm Purchase
             </h2>
             <button
               onClick={onClose}
               disabled={isLoading}
-              className="text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg p-1"
+              className="rounded-lg p-1 text-muted transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Close dialog"
             >
-              <X className="w-5 h-5" />
+              <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Success State */}
           {success && (
             <div className="space-y-4">
-              <div className={cn(SUCCESS_STYLES, 'flex items-center gap-3')}>
-                <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
-                <p className="text-green-300 font-medium text-sm">
+              <div className="flex items-center gap-3 rounded-xl border border-yes/30 bg-yes/10 p-3">
+                <CheckCircle className="h-5 w-5 shrink-0 text-yes" />
+                <p className="text-sm font-medium text-yes">
                   Successfully subscribed to <span className="font-bold">{planName}</span>!
                 </p>
               </div>
-              <button
-                onClick={onClose}
-                className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold bg-white text-black hover:bg-gray-200 active:scale-[0.98] transition-all duration-200"
-              >
+              <Button type="button" variant="primary" className="w-full" onClick={onClose}>
                 Close
-              </button>
+              </Button>
             </div>
           )}
 
@@ -155,10 +149,10 @@ export default function ConfirmPurchaseDialog({
           {!success && (
             <div className="space-y-4">
               {/* Plan Details */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+              <div className="rounded-xl border border-border bg-surface-2 p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">Plan</span>
-                  <span className="text-white font-semibold">
+                  <span className="text-sm text-muted">Plan</span>
+                  <span className="font-semibold text-fg">
                     {planName} - {planPrice} USD
                   </span>
                 </div>
@@ -166,11 +160,11 @@ export default function ConfirmPurchaseDialog({
 
               {/* Proration Info (for plan changes) */}
               {isPlanChange && (
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4">
-                  <p className="text-xs text-indigo-300 font-medium mb-1">
+                <div className="rounded-xl border border-ai/20 bg-ai/10 p-4">
+                  <p className="mb-1 text-xs font-medium text-ai">
                     Plan Change Proration
                   </p>
-                  <p className="text-sm text-gray-300">
+                  <p className="text-sm text-muted">
                     You&apos;re changing from your current plan ({currentPlanPrice} USD/mo).
                     A prorated credit for unused days will be applied to reduce the charge.
                   </p>
@@ -178,29 +172,25 @@ export default function ConfirmPurchaseDialog({
               )}
 
               {/* Balance Breakdown */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/5 space-y-3">
+              <div className="space-y-3 rounded-xl border border-border bg-surface-2 p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">
-                    Trading Wallet Balance
-                  </span>
-                  <span className="text-white font-medium">
+                  <span className="text-sm text-muted">Trading Wallet Balance</span>
+                  <span className="font-medium text-fg">
                     {currentBalance.toFixed(2)} USD
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">Plan Price</span>
-                  <span className="text-white font-medium">
+                  <span className="text-sm text-muted">Plan Price</span>
+                  <span className="font-medium text-fg">
                     −{planPrice.toFixed(2)} USD
                   </span>
                 </div>
-                <div className="border-t border-white/10 pt-3 flex items-center justify-between">
-                  <span className="text-sm text-gray-400">
-                    Remaining Balance
-                  </span>
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <span className="text-sm text-muted">Remaining Balance</span>
                   <span
                     className={cn(
                       'font-semibold',
-                      isInsufficientBalance ? 'text-red-400' : 'text-green-400'
+                      isInsufficientBalance ? 'text-no' : 'text-yes'
                     )}
                   >
                     {remainingBalance.toFixed(2)} USD
@@ -210,9 +200,9 @@ export default function ConfirmPurchaseDialog({
 
               {/* Insufficient Balance Warning */}
               {isInsufficientBalance && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-300">
+                <div className="flex items-start gap-2 rounded-xl border border-no/20 bg-no/10 p-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-no" />
+                  <p className="text-sm text-no">
                     Insufficient balance. You need{' '}
                     <span className="font-semibold">
                       {Math.abs(remainingBalance).toFixed(2)} USD
@@ -224,17 +214,17 @@ export default function ConfirmPurchaseDialog({
 
               {/* Error Message */}
               {error && (
-                <div className={cn(ERROR_STYLES, 'flex items-start gap-2 !p-3')}>
-                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-300">{error}</p>
+                <div className="flex items-start gap-2 rounded-xl border border-no/20 bg-no/10 p-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-no" />
+                  <p className="text-sm text-no">{error}</p>
                 </div>
               )}
 
               {/* Loading State */}
               {isLoading && (
-                <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4">
-                  <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0" />
-                  <p className="text-sm text-indigo-300 font-medium">
+                <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/10 p-4">
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-accent" />
+                  <p className="text-sm font-medium text-accent">
                     On-chain transfer in progress...
                   </p>
                 </div>
@@ -242,30 +232,26 @@ export default function ConfirmPurchaseDialog({
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-1">
-                <button
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="flex-1"
                   onClick={onClose}
                   disabled={isLoading}
-                  className="flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold bg-white/10 text-gray-300 hover:bg-white/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="flex-1"
                   onClick={onConfirm}
+                  loading={isLoading}
                   disabled={isLoading || isInsufficientBalance}
-                  className="flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
                   aria-label={`Confirm purchase of ${planName} plan for ${planPrice} USD`}
                 >
-                  {isLoading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
-                    </span>
-                  ) : error ? (
-                    'Retry'
-                  ) : (
-                    'Confirm'
-                  )}
-                </button>
+                  {isLoading ? 'Processing...' : error ? 'Retry' : 'Confirm'}
+                </Button>
               </div>
             </div>
           )}

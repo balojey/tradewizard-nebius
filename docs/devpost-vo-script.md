@@ -16,11 +16,11 @@ Then the league fires. Fourteen specialized agents run in parallel - microstruct
 
 Now the part most AI trading products skip. Three deterministic, non-LLM gates sit between the agents and the user.
 
-Signal fusion - weighted aggregation across all fourteen signals, scaled by historical accuracy from a closed-loop leaderboard, with a divergence penalty when agent estimates spread too far apart.
+Signal fusion - the market price is the prior, and the ensemble's deviation is deliberately shrunk toward it. Agent influence is Brier-calibrated from a closed-loop leaderboard, and a divergence penalty applies when estimates spread too far apart.
 
 Adversarial debate - a bull thesis and a bear thesis each face five cross-examination tests. Evidence. Causality. Timing. Liquidity. Tail risk. Ten tests, structured and scored.
 
-And the consensus engine, which computes a final probability and a disagreement index. If disagreement crosses thirty percent, consensus fails and the system emits no-trade. If expected value is non-positive, no-trade. These are deterministic checks the model cannot override. No-trade is not a failure mode. It's a feature.
+And the consensus engine, which uses the anchored probability and a disagreement index. If disagreement crosses thirty percent, or confidence falls below twenty percent, consensus fails and the system emits no-trade. A divergence circuit breaker blocks implausible edges instead of fading the market. If expected value is non-positive, no-trade. These are deterministic checks the model cannot override. No-trade is not a failure mode. It's a feature.
 
 For users who want execution, we built an autonomous Portfolio Manager under one principle. The agent decides. A separate executor validates and places the order.
 

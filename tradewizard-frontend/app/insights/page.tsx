@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/shell/AppShell';
-import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Expandable } from '@/components/ui/Expandable';
@@ -12,13 +12,14 @@ import { InfoHint } from '@/components/ui/InfoHint';
 import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
 import { ScrollToTop } from '@/components/ui/ScrollToTop';
 import { useCurrentPlan } from '@/hooks/useCurrentPlan';
-import { useAnalysisHistoryPaginated, useAnalysisDetail, type AnalysisResultSummary, type AnalysisResultDetail } from '@/hooks/useAnalysisResults';
+import { useAnalysisHistoryPaginated, useAnalysisDetail, type AnalysisResultSummary } from '@/hooks/useAnalysisResults';
 import { useAllAnalysisProgress, type AnalysisProgress } from '@/hooks/useAnalysisProgress';
 import { useAnalysisSubscriptions, useCancelAnalysisSubscription, type AnalysisSubscription } from '@/hooks/useAnalysisSubscriptions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAgentAccuracy } from '@/hooks/useAgentAccuracy';
 import useInfiniteScroll from '@/hooks/useInfiniteScroll';
 import { cn } from '@/utils/classNames';
+import { BarChart3, Lightbulb, Microscope, Plus, X } from 'lucide-react';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -61,16 +62,6 @@ const AGENT_ABBREVIATIONS: Record<string, string> = {
   'Risk Assessment': 'RA',
   'Event Impact': 'EI',
 };
-
-// Mock agent accuracy data (since useAgentSignals is legacy/empty)
-const MOCK_AGENT_ACCURACY = [
-  { name: 'Polling Intel', accuracy: 88 },
-  { name: 'Historical Pattern', accuracy: 82 },
-  { name: 'News Impact', accuracy: 79 },
-  { name: 'Momentum', accuracy: 76 },
-  { name: 'Sentiment', accuracy: 71 },
-  { name: 'Tail Risk', accuracy: 64 },
-];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -125,44 +116,54 @@ function RunningAnalysisCard({ progress, marketQuestion }: { progress: AnalysisP
     || (progress.marketId ? `Market ${progress.marketId.slice(0, 8)}…` : 'Analysis');
 
   return (
-    <div className="running-card-gradient rounded-[12px] p-5 mb-4">
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <span className="text-[0.9375rem] font-semibold flex items-center gap-2 min-w-0">
-          <span className="w-9 h-9 rounded-[7px] bg-surface-2 flex items-center justify-center shrink-0 overflow-hidden">
+    <div className="px-4 py-4 sm:px-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-surface-2">
             {marketMeta?.image ? (
-              <img src={marketMeta.image} alt="" className="w-full h-full object-cover" />
+              <img src={marketMeta.image} alt="" className="h-full w-full object-cover" />
             ) : (
-              <span className="text-base">🔬</span>
+              <Microscope className="h-4 w-4 text-ai" aria-hidden="true" />
             )}
           </span>
-          <span className="line-clamp-2">{displayName}</span>
-        </span>
-        <span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-ai bg-ai/15 px-2 py-1 rounded shrink-0">
-          <span className="w-2 h-2 border-[1.5px] border-ai border-t-transparent rounded-full animate-spin" />
+          <div className="min-w-0">
+            <p className="line-clamp-2 text-sm font-semibold text-fg">{displayName}</p>
+            <p className="mt-0.5 text-[0.6rem] text-muted">
+              Stage {currentStage + 1} of {progress.totalStages}
+              {elapsed > 0 ? ` · ${elapsed}s elapsed` : ''}
+            </p>
+          </div>
+        </div>
+
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-ai/30 bg-ai/10 px-2 py-1 text-[0.6rem] font-medium text-ai">
+          <span className="h-2 w-2 animate-spin rounded-full border-[1.5px] border-ai border-t-transparent" />
           Analyzing
         </span>
       </div>
 
-      {/* Mini pipeline - 11 fixed-width stage bars */}
-      <div className="flex gap-1.5 items-center flex-wrap mb-2.5">
+      <div className="mt-3 flex items-center gap-1">
         {PIPELINE_STAGES.map((_, i) => (
           <div
             key={i}
             className={cn(
-              'w-7 h-1 rounded-sm',
+              'h-1 flex-1 rounded-full',
               i < currentStage
                 ? 'bg-ai'
                 : i === currentStage
-                  ? 'bg-ai animate-[stageBlink_1s_infinite]'
+                  ? 'animate-[stageBlink_1s_infinite] bg-ai'
                   : 'bg-surface-2'
             )}
           />
         ))}
       </div>
 
-      <p className="text-[0.7rem] text-muted mt-2.5">
-        Stage {currentStage + 1} of {progress.totalStages} - {progress.stageName}
-        {elapsed > 0 && ` · ${elapsed}s elapsed`}
+      <p
+        className="mt-1.5 text-[0.6rem] text-muted"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {progress.stageName}
       </p>
     </div>
   );
@@ -276,7 +277,7 @@ function AnalysisCard({
   const activeSub = subscriptions?.find((s) => s.marketId === analysis.marketId && s.status === 'active');
 
   return (
-    <Card className="p-4 sm:p-5 mb-4">
+    <article className="px-4 py-4 sm:px-5">
       {/* Top row: market name + recommendation pill */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <Link
@@ -287,7 +288,7 @@ function AnalysisCard({
             {marketImage ? (
               <img src={marketImage} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-sm sm:text-base">📊</span>
+              <BarChart3 className="h-4 w-4 text-muted" aria-hidden="true" />
             )}
           </span>
           <span className="line-clamp-2">{analysis.marketQuestion}</span>
@@ -332,6 +333,7 @@ function AnalysisCard({
             {Math.round(analysis.confidence * 100)}%
           </span>
         </span>
+        <span className="text-muted/80">{formatTimeAgo(analysis.executedAt)}</span>
         <span className="hidden xs:inline">
           Agents: <span className="font-mono text-fg tabular-nums">{agentsUsed.length || 14}</span>
         </span>
@@ -519,7 +521,7 @@ function AnalysisCard({
           </p>
         </Expandable>
       ) : null}
-    </Card>
+    </article>
   );
 }
 
@@ -534,8 +536,8 @@ function formatAgentDisplayName(name: string): string {
 
 function AnalysisCardSkeleton() {
   return (
-    <div className="animate-pulse rounded-[12px] border border-border bg-surface p-4 sm:p-5 mb-4">
-      <div className="flex items-start justify-between gap-2 mb-3">
+    <div className="animate-pulse px-4 py-4 sm:px-5">
+      <div className="mb-3 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-surface-2 shrink-0" />
           <div className="h-4 w-32 sm:w-48 rounded bg-surface-2" />
@@ -557,160 +559,133 @@ function AnalysisCardSkeleton() {
   );
 }
 
-// ─── Sidebar Cards ──────────────────────────────────────────────────────────
+// ─── Summary & Upcoming ─────────────────────────────────────────────────────
 
-function CreditUsageCard() {
+function InsightsSummary({
+  runningCount,
+  analysisTotal,
+}: {
+  runningCount: number;
+  analysisTotal: number;
+}) {
   const { data: subscription } = useSubscription();
+  const { data: accuracyData } = useAgentAccuracy();
+  const agents = accuracyData?.agents ?? [];
+  const totalSignals = agents.reduce((sum, agent) => sum + agent.totalSignals, 0);
+  const avgAccuracy =
+    totalSignals > 0
+      ? agents.reduce((sum, agent) => sum + agent.accuracy * agent.totalSignals, 0) /
+        totalSignals
+      : null;
 
-  if (!subscription) {
-    return (
-      <Card className="p-4 sm:p-5 mb-4">
-        <h3 className="text-[0.8125rem] font-semibold mb-4">Credit Usage</h3>
-        <div className="animate-pulse space-y-3">
-          <div className="h-3 w-full rounded bg-surface-2" />
-          <div className="h-1.5 w-full rounded bg-surface-2" />
-          <div className="h-3 w-3/4 rounded bg-surface-2" />
-        </div>
-      </Card>
-    );
-  }
-
-  const { creditsRemaining, creditsMonthlyLimit, billingCycleEnd, plan } = subscription;
-  const usedThisMonth = creditsMonthlyLimit - creditsRemaining;
-  const usagePercent = plan === 'elite' ? 100 : Math.min(100, (usedThisMonth / creditsMonthlyLimit) * 100);
-  const resetDate = new Date(billingCycleEnd).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+  const creditsLabel = subscription
+    ? subscription.plan === 'elite'
+      ? '∞'
+      : `${subscription.creditsRemaining} / ${subscription.creditsMonthlyLimit}`
+    : '-';
+  const resetDate = subscription
+    ? new Date(subscription.billingCycleEnd).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    : null;
 
   return (
-    <Card className="p-4 sm:p-5 mb-4">
-      <h3 className="text-[0.8125rem] font-semibold mb-3 sm:mb-4">Credit Usage</h3>
-      <div className="space-y-2.5 sm:space-y-3">
-        <div className="flex justify-between text-[0.75rem] sm:text-[0.8rem]">
-          <span className="text-muted">Balance</span>
-          <span className="font-mono tabular-nums">
-            {plan === 'elite' ? '∞' : `${creditsRemaining} / ${creditsMonthlyLimit}`}
-          </span>
-        </div>
-        <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-accent to-ai transition-[width] duration-300"
-            style={{ width: `${usagePercent}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-[0.75rem] sm:text-[0.8rem]">
-          <span className="text-muted">Used this month</span>
-          <span className="font-mono tabular-nums">{usedThisMonth}</span>
-        </div>
-        <div className="flex justify-between text-[0.75rem] sm:text-[0.8rem]">
-          <span className="text-muted">Resets</span>
-          <span className="font-mono tabular-nums">{resetDate}</span>
-        </div>
-      </div>
-    </Card>
+    <div className="mt-5 grid grid-cols-2 divide-x divide-y divide-border/60 overflow-hidden rounded-2xl border border-border bg-surface sm:grid-cols-4 sm:divide-y-0">
+      <InsightStat
+        label="Running now"
+        value={String(runningCount)}
+        caption={runningCount > 0 ? 'live analyses' : 'nothing running'}
+        tone={runningCount > 0 ? 'ai' : 'fg'}
+      />
+      <InsightStat
+        label="Analyses"
+        value={String(analysisTotal)}
+        caption="on record"
+      />
+      <InsightStat
+        label="Credits"
+        value={creditsLabel}
+        caption={resetDate ? `resets ${resetDate}` : 'monthly balance'}
+      />
+      <InsightStat
+        label="Agent accuracy"
+        value={avgAccuracy != null ? `${Math.round(avgAccuracy)}%` : '-'}
+        caption={avgAccuracy != null ? '30-day weighted' : 'awaiting resolved calls'}
+        tone={
+          avgAccuracy == null
+            ? 'fg'
+            : avgAccuracy >= 60
+              ? 'yes'
+              : avgAccuracy < 50
+                ? 'no'
+                : 'fg'
+        }
+      />
+    </div>
   );
 }
 
-function AgentAccuracyCard() {
-  const { data, isLoading } = useAgentAccuracy();
-  const agents = data?.agents ?? [];
-
-  // Fallback to mock data only when the API returns empty (no resolved markets yet)
-  const displayAgents = agents.length > 0
-    ? agents
-    : MOCK_AGENT_ACCURACY.map((a) => ({
-        name: a.name,
-        accuracy: a.accuracy,
-        totalSignals: 0,
-        correctSignals: 0,
-        avgConfidence: 0,
-        lastUpdatedAt: '',
-      }));
-
-  const isRealData = agents.length > 0;
-
+function InsightStat({
+  label,
+  value,
+  caption,
+  tone = 'fg',
+}: {
+  label: string;
+  value: string;
+  caption: string;
+  tone?: 'fg' | 'yes' | 'no' | 'ai';
+}) {
   return (
-    <Card className="p-4 sm:p-5 mb-4">
-      <h3 className="text-[0.8125rem] font-semibold mb-3 sm:mb-4">
-        Agent Accuracy (30d)
-        {!isRealData && !isLoading && (
-          <span className="ml-1.5 text-[0.6rem] font-normal text-muted">(estimated)</span>
+    <div className="px-4 py-3.5">
+      <p className="text-[0.62rem] text-muted">{label}</p>
+      <p
+        className={cn(
+          'mt-1 font-mono text-lg font-bold tabular-nums',
+          tone === 'yes' && 'text-yes',
+          tone === 'no' && 'text-no',
+          tone === 'ai' && 'text-ai',
+          tone === 'fg' && 'text-fg'
         )}
-      </h3>
-
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="animate-pulse flex items-center gap-2 py-1.5">
-              <div className="h-3 w-20 rounded bg-surface-2 flex-1" />
-              <div className="h-1 w-12 rounded bg-surface-2" />
-              <div className="h-3 w-8 rounded bg-surface-2" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-0">
-          {displayAgents.map((agent) => (
-            <div
-              key={agent.name}
-              className="flex items-center gap-2 sm:gap-2.5 py-1.5 sm:py-2 border-b border-border/50 last:border-b-0"
-            >
-              <span className="text-[0.7rem] sm:text-[0.75rem] flex-1 truncate">{agent.name}</span>
-              <div className="w-10 sm:w-12 h-1 bg-surface-2 rounded-full overflow-hidden shrink-0">
-                <div
-                  className="h-full bg-ai rounded-full"
-                  style={{ width: `${agent.accuracy}%` }}
-                />
-              </div>
-              <span className="font-mono text-[0.7rem] sm:text-[0.75rem] font-semibold text-yes tabular-nums w-8 text-right shrink-0">
-                {Math.round(agent.accuracy)}%
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {isRealData && agents.length > 0 && (
-        <p className="text-[0.6rem] text-muted mt-2 pt-2 border-t border-border/50">
-          Based on {agents.reduce((sum, a) => sum + a.totalSignals, 0)} total signals across resolved recommendations
-        </p>
-      )}
-    </Card>
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 text-[0.55rem] text-muted">{caption}</p>
+    </div>
   );
 }
 
-function UpcomingAnalysesSection() {
+function UpcomingDeliveriesPanel() {
   const { data: subscriptions, isLoading } = useAnalysisSubscriptions();
   const { mutate: cancelSubscription, isPending: isCancelling } = useCancelAnalysisSubscription();
 
-  // Only visible on mobile/tablet (hidden on desktop where sidebar shows the same data)
-  if (isLoading) {
-    return (
-      <section className="mb-6 lg:hidden">
-        <h2 className="text-[0.75rem] text-muted uppercase tracking-wider font-semibold mb-3">
-          Upcoming Analyses
-        </h2>
-        <Card className="p-4 sm:p-5 animate-pulse">
-          <div className="h-10 rounded bg-surface-2 mb-2" />
-          <div className="h-10 rounded bg-surface-2" />
-        </Card>
-      </section>
-    );
-  }
-
-  if (!subscriptions || subscriptions.length === 0) return null;
-
   return (
-    <section className="mb-6 lg:hidden">
-      <h2 className="text-[0.75rem] text-muted uppercase tracking-wider font-semibold mb-3">
-        Upcoming Analyses
-        <span className="ml-2 text-[0.6rem] font-normal text-muted">
-          {subscriptions.length} scheduled
-        </span>
-      </h2>
-      <Card className="p-4 sm:p-5">
-        <div className="space-y-0">
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5">
+        <div>
+          <h2 className="text-sm font-semibold text-fg">Upcoming analyses</h2>
+          <p className="text-[0.6rem] text-muted">Recurring runs you have scheduled</p>
+        </div>
+        {!isLoading && subscriptions && subscriptions.length > 0 && (
+          <span className="font-mono text-[0.6rem] text-muted">
+            {subscriptions.length} scheduled
+          </span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="animate-pulse space-y-3 px-4 py-4">
+          <div className="h-10 rounded bg-surface-2" />
+          <div className="h-10 rounded bg-surface-2" />
+          <div className="h-10 rounded bg-surface-2" />
+        </div>
+      ) : !subscriptions || subscriptions.length === 0 ? (
+        <p className="px-4 py-5 text-center text-[0.65rem] leading-relaxed text-muted">
+          No recurring analyses scheduled. Set one up from any market page.
+        </p>
+      ) : (
+        <div className="divide-y divide-border/60">
           {subscriptions.map((sub) => (
             <UpcomingDeliveryRow
               key={sub.id}
@@ -720,58 +695,86 @@ function UpcomingAnalysesSection() {
             />
           ))}
         </div>
-      </Card>
+      )}
     </section>
   );
 }
 
-function UpcomingDeliveriesCard() {
-  const { data: subscriptions, isLoading } = useAnalysisSubscriptions();
-  const { mutate: cancelSubscription, isPending: isCancelling } = useCancelAnalysisSubscription();
-
-  if (isLoading) {
-    return (
-      <Card className="p-4 sm:p-5">
-        <h3 className="text-[0.8125rem] font-semibold mb-4">Upcoming Analyses</h3>
-        <div className="animate-pulse space-y-3">
-          <div className="h-10 rounded bg-surface-2" />
-          <div className="h-10 rounded bg-surface-2" />
-          <div className="h-10 rounded bg-surface-2" />
-        </div>
-      </Card>
-    );
-  }
-
-  if (!subscriptions || subscriptions.length === 0) {
-    return (
-      <Card className="p-4 sm:p-5">
-        <h3 className="text-[0.8125rem] font-semibold mb-4">Upcoming Analyses</h3>
-        <p className="text-[0.75rem] text-muted text-center py-3">
-          No recurring analyses scheduled. Set one up from any market page.
-        </p>
-      </Card>
-    );
-  }
+function AgentAccuracyPanel() {
+  const { data, isLoading } = useAgentAccuracy();
+  const agents = data?.agents ?? [];
+  const totalSignals = agents.reduce((sum, agent) => sum + agent.totalSignals, 0);
 
   return (
-    <Card className="p-4 sm:p-5">
-      <h3 className="text-[0.8125rem] font-semibold mb-3 sm:mb-4">
-        Upcoming Analyses
-        <span className="ml-2 text-[0.65rem] font-normal text-muted">
-          {subscriptions.length} active
-        </span>
-      </h3>
-      <div className="space-y-0">
-        {subscriptions.map((sub) => (
-          <UpcomingDeliveryRow
-            key={sub.id}
-            subscription={sub}
-            onCancel={() => cancelSubscription(sub.id)}
-            isCancelling={isCancelling}
-          />
-        ))}
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5">
+        <div>
+          <h2 className="text-sm font-semibold text-fg">Agent accuracy</h2>
+          <p className="text-[0.6rem] text-muted">30-day leaderboard</p>
+        </div>
+        {totalSignals > 0 && (
+          <span className="font-mono text-[0.6rem] text-muted">
+            {totalSignals} signals
+          </span>
+        )}
       </div>
-    </Card>
+
+      {isLoading ? (
+        <div className="animate-pulse space-y-3 px-4 py-4">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="space-y-1.5">
+              <div className="h-3 w-2/3 rounded bg-surface-2" />
+              <div className="h-1 rounded-full bg-surface-2" />
+            </div>
+          ))}
+        </div>
+      ) : agents.length === 0 ? (
+        <p className="px-4 py-5 text-center text-[0.65rem] leading-relaxed text-muted">
+          Accuracy appears after recommendations resolve against the market.
+        </p>
+      ) : (
+        <div className="divide-y divide-border/60">
+          {agents.slice(0, 6).map((agent, index) => {
+            const barColor =
+              agent.accuracy >= 70
+                ? 'bg-yes'
+                : agent.accuracy >= 50
+                  ? 'bg-ai'
+                  : 'bg-no';
+            const textColor =
+              agent.accuracy >= 70
+                ? 'text-yes'
+                : agent.accuracy >= 50
+                  ? 'text-fg'
+                  : 'text-no';
+
+            return (
+              <div key={agent.name} className="flex items-center gap-2.5 px-4 py-2.5">
+                <span className="w-4 shrink-0 text-right font-mono text-[0.55rem] text-muted">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[0.72rem] text-fg">
+                      {formatAgentDisplayName(agent.name)}
+                    </span>
+                    <span className={cn('shrink-0 font-mono text-[0.65rem] font-semibold', textColor)}>
+                      {Math.round(agent.accuracy)}%
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className={cn('h-full rounded-full', barColor)}
+                      style={{ width: `${Math.min(agent.accuracy, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -826,7 +829,7 @@ function UpcomingDeliveryRow({
     || `Market ${subscription.marketId.slice(0, 8)}…`;
 
   return (
-    <div className="flex items-center gap-2 py-2.5 border-b border-border/50 last:border-b-0 group">
+    <div className="group flex items-center gap-2 px-4 py-3 sm:px-5">
       <div className="flex-1 min-w-0">
         <Link
           href={marketHref}
@@ -849,11 +852,11 @@ function UpcomingDeliveryRow({
           type="button"
           onClick={onCancel}
           disabled={isCancelling}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-[0.6rem] text-muted hover:text-no px-1.5 py-0.5 rounded"
+          className="rounded px-1.5 py-0.5 text-[0.6rem] text-muted opacity-60 transition-opacity hover:text-no group-hover:opacity-100"
           title="Cancel subscription"
           aria-label={`Cancel recurring analysis for ${displayName}`}
         >
-          ✕
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -921,133 +924,168 @@ export default function InsightsPage() {
       return true;
     });
   })();
+  const analysisTotal = data?.pages[0]?.totalCount ?? analyses.length;
 
   return (
     <AppShell>
-      {/* Page Header */}
-      <div>
-        <div className="flex items-center justify-between mb-5 sm:mb-6 gap-3">
-          <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">
-            AI Insights
-          </h1>
-          <Link href="/markets">
-            <Button variant="ai" size="md" className="shrink-0 text-sm sm:text-base">
-              <span className="hidden sm:inline">+ New Analysis</span>
-              <span className="sm:hidden">+ Analyze</span>
-            </Button>
-          </Link>
-        </div>
+      <div className="w-full">
+        <header className="border-b border-border pb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="font-display text-[clamp(1.9rem,3.8vw,2.75rem)] font-bold leading-none tracking-[-0.04em] text-fg">
+                Insights
+              </h1>
+              <p className="mt-2 text-sm text-muted">
+                Every AI run, the signals behind it, and what is queued next.
+              </p>
+            </div>
 
-      {/* Upgrade Prompt */}
-      {isFree && (
-        <div className="mb-5 sm:mb-6">
-          <UpgradePrompt
-            variant="free-to-starter"
-            message={
-              <>
-                You&apos;re on the <strong>Free plan</strong> - one-time analysis
-                only. Upgrade to unlock recurring analysis and full debate access.
-              </>
-            }
-          />
-        </div>
-      )}
-      {plan === 'starter' && (
-        <div className="mb-5 sm:mb-6">
-          <UpgradePrompt
-            variant="starter-to-pro"
-            message={
-              <>
-                Unlock <strong>sub-daily intervals</strong> (1h, 4h, 12h) and
-                priority queue with Pro.
-              </>
-            }
-          />
-        </div>
-      )}
+            <Link href="/markets" className="w-fit">
+              <Button variant="ai" size="md" className="h-10">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                New analysis
+              </Button>
+            </Link>
+          </div>
+        </header>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px] gap-5 sm:gap-6 items-start">
-        {/* Left column */}
-        <div>
-          {/* Recent analyses */}
-          <section>
-            <h2 className="text-[0.75rem] text-muted uppercase tracking-wider font-semibold mb-3">
-              Recent Analyses
-            </h2>
+        {isFree && (
+          <div className="mt-5">
+            <UpgradePrompt
+              variant="free-to-starter"
+              message={
+                <>
+                  You&apos;re on the <strong>Free plan</strong> - one-time analysis
+                  only. Upgrade to unlock recurring analysis and full debate access.
+                </>
+              }
+            />
+          </div>
+        )}
+        {plan === 'starter' && (
+          <div className="mt-5">
+            <UpgradePrompt
+              variant="starter-to-pro"
+              message={
+                <>
+                  Unlock <strong>sub-daily intervals</strong> (1h, 4h, 12h) and
+                  priority queue with Pro.
+                </>
+              }
+            />
+          </div>
+        )}
 
-            {/* Running analyses - shown at the top of the feed */}
-            {runningAnalyses.length > 0 && runningAnalyses.map((progress) => (
-              <RunningAnalysisCard
-                key={progress.analysisId || progress.marketId}
-                progress={progress}
-              />
-            ))}
+        <InsightsSummary
+          runningCount={runningAnalyses.length}
+          analysisTotal={analysisTotal}
+        />
 
-            {/* Upcoming analyses (mobile-visible - sidebar hidden on mobile) */}
-            <UpcomingAnalysesSection />
+        <div className="mt-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
+          <aside className="contents min-w-0 lg:sticky lg:top-[72px] lg:col-start-2 lg:row-start-1 lg:block lg:self-start lg:space-y-4">
+            <div className="order-1 lg:order-none">
+              <UpcomingDeliveriesPanel />
+            </div>
+            <div className="order-3 lg:order-none">
+              <AgentAccuracyPanel />
+            </div>
+          </aside>
 
-            {isLoading ? (
-              <>
-                <AnalysisCardSkeleton />
-                <AnalysisCardSkeleton />
-                <AnalysisCardSkeleton />
-              </>
-            ) : error ? (
-              <Card className="p-8 text-center">
-                <p className="text-muted mb-4">
-                  {error instanceof Error
-                    ? error.message
-                    : 'Failed to load analyses'}
-                </p>
-                <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
-                  Retry
-                </Button>
-              </Card>
-            ) : analyses.length === 0 ? (
-              <Card className="p-8 text-center">
-                <p className="text-muted mb-2">No analyses yet</p>
-                <p className="text-[0.75rem] text-muted">
-                  Run your first analysis from any market page to see results here.
-                </p>
-              </Card>
-            ) : (
-              <>
-                {analyses.map((analysis) => (
-                  <AnalysisCard
-                    key={analysis.analysisId}
-                    analysis={analysis}
-                  />
-                ))}
-
-                {/* Infinite scroll trigger */}
-                {hasNextPage && (
-                  <div ref={targetRef} className="py-4 text-center">
-                    {isFetchingNextPage && (
-                      <span className="text-[0.75rem] text-muted">
-                        Loading more…
-                      </span>
-                    )}
+          <div className="order-2 min-w-0 space-y-4 lg:col-start-1 lg:row-start-1 lg:order-none">
+            {runningAnalyses.length > 0 && (
+              <section className="overflow-hidden rounded-2xl border border-ai/25 bg-surface">
+                <div className="flex items-center justify-between gap-3 border-b border-ai/15 bg-ai/[0.04] px-4 py-3.5 sm:px-5">
+                  <div>
+                    <h2 className="text-sm font-semibold text-fg">Live now</h2>
+                    <p className="text-[0.6rem] text-muted">
+                      Running the 14-agent pipeline
+                    </p>
                   </div>
-                )}
-              </>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-ai/30 bg-ai/10 px-2 py-0.5 font-mono text-[0.6rem] text-ai">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ai" />
+                    {runningAnalyses.length} running
+                  </span>
+                </div>
+                <div className="divide-y divide-border/60">
+                  {runningAnalyses.map((progress) => (
+                    <RunningAnalysisCard
+                      key={progress.analysisId || progress.marketId}
+                      progress={progress}
+                    />
+                  ))}
+                </div>
+              </section>
             )}
-          </section>
+
+            <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+              <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5 sm:px-5">
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">Recent analyses</h2>
+                  <p className="text-[0.6rem] text-muted">
+                    {analysisTotal} on record
+                  </p>
+                </div>
+                <span className="hidden text-[0.6rem] text-muted sm:inline">
+                  Newest first
+                </span>
+              </div>
+
+              {isLoading ? (
+                <div className="divide-y divide-border/60">
+                  <AnalysisCardSkeleton />
+                  <AnalysisCardSkeleton />
+                  <AnalysisCardSkeleton />
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+                  <p className="text-sm text-muted">
+                    {error instanceof Error ? error.message : 'Failed to load analyses'}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => window.location.reload()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : analyses.length === 0 ? (
+                <EmptyState
+                  icon={Lightbulb}
+                  title="No analyses yet"
+                  description="Run your first analysis from any market page to see results, signals, and reasoning here."
+                  action={
+                    <Link
+                      href="/markets"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-fg transition-colors hover:border-border-strong hover:bg-surface-2"
+                    >
+                      Explore markets
+                    </Link>
+                  }
+                />
+              ) : (
+                <>
+                  <div className="divide-y divide-border/60">
+                    {analyses.map((analysis) => (
+                      <AnalysisCard key={analysis.analysisId} analysis={analysis} />
+                    ))}
+                  </div>
+
+                  {hasNextPage && (
+                    <div
+                      ref={targetRef}
+                      className="border-t border-border/60 py-4 text-center"
+                    >
+                      {isFetchingNextPage && (
+                        <span className="text-[0.7rem] text-muted">Loading more…</span>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          </div>
         </div>
-
-        {/* Right sidebar - sticky on desktop, hidden on mobile/tablet */}
-        <aside className="hidden lg:block lg:sticky lg:top-[72px] space-y-0">
-          <CreditUsageCard />
-          <AgentAccuracyCard />
-          <UpcomingDeliveriesCard />
-        </aside>
-      </div>
-
-      {/* Mobile credit & schedule summary - visible only below lg */}
-      <div className="lg:hidden mt-6 space-y-4">
-        <CreditUsageCard />
-        <AgentAccuracyCard />
-      </div>
       </div>
       <ScrollToTop />
     </AppShell>

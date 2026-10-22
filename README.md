@@ -33,6 +33,7 @@ See [docs/nebius-token-factory.md](docs/nebius-token-factory.md) for the integra
 | AI inference | Analysis and portfolio reasoning on Nebius Token Factory | NVIDIA Nemotron 3 Super + open models, Strands SDK, OpenAI-compatible API |
 | [infra/](infra/README.md) | Serverless deployment substrate: CDK, Lambda, Aurora, DynamoDB | TypeScript, AWS CDK, Lambda, RDS, DynamoDB |
 | [tradewizard-frontend/](tradewizard-frontend/README.md) | Web UI with Cognito auth, real-time delivery, subscription management | Next.js 16, React 19, Tailwind CSS 4 |
+| [remotion/](remotion/) | Product demo video compositions | Remotion, React |
 
 ## Architecture
 
@@ -70,10 +71,10 @@ The division of responsibility is deliberate. Nebius runs inference. The determi
 3. **Web Research** - Autonomous research via NewsData.io and Serper tools on Nemotron 3 Super
 4. **Agent Selection** - All 14 agents activated for every market (no conditional filtering)
 5. **Parallel Intelligence Agents** - 14 agents execute in parallel through Nebius Token Factory
-6. **Signal Fusion** (deterministic) - Weighted aggregation with conflict detection
+6. **Signal Fusion** (deterministic) - Market-anchored log-odds aggregation with conservative shrinkage, Brier-calibrated agent weights, and conflict detection
 7. **Thesis Construction** - Competing bull and bear theses
 8. **Cross-Examination** - 5 adversarial tests on both theses
-9. **Consensus Engine** (deterministic) - Weighted probability, fails if disagreement > 30%
+9. **Consensus Engine** (deterministic) - Uses the anchored fused probability; fails on disagreement > 30% or confidence < 20%
 10. **Risk Philosophy Agents** - Aggressive, conservative, neutral position sizing
 11. **Recommendation Generation** - LONG_YES, LONG_NO, or NO_TRADE with entry/exit zones
 
@@ -101,11 +102,11 @@ The division of responsibility is deliberate. Nebius runs inference. The determi
 - Real-time prepend from WebSocket
 
 ### Subscription Management
-- Plan comparison (Free, Starter 19 USDC.e, Pro 49 USDC.e, Elite 149 USDC.e)
-- On-chain USDC.e payments from Trading Wallet (Safe) on Polygon
+- Plan comparison (Free, Starter $19, Pro $49, Elite $149 in pUSD)
+- On-chain pUSD (Polymarket USD) payments from Trading Wallet (Safe) on Polygon, with legacy USDC.e read compatibility
 - Auto-renewal via ERC-20 allowance (approve/revoke from UI)
 - Manual renewal flow for users without allowance set
-- Credit pack purchases (20 for 9 USDC.e, 50 for 19 USDC.e)
+- Credit pack purchases in pUSD
 - Subscription cancellation with period-end handling
 - Payment history with on-chain transaction links
 - Credit balance in header with optimistic updates
@@ -123,7 +124,7 @@ The division of responsibility is deliberate. Nebius runs inference. The determi
 | Node.js 18+ | All components |
 | Nebius Token Factory API key | AI inference |
 | AWS account | Serverless deployment substrate |
-| Platform Wallet (Polygon) | USDC.e payment receiving + renewal transferFrom |
+| Platform Wallet (Polygon) | pUSD payment receiving + renewal transferFrom; legacy USDC.e read compatibility |
 | Amazon Cognito User Pool | Authentication |
 
 ## Getting Started
@@ -203,6 +204,7 @@ NEXT_PUBLIC_WS_URL=wss://your-ws-id.execute-api.us-east-1.amazonaws.com/dev
 
 # Wallet Payments
 NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS=0x...
+# Legacy USDC.e address; pUSD is canonical collateral in code.
 NEXT_PUBLIC_USDC_CONTRACT_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
 
 # Polymarket
@@ -219,6 +221,7 @@ ENVIRONMENT=dev
 
 # Wallet (stored in Secrets Manager via deploy.sh)
 PLATFORM_WALLET_ADDRESS=0x...
+# Legacy USDC.e address retained for read compatibility; pUSD is canonical.
 USDC_CONTRACT_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
 POLYGON_RPC_URL=https://polygon-rpc.com
 SAFE_FACTORY_ADDRESS=0x...
@@ -246,7 +249,7 @@ npm run lint    # Lint check
 
 ## Subscription Plans
 
-| Plan | Price (USDC.e/mo) | Credits/Month | Intervals | Channels |
+| Plan | Price (pUSD/mo) | Credits/Month | Intervals | Channels |
 |------|-------------------|---------------|-----------|----------|
 | Free | 0 | 20 | One-time only | In-app |
 | Starter | 19 | 100 | One-time, 1 day | In-app, email, push |
@@ -257,10 +260,10 @@ Credit packs: 20 credits for $4.99, 45 credits for $9.99, 75 credits for $14.99.
 
 ### Payment Model
 
-Payments are made via on-chain USDC.e transfers on Polygon:
-- **Frontend** initiates transfers from the user's Trading Wallet (Safe) via `relayClient.execute()`
-- **Backend** verifies completed on-chain transactions (never initiates transfers from user wallets)
-- **Auto-renewal** uses ERC-20 `transferFrom` with pre-approved allowance
+Payments are made on-chain in pUSD (Polymarket USD) on Polygon, with legacy USDC.e read compatibility:
+- **Frontend** prefers a pUSD transfer from the user's Trading Wallet (Safe) and falls back to the legacy USDC.e path during the migration window
+- **Backend** verifies completed on-chain transactions (never initiates transfers from user wallets) and accepts both pUSD and legacy USDC.e
+- **Auto-renewal** uses ERC-20 `transferFrom` with a pre-approved allowance
 - **Grace period** (3 days) if renewal fails, with retry every 24h and user notifications
 
 ## Project Structure
@@ -277,6 +280,7 @@ tradewizard/
 │   ├── hooks/             # Custom hooks (useAuth, useWebSocket, usePortfolio*, etc.)
 │   ├── lib/               # Utilities (cognito-auth, api-client, websocket-client)
 │   └── providers/         # Context providers (Auth, Wallet, Query, WebSocket, Trading)
+├── remotion/               # Product demo video compositions
 ├── docs/                   # Product and technical documentation
 └── .kiro/                  # AI assistant configuration
 ```

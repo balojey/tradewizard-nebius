@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, type KeyboardEvent } from "react";
+import { Lock } from "lucide-react";
 import { cn } from "@/utils/classNames";
 
 export interface TabsProps<T extends string> {
@@ -70,8 +71,8 @@ export function Tabs<T extends string>({
             >
               {tab.label}
               {isLocked && (
-                <span className="ml-1.5 text-xs text-muted" aria-label={tab.lockReason}>
-                  🔒
+                <span className="ml-1.5 inline-flex align-middle" aria-label={tab.lockReason}>
+                  <Lock className="h-3 w-3 text-muted" aria-hidden="true" />
                 </span>
               )}
               {isActive && (

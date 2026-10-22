@@ -10,20 +10,36 @@ import { Card } from '@/components/ui/Card';
 import { Tabs } from '@/components/ui/Tabs';
 import { Expandable } from '@/components/ui/Expandable';
 import { InfoHint } from '@/components/ui/InfoHint';
-import { ProbabilityBar } from '@/components/ui/ProbabilityBar';
-import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
 import { ScrollToTop } from '@/components/ui/ScrollToTop';
 import { useCurrentPlan } from '@/hooks/useCurrentPlan';
+import { usePersonaSettings } from '@/hooks/usePersonaSettings';
 import usePriceHistory, { type TimeRange, type PriceHistoryPoint } from '@/hooks/usePriceHistory';
 import useOrderBook from '@/hooks/useOrderBook';
-import { useMarketAnalysis } from '@/hooks/useMarketAnalysis';
+import { useMarketAnalysis, type MarketAnalysisResult } from '@/hooks/useMarketAnalysis';
 import { useMarketAnalysisHistory } from '@/hooks/useMarketAnalysisHistory';
 import { useAnalysisDetail } from '@/hooks/useAnalysisResults';
-import { useMarketTradePerformance } from '@/hooks/useMarketTradePerformance';
-import { useAgentAccuracy, type AgentAccuracyItem } from '@/hooks/useAgentAccuracy';
+import { useMarketTradePerformance, type TradeOutcome } from '@/hooks/useMarketTradePerformance';
+import { useAgentAccuracy } from '@/hooks/useAgentAccuracy';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/utils/classNames';
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  Bot,
+  Check,
+  ChevronRight,
+  ExternalLink,
+  Flame,
+  Scale,
+  Shield,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import type { PolymarketMarket } from '@/hooks/useMarkets';
 
 // Placeholder imports for components created in tasks 6.2–6.5
@@ -46,7 +62,7 @@ function getYesProbability(market: PolymarketMarket): number {
     try {
       const prices = JSON.parse(market.outcomePrices);
       if (prices[0]) return Math.round(parseFloat(prices[0]) * 100);
-    } catch {}
+    } catch { }
   }
   return 50;
 }
@@ -82,124 +98,460 @@ const TIME_RANGE_MAP: Record<string, TimeRange> = {
   ALL: '30D',
 };
 
-// ─── Breadcrumb ─────────────────────────────────────────────────────────────
+// ─── Market Masthead ────────────────────────────────────────────────────────
 
-function Breadcrumb({ marketTitle }: { marketTitle: string }) {
-  return (
-    <nav aria-label="Breadcrumb" className="mb-3 sm:mb-4">
-      <ol className="flex items-center gap-1.5 text-xs sm:text-sm text-muted">
-        <li>
-          <Link href="/markets" className="hover:text-fg transition-colors">
-            Markets
-          </Link>
-        </li>
-        <li aria-hidden="true">
-          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </li>
-        <li>
-          <span className="text-fg font-medium truncate max-w-[200px] sm:max-w-[300px] md:max-w-[400px] inline-block align-bottom">
-            {marketTitle}
-          </span>
-        </li>
-      </ol>
-    </nav>
-  );
-}
-
-// ─── Market Header ──────────────────────────────────────────────────────────
-
-function MarketHeader({ market, recommendation }: { market: PolymarketMarket; recommendation?: 'LONG_YES' | 'LONG_NO' | 'NO_TRADE' | null }) {
-  const yesCents = getYesProbability(market);
+function ProbabilityRail({
+  yesCents,
+  aiCents,
+  isClosed,
+}: {
+  yesCents: number;
+  aiCents?: number | null;
+  isClosed: boolean;
+}) {
   const noCents = 100 - yesCents;
-  const isNo = recommendation === 'LONG_NO';
 
   return (
-    <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 mb-4 sm:mb-6">
-      {/* Market Image */}
-      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl bg-surface-2 flex items-center justify-center shrink-0 overflow-hidden border border-border relative">
-        {market.image ? (
-          <Image
-            src={market.image}
-            alt=""
-            fill
-            className="object-cover"
-            sizes="(max-width: 640px) 48px, 64px"
-            unoptimized
-          />
-        ) : market.icon ? (
-          <span className="text-xl sm:text-2xl">{market.icon}</span>
-        ) : (
-          <span className="text-xl sm:text-2xl opacity-50">📊</span>
-        )}
+    <div>
+      <div className="flex items-end justify-between gap-4">
+        <span className="text-xs font-medium text-fg">Market probability</span>
+        <span className="font-mono text-[0.65rem] text-muted">
+          {isClosed ? 'Final' : 'Live'} · {yesCents}% YES
+        </span>
       </div>
 
-      {/* Title + Stats */}
-      <div className="flex-1 min-w-0">
-        <h1 className="font-display text-lg sm:text-xl md:text-2xl font-bold leading-tight mb-1.5 sm:mb-2">
-          {market.question}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted">
-          {market.eventTitle && (
-            <span className="inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden="true" />
-              <span className="truncate max-w-[150px] sm:max-w-none">{market.eventTitle}</span>
+      <div className="relative mt-2.5 pt-6">
+        {aiCents != null && (
+          <div
+            className="absolute top-0 z-10 flex -translate-x-1/2 flex-col items-center"
+            style={{ left: `${Math.min(97, Math.max(3, aiCents))}%` }}
+          >
+            <span className="whitespace-nowrap font-mono text-[0.62rem] font-medium text-ai">
+              AI fair {Math.round(aiCents)}¢
             </span>
-          )}
-          {market.volume && (
-            <span>{formatVolume(market.volume)} vol</span>
-          )}
-          {(market.endDateIso || market.endDate) && (
-            <span className="hidden xs:inline">Ends {formatEndDate(market.endDateIso || market.endDate)}</span>
-          )}
-          {market.liquidity && (
-            <span className="hidden sm:inline">{formatVolume(market.liquidity)} liquidity</span>
-          )}
+            <span className="mt-1 h-3 w-px bg-ai" />
+          </div>
+        )}
+
+        <div className="relative flex h-2 overflow-hidden rounded-full bg-no/25">
+          <div
+            className="h-full bg-yes transition-[width] duration-500"
+            style={{ width: `${yesCents}%` }}
+          />
+          <div className="h-full flex-1 bg-no/45" />
         </div>
 
-        {/* Probability summary */}
-        <div className="flex items-center gap-3 sm:gap-4 mt-2.5 sm:mt-3">
-          <ProbabilityBar cents={isNo ? noCents : yesCents} variant="thick" className="flex-1 max-w-[160px] sm:max-w-[200px]" />
-          <div className="flex items-center gap-2 sm:gap-3">
-            {isNo ? (
-              <>
-                <span className="font-mono text-base sm:text-lg font-bold text-no tabular-nums">
-                  No {noCents}¢
-                </span>
-                <span className="font-mono text-base sm:text-lg font-bold text-yes tabular-nums">
-                  Yes {yesCents}¢
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="font-mono text-base sm:text-lg font-bold text-yes tabular-nums">
-                  Yes {yesCents}¢
-                </span>
-                <span className="font-mono text-base sm:text-lg font-bold text-no tabular-nums">
-                  No {noCents}¢
-                </span>
-              </>
-            )}
-          </div>
+        <div className="mt-1.5 flex justify-between font-mono text-[0.6rem] text-muted/60">
+          <span>0</span>
+          <span>25</span>
+          <span>50</span>
+          <span>75</span>
+          <span>100</span>
         </div>
+      </div>
+
+      <div className="sr-only" aria-live="polite">
+        YES {yesCents} cents, NO {noCents} cents
+        {aiCents != null ? `, AI fair value ${Math.round(aiCents)} cents` : ''}
       </div>
     </div>
   );
 }
 
-// ─── Chart Panel ────────────────────────────────────────────────────────────
+function QuoteTile({
+  side,
+  cents,
+  picked,
+}: {
+  side: 'yes' | 'no';
+  cents: number;
+  picked: boolean;
+}) {
+  const isYes = side === 'yes';
+
+  return (
+    <div
+      className={cn(
+        'relative flex min-w-0 flex-1 flex-col justify-between px-4 py-3.5 sm:px-5 sm:py-4 lg:min-w-[148px]',
+        isYes ? 'bg-yes/[0.06]' : 'bg-no/[0.04]'
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[0.7rem] font-medium text-muted">
+          {isYes ? 'YES' : 'NO'}
+        </span>
+        {picked && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-ai/30 bg-ai/10 px-1.5 py-0.5 text-[0.55rem] font-medium text-ai">
+            <span className="h-1 w-1 rounded-full bg-ai" aria-hidden="true" />
+            AI pick
+          </span>
+        )}
+      </div>
+      <div className="mt-3 flex items-baseline gap-0.5">
+        <span
+          className={cn(
+            'font-mono text-[2.35rem] font-bold leading-none tracking-[-0.04em] tabular-nums sm:text-[2.75rem]',
+            isYes ? 'text-yes' : 'text-no'
+          )}
+        >
+          {cents}
+        </span>
+        <span
+          className={cn(
+            'text-base font-semibold opacity-60',
+            isYes ? 'text-yes' : 'text-no'
+          )}
+        >
+          ¢
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MarketMasthead({
+  market,
+  analysis,
+}: {
+  market: PolymarketMarket;
+  analysis: MarketAnalysisResult | null | undefined;
+}) {
+  const yesCents = getYesProbability(market);
+  const noCents = 100 - yesCents;
+  const isClosed = market.closed === true;
+  const action = analysis?.action;
+  const recLabel =
+    action === 'LONG_YES' ? 'BUY YES' : action === 'LONG_NO' ? 'BUY NO' : 'NO TRADE';
+  const consensus = analysis?.metadata?.consensusProbability;
+  const rawEdge = analysis?.metadata?.edge ?? 0;
+  const displayEdge = action === 'LONG_NO' ? -rawEdge : rawEdge;
+  const aiCents =
+    consensus != null && consensus > 0 ? Math.round(consensus * 100) : null;
+
+  const coverImage =
+    market.image ||
+    (market.icon && /^https?:\/\//.test(market.icon) ? market.icon : null);
+  const coverEmoji = !coverImage && market.icon ? market.icon : null;
+
+  const facts = [
+    { label: '24h volume', value: formatVolume(market.volume24hr ?? market.volume) },
+    { label: 'Liquidity', value: formatVolume(market.liquidity) },
+    {
+      label: 'Ends',
+      value: formatEndDate(market.endDateIso || market.endDate),
+    },
+    { label: 'Source', value: 'Polymarket' },
+  ].filter((fact) => fact.value);
+
+  return (
+    <header className="relative border-b border-border pb-7 sm:pb-9">
+      <nav
+        aria-label="Breadcrumb"
+        className="flex items-center gap-1.5 text-xs text-muted"
+      >
+        <Link href="/markets" className="transition-colors hover:text-fg">
+          Markets
+        </Link>
+        <ChevronRight className="h-3 w-3" aria-hidden="true" />
+        <span className="max-w-[240px] truncate sm:max-w-[420px]">
+          {market.eventTitle || market.question}
+        </span>
+      </nav>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-10">
+        <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-border bg-surface-2 sm:h-[72px] sm:w-[72px]">
+            {coverImage ? (
+              <Image
+                src={coverImage}
+                alt=""
+                fill
+                className="object-cover"
+                sizes="(max-width: 640px) 56px, 72px"
+                unoptimized
+              />
+            ) : coverEmoji ? (
+              <span className="flex h-full items-center justify-center text-2xl">
+                {coverEmoji}
+              </span>
+            ) : (
+              <span className="flex h-full items-center justify-center">
+                <BarChart3 className="h-6 w-6 text-muted/60" aria-hidden="true" />
+              </span>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.65rem] font-medium',
+                  isClosed
+                    ? 'border-border bg-surface-2 text-muted'
+                    : 'border-yes/25 bg-yes/10 text-yes'
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    isClosed ? 'bg-muted' : 'animate-pulse bg-yes'
+                  )}
+                  aria-hidden="true"
+                />
+                {isClosed ? 'Closed' : 'Live'}
+              </span>
+
+              {analysis && (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.65rem] font-medium',
+                    action === 'LONG_YES' && 'border-yes/25 bg-yes/[0.06] text-yes',
+                    action === 'LONG_NO' && 'border-no/25 bg-no/[0.06] text-no',
+                    action === 'NO_TRADE' && 'border-border bg-surface-2 text-muted'
+                  )}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-ai" aria-hidden="true" />
+                  AI read {recLabel.toLowerCase()}
+                  {displayEdge !== 0 && (
+                    <span className="font-mono opacity-80">
+                      {displayEdge > 0 ? '+' : ''}
+                      {(displayEdge * 100).toFixed(1)}¢
+                    </span>
+                  )}
+                </span>
+              )}
+
+              <span className="text-xs text-muted">
+                {market.eventTitle ? `${market.eventTitle}` : 'Prediction market'}
+              </span>
+            </div>
+
+            <h1 className="mt-4 max-w-[24ch] font-display text-[clamp(1.9rem,4.2vw,3.15rem)] font-bold leading-[1.04] tracking-[-0.04em] text-fg">
+              {market.question}
+            </h1>
+          </div>
+        </div>
+
+        <div className="flex w-full overflow-hidden rounded-2xl border border-border bg-surface/40 lg:w-auto">
+          <QuoteTile side="yes" cents={yesCents} picked={action === 'LONG_YES'} />
+          <div className="w-px bg-border" aria-hidden="true" />
+          <QuoteTile side="no" cents={noCents} picked={action === 'LONG_NO'} />
+        </div>
+      </div>
+
+      <div className="mt-7 max-w-3xl">
+        <ProbabilityRail yesCents={yesCents} aiCents={aiCents} isClosed={isClosed} />
+      </div>
+
+      {facts.length > 0 && (
+        <dl className="mt-6 flex flex-wrap items-center gap-y-2 text-xs">
+          {facts.map((fact) => (
+            <div
+              key={fact.label}
+              className="flex items-baseline gap-2 border-l border-border px-3 first:border-l-0 first:pl-0"
+            >
+              <dt className="text-muted">{fact.label}</dt>
+              <dd className="font-mono text-fg">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+    </header>
+  );
+}
+
+// ─── Market Details ─────────────────────────────────────────────────────────
+
+function MarketDetails({ market }: { market: PolymarketMarket }) {
+  const rows = [
+    market.eventTitle && ['Event', market.eventTitle],
+    (market.endDateIso || market.endDate) && [
+      'Ends',
+      formatEndDate(market.endDateIso || market.endDate),
+    ],
+    market.resolutionSource && ['Resolution', market.resolutionSource],
+  ].filter(Boolean) as [string, string][];
+
+  if (rows.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface/60 p-4 sm:p-5">
+      <h2 className="text-sm font-semibold text-fg">Market details</h2>
+      <dl className="mt-2 divide-y divide-border/60">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-start justify-between gap-4 py-2.5">
+            <dt className="shrink-0 text-xs text-muted">{label}</dt>
+            <dd
+              className="min-w-0 break-words text-right text-xs leading-relaxed text-fg"
+              title={value}
+            >
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <a
+        href={`https://polymarket.com/market/${market.slug}`}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-accent transition-colors hover:text-fg"
+      >
+        View on Polymarket
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+      </a>
+    </section>
+  );
+}
+
+// ─── Portfolio Manager Promo ────────────────────────────────────────────────
+
+function PortfolioManagerTeaser() {
+  const { data: personaSettings, isLoading: isPersonaLoading } = usePersonaSettings();
+  const personaName =
+    personaSettings?.persona?.name ??
+    personaSettings?.description?.name ??
+    'your persona';
+  const personaRisk =
+    personaSettings?.persona?.riskLevel ??
+    personaSettings?.description?.riskLevel ??
+    null;
+  const personaTagline =
+    personaSettings?.description?.tagline ??
+    personaSettings?.description?.entryPhilosophy ??
+    'Follows your selected entry, sizing, monitoring, and exit rules on this market.';
+  const riskTone =
+    personaRisk === 'aggressive'
+      ? 'border-no/30 bg-no/10 text-no'
+      : personaRisk === 'conservative'
+        ? 'border-yes/30 bg-yes/10 text-yes'
+        : 'border-warning/30 bg-warning/10 text-warning';
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-dashed border-accent/35 bg-surface">
+      <div
+        className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-accent via-accent/50 to-transparent"
+        aria-hidden="true"
+      />
+      <div className="flex items-center gap-2.5 border-b border-dashed border-accent/15 px-4 py-3.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white shadow-[0_6px_18px_-8px_oklch(62%_0.20_260_/_0.8)]">
+          <Bot className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-fg">Autopilot</h2>
+            <span className="rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[0.55rem] font-medium text-accent">
+              Pro
+            </span>
+          </div>
+          <p className="text-[0.6rem] text-muted">
+            Portfolio Manager · standby
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1 rounded-full border border-accent/25 bg-accent/[0.06] px-2 py-0.5 text-[0.55rem] font-medium text-accent">
+          <span className="h-1 w-1 rounded-full bg-accent" aria-hidden="true" />
+          Ready
+        </span>
+      </div>
+      <div className="bg-gradient-to-b from-accent/[0.04] to-transparent p-4">
+        {isPersonaLoading ? (
+          <div className="h-14 animate-pulse rounded-lg bg-surface-2" />
+        ) : (
+          <div className="rounded-lg border border-accent/15 bg-accent/[0.04] p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-fg">{personaName}</span>
+              {personaRisk && (
+                <span
+                  className={cn(
+                    'rounded-full border px-1.5 py-0.5 text-[0.55rem] font-medium capitalize',
+                    riskTone
+                  )}
+                >
+                  {personaRisk}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[0.65rem] leading-relaxed text-muted">
+              {personaTagline}
+            </p>
+          </div>
+        )}
+        <p className="mt-2 text-[0.65rem] leading-relaxed text-muted">
+          Watches each new analysis and executes with hard stop-loss and
+          take-profit rails.
+        </p>
+        <ul className="mt-2.5 space-y-1.5 text-[0.7rem] text-muted">
+          {[
+            'Hard stop-loss and take-profit rails',
+            'Session loss limits plus a kill switch',
+            'Every decision logged and visible',
+          ].map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
+              {item}
+            </li>
+          ))}
+        </ul>
+        <Link
+          href="/account/subscription"
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-xs font-semibold text-white shadow-[0_8px_20px_-10px_oklch(62%_0.20_260_/_0.8)] transition-[filter] hover:brightness-110"
+        >
+          Unlock autopilot
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+// ─── Upgrade Nudge ──────────────────────────────────────────────────────────
+
+function UpgradeNudge() {
+  return (
+    <div className="flex flex-col gap-2 border-y border-accent/20 bg-accent/[0.04] px-1 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2.5">
+        <Sparkles className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+        <p className="text-xs text-muted">
+          <span className="font-medium text-fg">You&apos;re on Free.</span> Unlock
+          recurring analysis, real-time alerts, and more credits.
+        </p>
+      </div>
+      <Link
+        href="/account/subscription"
+        className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent transition-colors hover:text-fg"
+      >
+        See plans
+        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
+// ─── Price Chart ────────────────────────────────────────────────────────────
 
 type ChartTimeRange = '1H' | '1D' | '1W' | '1M' | 'ALL';
+
+function formatAxisTime(timestamp: string, range: ChartTimeRange): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  if (range === '1H' || range === '1D') {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 function ChartPanel({
   conditionId,
   yesTokenId,
   noTokenId,
+  aiCents,
+  recommendation,
 }: {
   conditionId: string | null;
   yesTokenId: string | null;
   noTokenId: string | null;
+  aiCents?: number | null;
+  recommendation?: 'LONG_YES' | 'LONG_NO' | 'NO_TRADE' | null;
 }) {
   const [timeRange, setTimeRange] = useState<ChartTimeRange>('1D');
 
@@ -212,6 +564,24 @@ function ChartPanel({
     noTokenId,
   );
 
+  const yesData = priceHistory?.data ?? [];
+  const noData = priceHistory?.noData ?? [];
+  const primarySide: 'yes' | 'no' =
+    recommendation === 'LONG_NO' && noData.length > 0 ? 'no' : 'yes';
+  const primaryData = primarySide === 'yes' ? yesData : noData;
+  const primaryLabel = primarySide === 'yes' ? 'YES' : 'NO';
+  const primaryIsPick =
+    (primarySide === 'yes' && recommendation === 'LONG_YES') ||
+    (primarySide === 'no' && recommendation === 'LONG_NO');
+  const lastPrimary =
+    primaryData.length > 0
+      ? primaryData[primaryData.length - 1].price * 100
+      : null;
+  const firstPrimary =
+    primaryData.length > 0 ? primaryData[0].price * 100 : null;
+  const primaryChange =
+    lastPrimary != null && firstPrimary != null ? lastPrimary - firstPrimary : null;
+
   const chartTabs: { id: ChartTimeRange; label: string }[] = [
     { id: '1H', label: '1H' },
     { id: '1D', label: '1D' },
@@ -221,179 +591,294 @@ function ChartPanel({
   ];
 
   return (
-    <Card className="p-3 sm:p-5 mb-3 sm:mb-4">
-      <div className="flex items-center justify-between mb-3 sm:mb-4">
-        <h2 className="text-xs sm:text-sm font-semibold text-muted uppercase tracking-wider">
-          Price Chart
-        </h2>
-        <Tabs tabs={chartTabs} active={timeRange} onChange={(id) => setTimeRange(id as ChartTimeRange)} />
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2">
+          <div>
+            <h2 className="text-sm font-semibold text-fg">Price history</h2>
+            <p className="mt-0.5 flex items-center gap-1.5 text-[0.65rem] text-muted">
+              Polymarket midpoint · {primaryLabel} token
+              {primaryIsPick && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-ai/30 bg-ai/10 px-1.5 py-0.5 text-[0.55rem] font-medium text-ai">
+                  <span className="h-1 w-1 rounded-full bg-ai" aria-hidden="true" />
+                  AI pick
+                </span>
+              )}
+            </p>
+          </div>
+
+          {lastPrimary != null && (
+            <div className="flex items-baseline gap-2">
+              <span
+                className={cn(
+                  'font-mono text-xl font-bold tabular-nums',
+                  primarySide === 'yes' ? 'text-yes' : 'text-no'
+                )}
+              >
+                {lastPrimary.toFixed(1)}¢
+              </span>
+              {primaryChange != null && (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-0.5 font-mono text-[0.65rem] tabular-nums',
+                    primaryChange >= 0 ? 'text-yes' : 'text-no'
+                  )}
+                >
+                  {primaryChange >= 0 ? (
+                    <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                  ) : (
+                    <ArrowDownRight className="h-3 w-3" aria-hidden="true" />
+                  )}
+                  {Math.abs(primaryChange).toFixed(1)}¢
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        <Tabs
+          tabs={chartTabs}
+          active={timeRange}
+          onChange={(id) => setTimeRange(id as ChartTimeRange)}
+        />
       </div>
 
-      {/* Chart area - responsive height */}
-      <div className="h-[200px] sm:h-[240px] md:h-[280px] rounded-lg bg-surface-2 flex items-center justify-center relative overflow-hidden">
+      <div className="relative h-[240px] border-t border-border/60 sm:h-[300px] lg:h-[340px]">
         {isLoading ? (
-          <div className="animate-pulse text-muted text-sm">Loading chart…</div>
+          <div className="flex h-full animate-pulse items-center justify-center text-sm text-muted">
+            Loading chart…
+          </div>
         ) : error ? (
-          <div className="text-muted text-sm text-center px-4">
+          <div className="flex h-full flex-col items-center justify-center px-4 text-center text-sm text-muted">
             <p>Unable to load price data</p>
-            <p className="text-xs mt-1 opacity-60">
+            <p className="mt-1 text-xs opacity-60">
               {error instanceof Error ? error.message : 'Unknown error'}
             </p>
           </div>
-        ) : priceHistory && priceHistory.data.length > 0 ? (
-          <DualLineChart
-            yesData={priceHistory.data}
-            noData={priceHistory.noData || []}
+        ) : primaryData.length > 0 ? (
+          <ChartPlot
+            yesData={yesData}
+            noData={noData}
+            aiCents={aiCents}
+            timeRange={timeRange}
+            primarySide={primarySide}
           />
         ) : (
-          <div className="text-muted text-sm">No price data available</div>
+          <div className="flex h-full items-center justify-center text-sm text-muted">
+            No price data available
+          </div>
         )}
       </div>
 
-      {/* Legend */}
-      {priceHistory && priceHistory.data.length > 0 && (
-        <div className="flex items-center gap-4 mt-3 px-1">
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 rounded-full bg-yes" />
-            <span className="text-xs text-muted">Yes</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 rounded-full bg-no" />
-            <span className="text-xs text-muted">No</span>
-          </div>
-          {priceHistory.dataSource === 'synthetic' && (
-            <span className="text-xs text-muted opacity-60 ml-auto">Simulated data</span>
-          )}
-        </div>
-      )}
-    </Card>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border/60 px-4 py-3 sm:px-5">
+        <span className="flex items-center gap-1.5 text-[0.65rem] text-muted">
+          <span
+            className={cn(
+              'h-0.5 w-3 rounded-full',
+              primarySide === 'yes' ? 'bg-yes' : 'bg-no'
+            )}
+          />
+          <span className={primarySide === 'yes' ? 'text-fg' : 'text-muted'}>
+            {primaryLabel}
+          </span>
+          {primaryIsPick && <span className="text-ai">AI pick</span>}
+        </span>
+        <span className="flex items-center gap-1.5 text-[0.65rem] text-muted">
+          <span
+            className={cn(
+              'w-3 border-t border-dashed',
+              primarySide === 'yes' ? 'border-no/50' : 'border-yes/50'
+            )}
+          />
+          <span className={primarySide === 'yes' ? 'text-muted' : 'text-fg'}>
+            {primarySide === 'yes' ? 'NO' : 'YES'}
+          </span>
+        </span>
+        {aiCents != null && (
+          <span className="flex items-center gap-1.5 text-[0.65rem] text-muted">
+            <span className="h-0.5 w-3 rounded-full border-t border-dashed border-ai" />
+            AI fair value
+          </span>
+        )}
+        {priceHistory?.dataSource === 'synthetic' && (
+          <span className="ml-auto text-[0.65rem] text-muted/60">
+            Simulated data
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 
-/** Dual-line SVG chart showing YES (green) and NO (red) price history */
-function DualLineChart({
+/** Price history with the AI-picked token as the primary series. */
+function ChartPlot({
   yesData,
   noData,
+  aiCents,
+  timeRange,
+  primarySide,
 }: {
   yesData: PriceHistoryPoint[];
   noData: PriceHistoryPoint[];
+  aiCents?: number | null;
+  timeRange: ChartTimeRange;
+  primarySide: 'yes' | 'no';
 }) {
   const chartId = useId();
+  const W = 1000;
+  const H = 300;
+  const PAD_TOP = 14;
+  const PAD_BOTTOM = 14;
 
-  const allPrices = [
-    ...yesData.map((p) => p.price),
-    ...noData.map((p) => p.price),
-  ];
-  const minPrice = Math.min(...allPrices);
-  const maxPrice = Math.max(...allPrices);
-  const range = maxPrice - minPrice || 0.01;
-
-  const width = 100;
-  const height = 100;
-  const padding = 2;
+  const primaryData = primarySide === 'yes' ? yesData : noData;
+  const secondaryLabel = primarySide === 'yes' ? 'NO' : 'YES';
 
   function buildPath(data: PriceHistoryPoint[]): string {
     if (data.length === 0) return '';
-    const points = data.map((point, i) => {
-      const x = padding + ((width - 2 * padding) * i) / (data.length - 1 || 1);
-      const y = height - padding - ((point.price - minPrice) / range) * (height - 2 * padding);
-      return `${x},${y}`;
-    });
-    return `M ${points.join(' L ')}`;
+    return data
+      .map((point, i) => {
+        const x = (i / Math.max(data.length - 1, 1)) * W;
+        const y =
+          PAD_TOP +
+          (1 - Math.max(0, Math.min(1, point.price))) * (H - PAD_TOP - PAD_BOTTOM);
+        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(' ');
   }
 
-  const yesPath = buildPath(yesData);
-  const noPath = buildPath(noData);
+  const primaryPath = buildPath(primaryData);
+  const secondaryPath = buildPath(primarySide === 'yes' ? noData : yesData);
+  const last = primaryData[primaryData.length - 1];
+  const lastX = W - 1;
+  const lastY =
+    PAD_TOP + (1 - Math.max(0, Math.min(1, last.price))) * (H - PAD_TOP - PAD_BOTTOM);
 
-  const yesLastPrice = yesData.length > 0 ? yesData[yesData.length - 1].price : 0;
-  const yesFirstPrice = yesData.length > 0 ? yesData[0].price : 0;
-  const noLastPrice = noData.length > 0 ? noData[noData.length - 1].price : 0;
-  const noFirstPrice = noData.length > 0 ? noData[0].price : 0;
+  const primaryColor =
+    primarySide === 'yes' ? 'oklch(72% 0.16 155)' : 'oklch(65% 0.18 25)';
+  const secondaryColor =
+    primarySide === 'yes' ? 'oklch(65% 0.18 25)' : 'oklch(72% 0.16 155)';
+  const aiPrimaryCents =
+    primarySide === 'no' && aiCents != null ? 100 - aiCents : aiCents;
+  const aiY =
+    aiPrimaryCents != null
+      ? PAD_TOP +
+      (1 - Math.max(0, Math.min(100, aiPrimaryCents)) / 100) *
+      (H - PAD_TOP - PAD_BOTTOM)
+      : null;
 
-  const yesChange = yesLastPrice - yesFirstPrice;
-  const noChange = noLastPrice - noFirstPrice;
+  const startLabel = formatAxisTime(primaryData[0]?.timestamp, timeRange);
+  const midLabel = formatAxisTime(
+    primaryData[Math.floor(primaryData.length / 2)]?.timestamp,
+    timeRange
+  );
+  const endLabel = formatAxisTime(last?.timestamp, timeRange);
 
   return (
-    <div className="w-full h-full flex flex-col">
-      {/* Price labels */}
-      <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <div className="flex flex-col">
-            <span className="font-mono text-base sm:text-lg font-bold tabular-nums text-yes">
-              {(yesLastPrice * 100).toFixed(1)}¢
-            </span>
-            <span className="text-[10px] sm:text-xs font-mono tabular-nums text-yes opacity-75">
-              {yesChange >= 0 ? '+' : ''}{(yesChange * 100).toFixed(1)}¢
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="font-mono text-base sm:text-lg font-bold tabular-nums text-no">
-              {(noLastPrice * 100).toFixed(1)}¢
-            </span>
-            <span className="text-[10px] sm:text-xs font-mono tabular-nums text-no opacity-75">
-              {noChange >= 0 ? '+' : ''}{(noChange * 100).toFixed(1)}¢
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* SVG Chart */}
+    <div className="relative h-full w-full">
       <svg
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
-        className="flex-1 w-full"
-        aria-label="Price history chart showing YES and NO token prices"
+        className="h-full w-full"
+        aria-label={`Price history chart with ${primarySide.toUpperCase()} as the primary token and ${secondaryLabel} as the secondary token`}
         role="img"
       >
         <defs>
-          {/* YES gradient */}
-          <linearGradient id={`${chartId}-yesGradient`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="oklch(72% 0.16 155)" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="oklch(72% 0.16 155)" stopOpacity="0" />
-          </linearGradient>
-          {/* NO gradient */}
-          <linearGradient id={`${chartId}-noGradient`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="oklch(65% 0.18 25)" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="oklch(65% 0.18 25)" stopOpacity="0" />
+          <linearGradient id={`${chartId}-primaryGradient`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={primaryColor} stopOpacity="0.16" />
+            <stop offset="100%" stopColor={primaryColor} stopOpacity="0" />
           </linearGradient>
         </defs>
 
-        {/* YES fill area */}
-        {yesPath && (
-          <path
-            d={`${yesPath} L ${width - padding},${height} L ${padding},${height} Z`}
-            fill={`url(#${chartId}-yesGradient)`}
-          />
-        )}
-        {/* NO fill area */}
-        {noPath && (
-          <path
-            d={`${noPath} L ${width - padding},${height} L ${padding},${height} Z`}
-            fill={`url(#${chartId}-noGradient)`}
+        {[25, 50, 75].map((level) => {
+          const y = PAD_TOP + (1 - level / 100) * (H - PAD_TOP - PAD_BOTTOM);
+          return (
+            <line
+              key={level}
+              x1={0}
+              x2={W}
+              y1={y}
+              y2={y}
+              stroke="var(--border)"
+              strokeWidth="0.5"
+              strokeDasharray={level === 50 ? '3 3' : '2 5'}
+              vectorEffect="non-scaling-stroke"
+              opacity={level === 50 ? 0.55 : 0.35}
+            />
+          );
+        })}
+
+        {aiY != null && (
+          <line
+            x1={0}
+            x2={W}
+            y1={aiY}
+            y2={aiY}
+            stroke="oklch(62% 0.18 295)"
+            strokeWidth="1.25"
+            strokeDasharray="5 4"
+            vectorEffect="non-scaling-stroke"
+            opacity={0.75}
           />
         )}
 
-        {/* YES line */}
-        {yesPath && (
+        {primaryPath && (
           <path
-            d={yesPath}
+            d={`${primaryPath} L ${W},${H} L 0,${H} Z`}
+            fill={`url(#${chartId}-primaryGradient)`}
+          />
+        )}
+        {primaryPath && (
+          <path
+            d={primaryPath}
             fill="none"
-            stroke="oklch(72% 0.16 155)"
-            strokeWidth="1.5"
+            stroke={primaryColor}
+            strokeWidth="2"
             vectorEffect="non-scaling-stroke"
           />
         )}
-        {/* NO line */}
-        {noPath && (
+        {secondaryPath && (
           <path
-            d={noPath}
+            d={secondaryPath}
             fill="none"
-            stroke="oklch(65% 0.18 25)"
-            strokeWidth="1.5"
+            stroke={secondaryColor}
+            strokeWidth="1.25"
+            strokeDasharray="4 4"
             vectorEffect="non-scaling-stroke"
+            opacity={0.45}
           />
         )}
+
+        <circle
+          cx={lastX}
+          cy={lastY}
+          r="3.5"
+          fill={primaryColor}
+          stroke="var(--surface)"
+          strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
+
+      <div className="pointer-events-none absolute inset-y-0 left-0 flex flex-col justify-between py-2 pl-3 font-mono text-[0.58rem] text-muted/60">
+        <span>100¢</span>
+        <span>50¢</span>
+        <span>0¢</span>
+      </div>
+
+      {aiY != null && (
+        <span
+          className="pointer-events-none absolute right-3 -translate-y-1/2 rounded border border-ai/30 bg-surface/90 px-1.5 py-0.5 font-mono text-[0.58rem] text-ai backdrop-blur-sm"
+          style={{ top: `${(aiY / H) * 100}%` }}
+        >
+          AI {Math.round(aiPrimaryCents!)}¢
+        </span>
+      )}
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-3 pb-1 font-mono text-[0.58rem] text-muted/60">
+        <span>{startLabel}</span>
+        <span className="hidden sm:inline">{midLabel}</span>
+        <span>{endLabel}</span>
+      </div>
     </div>
   );
 }
@@ -441,157 +926,173 @@ function OrderBookPanel({ market }: { market: PolymarketMarket }) {
   ];
   const maxSize = Math.max(...allSizes, 1);
 
+  const toCents = (price: string | undefined) =>
+    price ? parseFloat(price) * 100 : null;
+  const bestYesBid = toCents(yesBids[0]?.price);
+  const bestYesAsk = toCents(yesAsks[0]?.price);
+  const bestNoBid = toCents(noBids[0]?.price);
+  const bestNoAsk = toCents(noAsks[0]?.price);
+
+  const fmt = (value: number | null) =>
+    value === null ? '-' : `${value.toFixed(1)}¢`;
+  const mid = (bid: number | null, ask: number | null) =>
+    bid !== null && ask !== null ? (bid + ask) / 2 : null;
+  const spread = (bid: number | null, ask: number | null) =>
+    bid !== null && ask !== null ? Math.max(0, ask - bid) : null;
+
+  const yesSpread = spread(bestYesBid, bestYesAsk);
+
+  const renderSide = (
+    token: 'yes' | 'no',
+    bids: { price: string; size: string }[],
+    asks: { price: string; size: string }[],
+    bestBid: number | null,
+    bestAsk: number | null,
+    sideSpread: number | null
+  ) => (
+    <div className="min-w-0 px-4 py-3.5 sm:px-5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              'h-2 w-2 rounded-full',
+              token === 'yes' ? 'bg-yes' : 'bg-no'
+            )}
+          />
+          <span
+            className={cn(
+              'text-xs font-semibold',
+              token === 'yes' ? 'text-yes' : 'text-no'
+            )}
+          >
+            {token.toUpperCase()}
+          </span>
+          <span className="font-mono text-[0.6rem] text-muted">
+            mid {fmt(mid(bestBid, bestAsk))}
+          </span>
+        </div>
+        <span className="font-mono text-[0.6rem] text-muted">
+          spread {fmt(sideSpread)}
+        </span>
+      </div>
+
+      <div className="mt-2.5 flex items-center justify-between px-2.5 text-[0.58rem] text-muted/60">
+        <span>Bids</span>
+        <span>Size</span>
+      </div>
+      <div className="mt-0.5 space-y-0.5">
+        {bids.length > 0 ? (
+          bids.map((level, i) => (
+            <OrderBookRow
+              key={`${token}-bid-${i}`}
+              price={level.price}
+              size={level.size}
+              maxSize={maxSize}
+              side="bid"
+              token={token}
+              isBest={i === 0}
+            />
+          ))
+        ) : (
+          <div className="px-2.5 py-1 text-[0.65rem] text-muted">No bids</div>
+        )}
+      </div>
+
+      <div className="mt-2.5 flex items-center justify-between px-2.5 text-[0.58rem] text-muted/60">
+        <span>Asks</span>
+        <span>Size</span>
+      </div>
+      <div className="mt-0.5 space-y-0.5">
+        {asks.length > 0 ? (
+          asks.map((level, i) => (
+            <OrderBookRow
+              key={`${token}-ask-${i}`}
+              price={level.price}
+              size={level.size}
+              maxSize={maxSize}
+              side="ask"
+              token={token}
+              isBest={i === 0}
+            />
+          ))
+        ) : (
+          <div className="px-2.5 py-1 text-[0.65rem] text-muted">No asks</div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <Card className="p-3 sm:p-5 mb-3 sm:mb-4">
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between w-full text-left lg:cursor-default"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left sm:px-5"
         aria-expanded={isExpanded}
       >
-        <h2 className="text-xs sm:text-sm font-semibold text-muted uppercase tracking-wider">
-          Order Book
-        </h2>
-        <svg
-          className={cn(
-            'w-4 h-4 text-muted transition-transform lg:hidden',
-            isExpanded && 'rotate-180'
-          )}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-sm font-semibold text-fg">Order book</h2>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[0.58rem] text-muted">
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                isLoading ? 'bg-muted' : 'animate-pulse bg-yes'
+              )}
+            />
+            {isLoading ? 'syncing' : 'live'}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="hidden font-mono text-[0.62rem] text-muted sm:inline">
+            YES spread {fmt(yesSpread)}
+          </span>
+          <ChevronRight
+            className={cn(
+              'h-4 w-4 text-muted transition-transform',
+              isExpanded && 'rotate-90'
+            )}
+            aria-hidden="true"
+          />
+        </div>
       </button>
 
-      <div className={cn(
-        'mt-4 transition-all',
-        !isExpanded && 'hidden lg:block'
-      )}>
+      <div
+        className={cn(
+          'border-t border-border/60 transition-all',
+          !isExpanded && 'hidden'
+        )}
+      >
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="animate-pulse text-muted text-sm">Loading order book…</div>
+            <div className="animate-pulse text-sm text-muted">Loading order book…</div>
           </div>
         ) : error ? (
-          <div className="text-muted text-sm text-center py-4">
+          <div className="py-4 text-center text-sm text-muted">
             Unable to load order book data
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
-            {/* YES side */}
-            <div>
-              <h3 className="text-xs font-semibold text-yes mb-2 flex items-center justify-between">
-                <span>YES</span>
-                <span className="text-muted font-normal">Bids / Asks</span>
-              </h3>
-
-              {/* YES Bids (buy orders) */}
-              <div className="space-y-0.5 mb-2">
-                {yesBids.length > 0 ? (
-                  yesBids.map((level, i) => (
-                    <OrderBookRow
-                      key={`yes-bid-${i}`}
-                      price={level.price}
-                      size={level.size}
-                      maxSize={maxSize}
-                      side="bid"
-                      token="yes"
-                    />
-                  ))
-                ) : (
-                  <div className="text-xs text-muted py-1">No bids</div>
-                )}
-              </div>
-
-              {/* Spread indicator */}
-              {yesBids.length > 0 && yesAsks.length > 0 && (
-                <div className="text-[10px] text-muted text-center py-0.5 border-y border-border/50">
-                  Spread: {(parseFloat(yesAsks[0].price) - parseFloat(yesBids[0].price)).toFixed(3)}
-                </div>
+          <>
+            <div className="grid grid-cols-1 divide-y divide-border/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+              {renderSide('yes', yesBids, yesAsks, bestYesBid, bestYesAsk, yesSpread)}
+              {renderSide(
+                'no',
+                noBids,
+                noAsks,
+                bestNoBid,
+                bestNoAsk,
+                spread(bestNoBid, bestNoAsk)
               )}
-
-              {/* YES Asks (sell orders) */}
-              <div className="space-y-0.5 mt-2">
-                {yesAsks.length > 0 ? (
-                  yesAsks.map((level, i) => (
-                    <OrderBookRow
-                      key={`yes-ask-${i}`}
-                      price={level.price}
-                      size={level.size}
-                      maxSize={maxSize}
-                      side="ask"
-                      token="yes"
-                    />
-                  ))
-                ) : (
-                  <div className="text-xs text-muted py-1">No asks</div>
-                )}
-              </div>
             </div>
 
-            {/* NO side */}
-            <div>
-              <h3 className="text-xs font-semibold text-no mb-2 flex items-center justify-between">
-                <span>NO</span>
-                <span className="text-muted font-normal">Bids / Asks</span>
-              </h3>
-
-              {/* NO Bids */}
-              <div className="space-y-0.5 mb-2">
-                {noBids.length > 0 ? (
-                  noBids.map((level, i) => (
-                    <OrderBookRow
-                      key={`no-bid-${i}`}
-                      price={level.price}
-                      size={level.size}
-                      maxSize={maxSize}
-                      side="bid"
-                      token="no"
-                    />
-                  ))
-                ) : (
-                  <div className="text-xs text-muted py-1">No bids</div>
-                )}
+            {yesBook?.tick_size && (
+              <div className="flex items-center justify-between border-t border-border/60 px-4 py-2 font-mono text-[0.58rem] text-muted sm:px-5">
+                <span>Tick {yesBook.tick_size}</span>
+                <span>Min order {yesBook.min_order_size}</span>
               </div>
-
-              {/* Spread indicator */}
-              {noBids.length > 0 && noAsks.length > 0 && (
-                <div className="text-[10px] text-muted text-center py-0.5 border-y border-border/50">
-                  Spread: {(parseFloat(noAsks[0].price) - parseFloat(noBids[0].price)).toFixed(3)}
-                </div>
-              )}
-
-              {/* NO Asks */}
-              <div className="space-y-0.5 mt-2">
-                {noAsks.length > 0 ? (
-                  noAsks.map((level, i) => (
-                    <OrderBookRow
-                      key={`no-ask-${i}`}
-                      price={level.price}
-                      size={level.size}
-                      maxSize={maxSize}
-                      side="ask"
-                      token="no"
-                    />
-                  ))
-                ) : (
-                  <div className="text-xs text-muted py-1">No asks</div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tick size info */}
-        {yesBook?.tick_size && (
-          <div className="mt-3 pt-2 border-t border-border/50 flex items-center justify-between text-[10px] text-muted">
-            <span>Tick: {yesBook.tick_size}</span>
-            <span>Min order: {yesBook.min_order_size}</span>
-          </div>
+            )}
+          </>
         )}
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -602,12 +1103,14 @@ function OrderBookRow({
   maxSize,
   side,
   token,
+  isBest = false,
 }: {
   price: string;
   size: string;
   maxSize: number;
   side: 'bid' | 'ask';
   token: 'yes' | 'no';
+  isBest?: boolean;
 }) {
   const priceCents = (parseFloat(price) * 100).toFixed(1);
   const sizeNum = parseFloat(size);
@@ -622,39 +1125,85 @@ function OrderBookRow({
     : 'text-muted';
 
   return (
-    <div className="relative flex items-center justify-between text-xs py-0.5 px-2 rounded overflow-hidden">
-      {/* Depth bar */}
+    <div
+      className={cn(
+        'relative flex items-center justify-between overflow-hidden rounded px-2.5 py-[5px] text-[0.7rem]',
+        isBest && 'bg-surface-2/50'
+      )}
+    >
+      <span
+        className={cn(
+          'absolute inset-y-0 left-0 w-0.5',
+          isBest ? (token === 'yes' ? 'bg-yes' : 'bg-no') : 'bg-transparent'
+        )}
+        aria-hidden="true"
+      />
       <div
-        className={cn('absolute inset-y-0 left-0 opacity-30', bgColor)}
+        className={cn('absolute inset-y-0 left-0 opacity-25', bgColor)}
         style={{ width: `${depthPercent}%` }}
       />
-      <span className={cn('font-mono tabular-nums relative z-10', textColor)}>
+      <span className={cn('relative z-10 font-mono tabular-nums', textColor)}>
         {priceCents}¢
       </span>
-      <span className="text-muted tabular-nums font-mono relative z-10">
-        {sizeNum >= 1000 ? `${(sizeNum / 1000).toFixed(1)}K` : Math.floor(sizeNum).toLocaleString()}
+      <span className="relative z-10 font-mono tabular-nums text-muted">
+        {sizeNum >= 1000
+          ? `${(sizeNum / 1000).toFixed(1)}K`
+          : Math.floor(sizeNum).toLocaleString()}
       </span>
     </div>
   );
 }
 
-// ─── Market Description ─────────────────────────────────────────────────────
+// ─── Market Brief ───────────────────────────────────────────────────────────
 
-function MarketDescription({ market }: { market: PolymarketMarket }) {
-  if (!market.description) return null;
+function MarketBrief({ market }: { market: PolymarketMarket }) {
+  const [expanded, setExpanded] = useState(false);
+  const description = market.description?.trim();
+
+  if (!description) return null;
+
+  const isLong = description.length > 520;
 
   return (
-    <Expandable summary="Market Description" defaultOpen={false}>
-      <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap">
-        {market.description}
-      </p>
-    </Expandable>
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+        <h2 className="text-sm font-semibold text-fg">The brief</h2>
+        <a
+          href={`https://polymarket.com/market/${market.slug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-[0.7rem] font-medium text-accent transition-colors hover:text-fg"
+        >
+          Polymarket
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        </a>
+      </div>
+      <div className="border-t border-border/60 px-4 py-4 sm:px-5">
+        <p
+          className={cn(
+            'whitespace-pre-wrap text-sm leading-7 text-muted',
+            !expanded && isLong && 'line-clamp-[9]'
+          )}
+        >
+          {description}
+        </p>
+        {isLong && (
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="mt-3 text-xs font-semibold text-accent transition-colors hover:text-fg"
+          >
+            {expanded ? 'Show less' : 'Read full brief'}
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 
 // ─── Analysis History Panel ─────────────────────────────────────────────────
 
-function AnalysisHistoryPanel({ marketId, conditionId, yesTokenId }: { marketId: string | null; conditionId: string | null; yesTokenId: string | null }) {
+function AnalysisHistoryPanel({ marketId, conditionId }: { marketId: string | null; conditionId: string | null; yesTokenId?: string | null }) {
   const {
     data,
     isLoading,
@@ -671,73 +1220,67 @@ function AnalysisHistoryPanel({ marketId, conditionId, yesTokenId }: { marketId:
 
   if (!marketId) return null;
 
+  const tabs = [
+    { id: 'timeline' as const, label: 'Timeline' },
+    { id: 'performance' as const, label: 'AI vs market' },
+    { id: 'agents' as const, label: 'Agent accuracy' },
+  ];
+
   return (
-    <div className="mt-4 sm:mt-6 rounded-[12px] border border-border bg-surface p-3 sm:p-5">
-      {/* Tabs */}
-      <div className="flex gap-0 mb-3 sm:mb-5 border-b border-border overflow-x-auto scrollbar-none">
-        <button
-          onClick={() => setActiveTab('timeline')}
-          className={cn(
-            'pb-2 px-3 sm:px-4 text-xs font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap',
-            activeTab === 'timeline'
-              ? 'text-fg border-ai'
-              : 'text-muted border-transparent hover:text-fg'
-          )}
-        >
-          Analysis History
-        </button>
-        <button
-          onClick={() => setActiveTab('performance')}
-          className={cn(
-            'pb-2 px-3 sm:px-4 text-xs font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap',
-            activeTab === 'performance'
-              ? 'text-fg border-ai'
-              : 'text-muted border-transparent hover:text-fg'
-          )}
-        >
-          AI vs Market
-        </button>
-        <button
-          onClick={() => setActiveTab('agents')}
-          className={cn(
-            'pb-2 px-3 sm:px-4 text-xs font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap',
-            activeTab === 'agents'
-              ? 'text-fg border-ai'
-              : 'text-muted border-transparent hover:text-fg'
-          )}
-        >
-          Agent Performance
-        </button>
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div>
+          <h2 className="text-sm font-semibold text-fg">Track record</h2>
+          <p className="text-[0.65rem] text-muted">
+            {totalCount > 0
+              ? `${totalCount} recorded run${totalCount === 1 ? '' : 's'} on this market`
+              : 'Every AI run on this market, in order'}
+          </p>
+        </div>
+
+        <div className="flex w-fit gap-0.5 rounded-lg bg-surface-2 p-0.5">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'rounded-md px-2.5 py-1.5 text-[0.7rem] font-medium transition-colors',
+                activeTab === tab.id
+                  ? 'bg-surface text-fg shadow-[var(--shadow-sm)]'
+                  : 'text-muted hover:text-fg'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Timeline Tab */}
-      {activeTab === 'timeline' && (
-        <>
-          {isLoading ? (
-            <div className="space-y-4 animate-pulse pl-6">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="space-y-2">
-                  <div className="h-3 w-1/3 rounded bg-surface-2" />
-                  <div className="h-4 w-2/3 rounded bg-surface-2" />
-                  <div className="h-3 w-1/2 rounded bg-surface-2" />
-                </div>
-              ))}
-            </div>
-          ) : items.length === 0 ? (
-            <p className="text-sm text-muted">
-              No past analyses for this market yet. Request one above to get started.
-            </p>
-          ) : (
-            <>
-              {/* Timeline */}
-              <div className="relative pl-6">
-                {/* Vertical timeline line */}
-                <div
-                  className="absolute left-[5px] top-2 bottom-2 w-px bg-border"
-                  aria-hidden="true"
-                />
-
-                <div className="space-y-5">
+      <div className="border-t border-border/60">
+        {activeTab === 'timeline' && (
+          <div className="p-4 sm:p-5">
+            {isLoading ? (
+              <div className="animate-pulse space-y-5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-2 sm:pl-[132px]">
+                    <div className="h-3 w-24 rounded bg-surface-2" />
+                    <div className="h-3 w-2/3 rounded bg-surface-2" />
+                    <div className="h-3 w-1/2 rounded bg-surface-2" />
+                  </div>
+                ))}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+                <BarChart3 className="h-5 w-5 text-muted/50" aria-hidden="true" />
+                <p className="text-sm font-medium text-fg">No runs yet</p>
+                <p className="max-w-[300px] text-xs leading-relaxed text-muted">
+                  Run an analysis to start a track record for this market.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="divide-y divide-border/60">
                   {items.map((item, idx) => (
                     <TimelineEntry
                       key={item.analysisId}
@@ -752,36 +1295,40 @@ function AnalysisHistoryPanel({ marketId, conditionId, yesTokenId }: { marketId:
                     />
                   ))}
                 </div>
-              </div>
 
-              {hasNextPage && (
-                <button
-                  onClick={() => fetchNextPage()}
-                  disabled={isFetchingNextPage}
-                  className={cn(
-                    'w-full mt-4 py-2 text-xs font-medium rounded-lg border border-border',
-                    'text-muted hover:text-fg hover:bg-surface-2 transition-colors',
-                    'disabled:opacity-50 disabled:cursor-not-allowed'
-                  )}
-                >
-                  {isFetchingNextPage ? 'Loading…' : `Load more (${totalCount - items.length} remaining)`}
-                </button>
-              )}
-            </>
-          )}
-        </>
-      )}
+                {hasNextPage && (
+                  <button
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className={cn(
+                      'mt-4 w-full rounded-lg border border-border py-2 text-xs font-medium',
+                      'text-muted transition-colors hover:bg-surface-2 hover:text-fg',
+                      'disabled:cursor-not-allowed disabled:opacity-50'
+                    )}
+                  >
+                    {isFetchingNextPage
+                      ? 'Loading…'
+                      : `Load more (${totalCount - items.length} remaining)`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
-      {/* Performance Tab */}
-      {activeTab === 'performance' && (
-        <PerformanceSummary items={items} conditionId={conditionId} />
-      )}
+        {activeTab === 'performance' && (
+          <div className="p-4 sm:p-5">
+            <PerformanceSummary items={items} conditionId={conditionId} />
+          </div>
+        )}
 
-      {/* Agent Performance Tab */}
-      {activeTab === 'agents' && (
-        <MarketAgentPerformance conditionId={conditionId} />
-      )}
-    </div>
+        {activeTab === 'agents' && (
+          <div className="p-4 sm:p-5">
+            <MarketAgentPerformance conditionId={conditionId} />
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -805,85 +1352,86 @@ interface TimelineEntryProps {
 
 function TimelineEntry({ item, isLatest, isExpanded, onToggle }: TimelineEntryProps) {
   const recLabel =
-    item.recommendation === 'LONG_YES' ? 'BUY YES' :
-    item.recommendation === 'LONG_NO' ? 'BUY NO' : 'NO TRADE';
+    item.recommendation === 'LONG_YES'
+      ? 'BUY YES'
+      : item.recommendation === 'LONG_NO'
+        ? 'BUY NO'
+        : 'NO TRADE';
   const recTone: 'yes' | 'no' | 'warning' =
-    item.recommendation === 'LONG_YES' ? 'yes' :
-    item.recommendation === 'LONG_NO' ? 'no' : 'warning';
+    item.recommendation === 'LONG_YES'
+      ? 'yes'
+      : item.recommendation === 'LONG_NO'
+        ? 'no'
+        : 'warning';
 
-  // Dot color: ai-glow for latest, accent color for rest
-  const dotClasses = isLatest
-    ? 'border-ai bg-ai shadow-[0_0_6px_var(--ai)]'
-    : recTone === 'yes'
-    ? 'border-yes bg-yes'
-    : recTone === 'no'
-    ? 'border-no bg-no'
-    : 'border-border bg-bg';
-
-  const dateStr = new Date(item.executedAt).toLocaleDateString(undefined, {
+  const date = new Date(item.executedAt);
+  const dateStr = date.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
-  const timeStr = new Date(item.executedAt).toLocaleTimeString(undefined, {
+  const timeStr = date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
   });
+  const fairCents =
+    item.recommendation === 'LONG_NO'
+      ? Math.round((1 - item.consensusProbability) * 100)
+      : Math.round(item.consensusProbability * 100);
 
   return (
-    <div className="relative">
-      {/* Timeline dot */}
-      <span
-        className={cn(
-          'absolute -left-6 top-1 w-[11px] h-[11px] rounded-full border-2',
-          dotClasses
-        )}
-        aria-hidden="true"
-      />
-
-      {/* Entry content */}
-      <div>
-        {/* Meta row */}
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[0.65rem] font-mono text-muted">
-            {dateStr} · {timeStr}
-          </span>
-          <Badge tone={recTone} size="sm">{recLabel}</Badge>
-          {item.wasCachedDelivery && (
-            <span className="text-[10px] text-muted px-1.5 py-0.5 rounded bg-surface-2">
-              cached
+    <div className="py-4 first:pt-0 last:pb-0">
+      <div className="grid gap-2 sm:grid-cols-[112px_minmax(0,1fr)] sm:gap-5">
+        <div className="flex items-center gap-2 sm:block">
+          <div className="font-mono text-[0.68rem] text-fg">{dateStr}</div>
+          <div className="font-mono text-[0.6rem] text-muted">{timeStr}</div>
+          {isLatest && (
+            <span className="ml-auto rounded border border-ai/25 bg-ai/10 px-1.5 py-0.5 text-[0.55rem] font-medium text-ai sm:mt-1.5 sm:inline-flex">
+              Latest
             </span>
           )}
         </div>
 
-        {/* Stats row */}
-        <div className="flex gap-3 text-[0.65rem] font-mono text-muted mb-1">
-          <span>Confidence: <span className="text-fg">{Math.round(item.confidence * 100)}%</span></span>
-          <span>
-            {item.recommendation === 'LONG_NO' ? 'NO' : 'YES'} Fair:{' '}
-            <span className="text-fg">
-              {item.recommendation === 'LONG_NO'
-                ? Math.round((1 - item.consensusProbability) * 100)
-                : Math.round(item.consensusProbability * 100)}¢
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Badge tone={recTone} size="sm">
+              {recLabel}
+            </Badge>
+            <span className="font-mono text-[0.65rem] text-muted">
+              Confidence <span className="text-fg">{Math.round(item.confidence * 100)}%</span>
             </span>
-          </span>
-        </div>
-
-        {/* Expand toggle */}
-        <button
-          onClick={onToggle}
-          className="text-xs text-accent hover:underline focus:outline-none"
-          aria-expanded={isExpanded}
-        >
-          {isExpanded ? 'Hide details' : 'View details & agent signals'}
-        </button>
-
-        {/* Expanded detail - lazy loaded */}
-        {isExpanded && (
-          <div className="mt-3">
-            <AnalysisHistoryDetail analysisId={item.analysisId} />
+            <span className="font-mono text-[0.65rem] text-muted">
+              Fair <span className="text-fg">{fairCents}¢</span>
+            </span>
+            {item.wasCachedDelivery && (
+              <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[0.55rem] text-muted">
+                cached
+              </span>
+            )}
           </div>
-        )}
+
+          <button
+            type="button"
+            onClick={onToggle}
+            className="mt-2 inline-flex items-center gap-1 text-[0.68rem] font-medium text-accent transition-colors hover:text-fg"
+            aria-expanded={isExpanded}
+          >
+            {isExpanded ? 'Hide report' : 'Open report'}
+            <ChevronRight
+              className={cn(
+                'h-3.5 w-3.5 transition-transform',
+                isExpanded && 'rotate-90'
+              )}
+              aria-hidden="true"
+            />
+          </button>
+
+          {isExpanded && (
+            <div className="mt-3">
+              <AnalysisHistoryDetail analysisId={item.analysisId} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1039,12 +1587,12 @@ function MarketAgentPerformance({ conditionId }: { conditionId: string | null })
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-4">
+        <div className="h-20 animate-pulse rounded-xl bg-surface-2" />
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="animate-pulse flex items-center gap-3 py-2">
-            <div className="h-3 w-28 rounded bg-surface-2" />
-            <div className="h-1.5 flex-1 rounded bg-surface-2" />
-            <div className="h-3 w-10 rounded bg-surface-2" />
+          <div key={i} className="animate-pulse space-y-2">
+            <div className="h-3 w-32 rounded bg-surface-2" />
+            <div className="h-1 rounded-full bg-surface-2" />
           </div>
         ))}
       </div>
@@ -1053,83 +1601,113 @@ function MarketAgentPerformance({ conditionId }: { conditionId: string | null })
 
   if (agents.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-sm text-muted mb-1">No scored recommendations yet</p>
-        <p className="text-xs text-muted">
-          Agent performance data appears after trade recommendations hit their TP or SL levels on this market.
+      <div className="flex flex-col items-center gap-1.5 py-6 text-center">
+        <BarChart3 className="h-5 w-5 text-muted/50" aria-hidden="true" />
+        <p className="text-sm font-medium text-fg">No agent calls scored yet</p>
+        <p className="max-w-[320px] text-xs leading-relaxed text-muted">
+          Accuracy appears after recommendations on this market hit their target
+          or stop.
         </p>
       </div>
     );
   }
 
-  const totalSignals = agents.reduce((sum, a) => sum + a.totalSignals, 0);
-  const avgAccuracy = agents.reduce((sum, a) => sum + a.accuracy * a.totalSignals, 0) / totalSignals;
+  const totalSignals = agents.reduce((sum, agent) => sum + agent.totalSignals, 0);
+  const avgAccuracy =
+    totalSignals > 0
+      ? agents.reduce((sum, agent) => sum + agent.accuracy * agent.totalSignals, 0) /
+      totalSignals
+      : 0;
+  const top = agents[0];
 
   return (
     <div className="space-y-4">
-      {/* Summary header */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted">
-          Based on <span className="font-mono font-semibold text-fg">{totalSignals}</span> scored signals (30d)
-        </p>
-        <span className={cn(
-          'text-xs font-mono font-semibold px-2 py-0.5 rounded',
-          avgAccuracy >= 60 ? 'bg-yes/10 text-yes' : avgAccuracy >= 50 ? 'bg-warning/10 text-warning' : 'bg-no/10 text-no'
-        )}>
-          Avg {Math.round(avgAccuracy)}%
-        </span>
+      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 sm:grid-cols-3 sm:divide-y-0">
+        <ScoreStat
+          label="Signals scored"
+          value={String(totalSignals)}
+          caption="30-day window"
+        />
+        <ScoreStat
+          label="Average accuracy"
+          value={`${Math.round(avgAccuracy)}%`}
+          caption="weighted by signals"
+          tone={
+            avgAccuracy >= 60 ? 'yes' : avgAccuracy >= 50 ? 'warning' : 'no'
+          }
+        />
+        <ScoreStat
+          label="Best accuracy"
+          value={`${Math.round(top.accuracy)}%`}
+          caption={formatAgentDisplayName(top.name)}
+          tone="ai"
+        />
       </div>
 
-      {/* Agent leaderboard */}
-      <div className="space-y-0">
-        {agents.map((agent, idx) => {
-          const barColor = agent.accuracy >= 70 ? 'bg-yes' : agent.accuracy >= 50 ? 'bg-ai' : 'bg-no';
-          const textColor = agent.accuracy >= 70 ? 'text-yes' : agent.accuracy >= 50 ? 'text-fg' : 'text-no';
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-xs font-medium text-fg">Leaderboard</h3>
+          <span className="font-mono text-[0.6rem] text-muted">30 days</span>
+        </div>
 
-          return (
-            <div
-              key={agent.name}
-              className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 border-b border-border/50 last:border-b-0"
-            >
-              {/* Rank */}
-              <span className="text-[0.6rem] font-mono text-muted w-4 text-right shrink-0">
-                {idx + 1}.
-              </span>
+        <div className="mt-1 divide-y divide-border/60 border-t border-border/60">
+          {agents.map((agent, idx) => {
+            const barColor =
+              agent.accuracy >= 70
+                ? 'bg-yes'
+                : agent.accuracy >= 50
+                  ? 'bg-ai'
+                  : 'bg-no';
+            const textColor =
+              agent.accuracy >= 70
+                ? 'text-yes'
+                : agent.accuracy >= 50
+                  ? 'text-fg'
+                  : 'text-no';
 
-              {/* Agent name */}
-              <span className="text-[0.75rem] sm:text-[0.8rem] font-medium flex-1 truncate min-w-0">
-                {agent.name}
-              </span>
-
-              {/* Accuracy bar */}
-              <div className="w-16 sm:w-20 h-1.5 bg-surface-2 rounded-full overflow-hidden shrink-0">
-                <div
-                  className={cn('h-full rounded-full transition-[width] duration-300', barColor)}
-                  style={{ width: `${agent.accuracy}%` }}
-                />
+            return (
+              <div key={agent.name} className="flex items-center gap-3 py-2.5">
+                <span className="w-5 shrink-0 text-right font-mono text-[0.6rem] text-muted">
+                  {idx + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-[0.76rem] font-medium text-fg">
+                      {formatAgentDisplayName(agent.name)}
+                    </span>
+                    <span
+                      className={cn(
+                        'shrink-0 font-mono text-[0.72rem] font-semibold tabular-nums',
+                        textColor
+                      )}
+                    >
+                      {Math.round(agent.accuracy)}%
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className={cn('h-full rounded-full', barColor)}
+                      style={{ width: `${Math.min(agent.accuracy, 100)}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[0.55rem] text-muted">
+                    <span>
+                      {agent.correctSignals}/{agent.totalSignals} correct
+                    </span>
+                    <span>
+                      avg conf {Math.round(agent.avgConfidence * 100)}%
+                    </span>
+                  </div>
+                </div>
               </div>
-
-              {/* Accuracy % */}
-              <span className={cn(
-                'font-mono text-[0.75rem] font-semibold tabular-nums w-10 text-right shrink-0',
-                textColor
-              )}>
-                {Math.round(agent.accuracy)}%
-              </span>
-
-              {/* Signal count */}
-              <span className="text-[0.6rem] text-muted font-mono tabular-nums w-6 text-right shrink-0 hidden sm:block">
-                ({agent.totalSignals})
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Explanation */}
-      <p className="text-[0.6rem] text-muted pt-2 border-t border-border/50 leading-relaxed">
-        Accuracy = how often an agent&apos;s direction aligned with profitable trades (TP hit)
-        or warned against losing trades (SL hit) on this market.
+      <p className="border-t border-border/60 pt-3 text-[0.6rem] leading-relaxed text-muted">
+        Accuracy counts calls whose direction matched a profitable trade, plus
+        calls that correctly warned against a losing one.
       </p>
     </div>
   );
@@ -1142,341 +1720,404 @@ function PerformanceSummary({ items, conditionId }: {
   conditionId: string | null;
 }) {
   const total = items.length;
-
-  // Only data source: real trade performance (TP/SL outcomes) from the recommendation scorer
   const { data: tradePerf, isLoading: isPerfLoading } = useMarketTradePerformance(conditionId);
 
   if (total === 0) {
     return (
-      <p className="text-sm text-muted">
-        No analyses yet. Performance data will appear after analyses are completed.
-      </p>
+      <div className="flex flex-col items-center gap-1.5 py-6 text-center">
+        <BarChart3 className="h-5 w-5 text-muted/50" aria-hidden="true" />
+        <p className="text-sm font-medium text-fg">Nothing scored yet</p>
+        <p className="max-w-[300px] text-xs leading-relaxed text-muted">
+          Win rate and edge appear after analyses resolve against the market.
+        </p>
+      </div>
     );
   }
 
-  const avgConfidence = items.reduce((sum, i) => sum + i.confidence, 0) / total;
+  const avgConfidence = items.reduce((sum, item) => sum + item.confidence, 0) / total;
   const recommendations = tradePerf?.recommendations ?? [];
   const summary = tradePerf?.summary;
-  const hasResolvedData = summary && summary.resolved > 0;
-
-  // SVG chart dimensions
-  const W = 400;
-  const H = 140;
-  const padX = 20;
-  const padY = 16;
-
-  // Build chart from recommendation scorer data only
-  const chartRecs = [...recommendations].sort(
-    (a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
+  const hasResolvedData = !!summary && summary.resolved > 0;
+  const sorted = [...recommendations].sort(
+    (a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime()
   );
 
-  // X positioning: evenly spaced if we have data, time-based
-  const earliestTime = chartRecs.length > 0 ? new Date(chartRecs[0].executedAt).getTime() : Date.now();
-  const latestTime = chartRecs.length > 0 ? new Date(chartRecs[chartRecs.length - 1].executedAt).getTime() : Date.now();
-  const timeSpan = latestTime - earliestTime || 1;
-
-  const toX = (executedAt: string) => {
-    if (chartRecs.length === 1) return W / 2;
-    const t = new Date(executedAt).getTime();
-    return padX + ((t - earliestTime) / timeSpan) * (W - padX * 2);
-  };
-  const toY = (prob: number) =>
-    padY + (1 - prob) * (H - padY * 2);
+  const outcomeSegments = hasResolvedData
+    ? [
+      { label: 'Target hit', value: summary.successes, tone: 'bg-yes' },
+      { label: 'Stop hit', value: summary.failures, tone: 'bg-no' },
+      { label: 'Expired', value: summary.expired, tone: 'bg-muted/50' },
+      { label: 'Pending', value: summary.pending, tone: 'bg-ai' },
+    ].filter((segment) => segment.value > 0)
+    : [];
+  const outcomeTotal = outcomeSegments.reduce((sum, segment) => sum + segment.value, 0);
 
   return (
     <div className="space-y-5">
-      {/* Performance summary stats */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <div className="relative overflow-hidden text-center py-3 sm:py-4 px-2 sm:px-3 rounded-xl border border-border bg-gradient-to-b from-surface to-surface-2">
-          <div className={cn(
-            'font-mono text-lg sm:text-xl font-bold tabular-nums tracking-tight',
+      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 sm:grid-cols-4 sm:divide-y-0">
+        <ScoreStat
+          label="Win rate"
+          value={
             hasResolvedData && summary.winRate !== null
-              ? (summary.winRate >= 0.6 ? 'text-yes' : 'text-warning')
-              : 'text-fg'
-          )}>
-            {hasResolvedData && summary.winRate !== null
               ? `${Math.round(summary.winRate * 100)}%`
-              : '-'}
-          </div>
-          <div className="text-[0.55rem] sm:text-[0.6rem] text-muted mt-1 uppercase tracking-wider">
-            {hasResolvedData
-              ? `Win Rate (${summary.successes}/${summary.resolved} trades)`
-              : 'Win Rate'}
-          </div>
-          {hasResolvedData && summary.winRate !== null && summary.winRate >= 0.6 && (
-            <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-yes/10 blur-xl" />
-          )}
-        </div>
-        <div className="relative overflow-hidden text-center py-3 sm:py-4 px-2 sm:px-3 rounded-xl border border-border bg-gradient-to-b from-surface to-surface-2">
-          <div className={cn(
-            'font-mono text-lg sm:text-xl font-bold tabular-nums tracking-tight',
-            hasResolvedData && summary.avgEdgeCaptured !== null && summary.avgEdgeCaptured > 0 ? 'text-yes' : 'text-fg'
-          )}>
-            {hasResolvedData && summary.avgEdgeCaptured !== null
-              ? `+${Math.round(summary.avgEdgeCaptured * 100)}¢`
-              : '0¢'}
-          </div>
-          <div className="text-[0.55rem] sm:text-[0.6rem] text-muted mt-1 uppercase tracking-wider">
-            Avg Edge Captured
-          </div>
-          {hasResolvedData && summary.avgEdgeCaptured !== null && summary.avgEdgeCaptured > 0 && (
-            <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-yes/10 blur-xl" />
-          )}
-        </div>
-        <div className="relative overflow-hidden text-center py-3 sm:py-4 px-2 sm:px-3 rounded-xl border border-border bg-gradient-to-b from-surface to-surface-2">
-          <div className="font-mono text-lg sm:text-xl font-bold tabular-nums tracking-tight">
-            {Math.round(avgConfidence * 100)}%
-          </div>
-          <div className="text-[0.55rem] sm:text-[0.6rem] text-muted mt-1 uppercase tracking-wider">Avg Confidence</div>
-          <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-ai/8 blur-xl" />
-        </div>
+              : '-'
+          }
+          caption={
+            hasResolvedData
+              ? `${summary.successes} of ${summary.resolved} resolved`
+              : 'awaiting outcomes'
+          }
+          tone={
+            hasResolvedData && summary.winRate !== null
+              ? summary.winRate >= 0.6
+                ? 'yes'
+                : summary.winRate < 0.4
+                  ? 'no'
+                  : 'warning'
+              : 'muted'
+          }
+        />
+        <ScoreStat
+          label="Edge captured"
+          value={
+            hasResolvedData && summary.avgEdgeCaptured !== null
+              ? `${summary.avgEdgeCaptured > 0 ? '+' : ''}${Math.round(summary.avgEdgeCaptured * 100)}¢`
+              : '-'
+          }
+          caption="average per resolved call"
+          tone={
+            hasResolvedData &&
+              summary.avgEdgeCaptured !== null &&
+              summary.avgEdgeCaptured > 0
+              ? 'yes'
+              : 'fg'
+          }
+        />
+        <ScoreStat
+          label="Avg confidence"
+          value={`${Math.round(avgConfidence * 100)}%`}
+          caption="AI self-reported"
+          tone="ai"
+        />
+        <ScoreStat
+          label="Calls scored"
+          value={String(recommendations.length)}
+          caption={`${summary?.pending ?? 0} pending`}
+        />
       </div>
 
-      {/* Trade Outcomes Breakdown */}
-      {hasResolvedData && (
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: 'TP Hit', value: summary.successes, color: 'text-yes' },
-            { label: 'SL Hit', value: summary.failures, color: 'text-no' },
-            { label: 'Expired', value: summary.expired, color: 'text-muted' },
-            { label: 'Pending', value: summary.pending, color: 'text-ai' },
-          ].map((stat) => (
-            <div key={stat.label} className="text-center py-2 px-1 rounded-lg border border-border/50 bg-surface-2/50">
-              <div className={cn('font-mono text-sm font-bold tabular-nums', stat.color)}>
-                {stat.value}
-              </div>
-              <div className="text-[0.5rem] text-muted mt-0.5 uppercase tracking-wider">{stat.label}</div>
-            </div>
-          ))}
-        </div>
+      {recommendations.length > 0 && (
+        <EdgeOverTimeChart calls={recommendations} />
       )}
 
-      {/* SVG Performance Chart - recommendation outcomes only */}
-      {recommendations.length > 0 ? (
-        <div className="relative rounded-xl border border-border overflow-hidden">
-          {/* Gradient background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-surface-2 via-surface to-surface-2" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,oklch(58%_0.18_295_/_0.04),transparent_60%)]" />
-
-          {/* Chart area */}
-          <div className="relative p-3 sm:p-5 pb-3 sm:pb-4">
-            {/* Chart title */}
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-ai shadow-[0_0_6px_oklch(58%_0.18_295)]" />
-                <span className="text-[0.65rem] sm:text-[0.7rem] font-semibold text-fg/80 uppercase tracking-wider">Recommendation Outcomes</span>
-              </div>
-              <span className="text-[0.55rem] sm:text-[0.6rem] font-mono text-muted">{recommendations.length} scored</span>
-            </div>
-
-            {/* SVG Chart */}
-            <div className="h-[140px] sm:h-[160px] md:h-[180px] relative">
-              <svg
-                viewBox={`0 0 ${W} ${H}`}
-                fill="none"
-                className="w-full h-full"
-                style={{ overflow: 'hidden' }}
-                aria-label="Recommendation performance chart showing entry, TP, and SL levels with outcomes"
-              >
-                <defs>
-                  <filter id="perf-dot-glow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-
-                {/* Subtle horizontal grid */}
-                {[0.25, 0.5, 0.75].map((level) => (
-                  <line
-                    key={level}
-                    x1={padX}
-                    y1={toY(level)}
-                    x2={W - padX}
-                    y2={toY(level)}
-                    stroke="oklch(62% 0.012 260)"
-                    strokeWidth="0.3"
-                    opacity="0.25"
-                    strokeDasharray="2 4"
-                  />
-                ))}
-
-                {/* Each recommendation: entry + TP/SL zone + outcome */}
-                {chartRecs.map((rec, idx) => {
-                  const cx = toX(rec.executedAt);
-                  const entryY = rec.entryPrice !== null ? toY(rec.entryPrice) : toY(rec.marketProbability);
-                  const targetY = rec.targetPrice !== null ? toY(rec.targetPrice) : null;
-                  const stopY = rec.stopLossPrice !== null ? toY(rec.stopLossPrice) : null;
-                  const isSuccess = rec.outcomeStatus === 'success';
-                  const isFailure = rec.outcomeStatus === 'failure';
-                  const isPending = rec.outcomeStatus === 'pending';
-                  const isLongNo = rec.recommendation === 'LONG_NO';
-
-                  return (
-                    <g key={idx}>
-                      {/* TP zone line (green dashed) */}
-                      {targetY !== null && (
-                        <line
-                          x1={cx - 10}
-                          y1={targetY}
-                          x2={cx + 10}
-                          y2={targetY}
-                          stroke="oklch(72% 0.16 155)"
-                          strokeWidth="1"
-                          strokeDasharray="2 1"
-                          opacity="0.7"
-                        />
-                      )}
-                      {/* SL zone line (red dashed) */}
-                      {stopY !== null && (
-                        <line
-                          x1={cx - 10}
-                          y1={stopY}
-                          x2={cx + 10}
-                          y2={stopY}
-                          stroke="oklch(65% 0.18 25)"
-                          strokeWidth="1"
-                          strokeDasharray="2 1"
-                          opacity="0.7"
-                        />
-                      )}
-                      {/* Vertical connector between TP and SL */}
-                      {targetY !== null && stopY !== null && (
-                        <line
-                          x1={cx}
-                          y1={targetY}
-                          x2={cx}
-                          y2={stopY}
-                          stroke="oklch(62% 0.012 260)"
-                          strokeWidth="0.5"
-                          opacity="0.2"
-                        />
-                      )}
-                      {/* Entry price dot */}
-                      <g filter="url(#perf-dot-glow)">
-                        <circle
-                          cx={cx}
-                          cy={entryY}
-                          r="5"
-                          fill={
-                            isSuccess ? 'oklch(72% 0.16 155)'
-                            : isFailure ? 'oklch(65% 0.18 25)'
-                            : isPending ? 'oklch(58% 0.18 295)'
-                            : 'oklch(45% 0.012 260)'
-                          }
-                          opacity="0.3"
-                        />
-                        <circle
-                          cx={cx}
-                          cy={entryY}
-                          r="3.5"
-                          fill={
-                            isSuccess ? 'oklch(72% 0.16 155)'
-                            : isFailure ? 'oklch(65% 0.18 25)'
-                            : isPending ? 'oklch(58% 0.18 295)'
-                            : 'oklch(45% 0.012 260)'
-                          }
-                          stroke="oklch(14% 0.015 260)"
-                          strokeWidth="0.5"
-                        />
-                        {/* Direction arrow */}
-                        {isLongNo ? (
-                          <polygon
-                            points={`${cx - 1.5},${entryY - 1} ${cx + 1.5},${entryY - 1} ${cx},${entryY + 1.5}`}
-                            fill="white"
-                            opacity="0.85"
-                          />
-                        ) : (
-                          <polygon
-                            points={`${cx - 1.5},${entryY + 1} ${cx + 1.5},${entryY + 1} ${cx},${entryY - 1.5}`}
-                            fill="white"
-                            opacity="0.85"
-                          />
-                        )}
-                      </g>
-                      {/* Outcome hit marker */}
-                      {isSuccess && targetY !== null && (
-                        <circle cx={cx} cy={targetY} r="2.5" fill="oklch(72% 0.16 155)" stroke="oklch(72% 0.16 155)" strokeWidth="0.5" opacity="0.9" />
-                      )}
-                      {isFailure && stopY !== null && (
-                        <circle cx={cx} cy={stopY} r="2.5" fill="oklch(65% 0.18 25)" stroke="oklch(65% 0.18 25)" strokeWidth="0.5" opacity="0.9" />
-                      )}
-                    </g>
-                  );
-                })}
-              </svg>
-
-              {/* Y-axis labels */}
-              <div className="absolute inset-y-0 left-0 flex flex-col justify-between py-1 pointer-events-none">
-                <span className="text-[9px] font-mono text-muted/50 pl-1">100¢</span>
-                <span className="text-[9px] font-mono text-muted/40 pl-1">75¢</span>
-                <span className="text-[9px] font-mono text-muted/40 pl-1">50¢</span>
-                <span className="text-[9px] font-mono text-muted/40 pl-1">25¢</span>
-                <span className="text-[9px] font-mono text-muted/50 pl-1">0¢</span>
-              </div>
-            </div>
-
-            {/* Legend */}
-            <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 sm:gap-y-1.5 pt-2 sm:pt-3 border-t border-border/50 mt-1">
-              <span className="flex items-center gap-1.5 text-[0.6rem] text-muted">
-                <span className="w-2.5 h-2.5 rounded-full bg-yes" />
-                TP Hit
+      {hasResolvedData ? (
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs font-medium text-fg">Outcome mix</h3>
+            <span className="font-mono text-[0.6rem] text-muted">
+              {summary.resolved} resolved
+            </span>
+          </div>
+          <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-surface-2">
+            {outcomeSegments.map((segment) => (
+              <div
+                key={segment.label}
+                className={segment.tone}
+                style={{ width: `${(segment.value / outcomeTotal) * 100}%` }}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5 text-[0.65rem] text-muted">
+            {outcomeSegments.map((segment) => (
+              <span key={segment.label} className="flex items-center gap-1.5">
+                <span className={cn('h-1.5 w-1.5 rounded-full', segment.tone)} />
+                {segment.label} <span className="font-mono text-fg">{segment.value}</span>
               </span>
-              <span className="flex items-center gap-1.5 text-[0.6rem] text-muted">
-                <span className="w-2.5 h-2.5 rounded-full bg-no" />
-                SL Hit
-              </span>
-              <span className="flex items-center gap-1.5 text-[0.6rem] text-muted">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'oklch(58% 0.18 295)' }} />
-                Pending
-              </span>
-              <span className="flex items-center gap-1.5 text-[0.6rem] text-muted">
-                <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="5" x2="9" y2="5" stroke="oklch(72% 0.16 155)" strokeWidth="1" strokeDasharray="2 1"/></svg>
-                Target
-              </span>
-              <span className="flex items-center gap-1.5 text-[0.6rem] text-muted">
-                <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="5" x2="9" y2="5" stroke="oklch(65% 0.18 25)" strokeWidth="1" strokeDasharray="2 1"/></svg>
-                Stop Loss
-              </span>
-            </div>
+            ))}
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2">
-          <svg className="w-3.5 h-3.5 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-[0.65rem] text-muted">
-            {isPerfLoading
-              ? 'Loading performance data...'
-              : 'No scored recommendations yet. Performance chart will appear once the recommendation scorer processes outcomes.'}
-          </p>
+        <p className="rounded-xl border border-dashed border-border px-3 py-2.5 text-[0.65rem] leading-relaxed text-muted">
+          No resolved calls yet. Outcomes appear once a call reaches its target,
+          stop, or expiry.
+        </p>
+      )}
+
+      {recommendations.length > 0 ? (
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs font-medium text-fg">Call ledger</h3>
+            <span className="font-mono text-[0.6rem] text-muted">entry → outcome</span>
+          </div>
+          <div className="mt-1 divide-y divide-border/60 border-t border-border/60">
+            {sorted.slice(0, 8).map((rec) => (
+              <CallRow key={rec.analysisId} rec={rec} />
+            ))}
+          </div>
+          {sorted.length > 8 && (
+            <p className="mt-2 text-[0.6rem] text-muted">
+              Showing 8 of {sorted.length} scored calls
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-border px-3 py-2.5 text-[0.65rem] text-muted">
+          {isPerfLoading
+            ? 'Loading scored calls…'
+            : 'No scored calls yet. The ledger fills as recommendations resolve.'}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Time ago helper ────────────────────────────────────────────────────────
+function ScoreStat({
+  label,
+  value,
+  caption,
+  tone = 'fg',
+}: {
+  label: string;
+  value: string;
+  caption: string;
+  tone?: 'fg' | 'yes' | 'no' | 'warning' | 'ai' | 'muted';
+}) {
+  return (
+    <div className="px-3 py-3">
+      <div className="text-[0.6rem] text-muted">{label}</div>
+      <div
+        className={cn(
+          'mt-1 font-mono text-lg font-bold tabular-nums',
+          tone === 'yes' && 'text-yes',
+          tone === 'no' && 'text-no',
+          tone === 'warning' && 'text-warning',
+          tone === 'ai' && 'text-ai',
+          tone === 'muted' && 'text-muted',
+          tone === 'fg' && 'text-fg'
+        )}
+      >
+        {value}
+      </div>
+      <div className="mt-0.5 text-[0.55rem] text-muted">{caption}</div>
+    </div>
+  );
+}
 
-function formatTimeAgo(isoDate: string): string {
-  const now = Date.now();
-  const then = new Date(isoDate).getTime();
-  const diffMs = now - then;
+function EdgeOverTimeChart({ calls }: { calls: TradeOutcome[] }) {
+  const ordered = [...calls].sort(
+    (a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
+  );
+  const recent = ordered.slice(-16);
+  const values = recent.map((call) => {
+    const raw = call.recommendation === 'LONG_NO' ? -call.edge : call.edge;
+    return Math.round(raw * 1000) / 10;
+  });
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const maxAbs = Math.max(5, ...values.map((value) => Math.abs(value)), Math.abs(avg));
+  const domain = Math.max(5, Math.ceil(maxAbs / 5) * 5);
 
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  const topFor = (value: number) => 50 - (value / domain) * 50;
+  const heightFor = (value: number) => Math.max((Math.abs(value) / domain) * 50, 0.8);
 
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  const statusLabel = (status: TradeOutcome['outcomeStatus']) =>
+    status === 'success'
+      ? 'Target hit'
+      : status === 'failure'
+        ? 'Stop hit'
+        : status === 'expired'
+          ? 'Expired'
+          : 'Pending';
 
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  return (
+    <div className="rounded-xl border border-border/60 bg-surface-2/20 p-3 sm:p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-xs font-medium text-fg">Edge over time</h3>
+          <p className="text-[0.6rem] text-muted">
+            Signed edge per scored call, in the recommended token&apos;s space
+          </p>
+        </div>
+        <span
+          className={cn(
+            'shrink-0 rounded border px-1.5 py-0.5 font-mono text-[0.6rem]',
+            avg >= 0
+              ? 'border-yes/25 bg-yes/10 text-yes'
+              : 'border-no/25 bg-no/10 text-no'
+          )}
+        >
+          avg {avg >= 0 ? '+' : ''}
+          {avg.toFixed(1)}¢
+        </span>
+      </div>
 
-  return new Date(isoDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      <div className="relative mt-4 h-[150px]">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex w-9 flex-col justify-between font-mono text-[0.55rem] text-muted/60">
+          <span>+{Math.round(domain)}¢</span>
+          <span>0</span>
+          <span>-{Math.round(domain)}¢</span>
+        </div>
+
+        <div className="absolute inset-y-0 left-10 right-0">
+          <div className="absolute inset-x-0 top-1/2 border-t border-border" aria-hidden="true" />
+
+          <div
+            className="absolute inset-x-0 z-10"
+            style={{ top: `${topFor(avg)}%` }}
+            aria-hidden="true"
+          >
+            <div className="border-t border-dashed border-ai/60" />
+            <span className="absolute -top-4 right-0 font-mono text-[0.55rem] text-ai">
+              avg
+            </span>
+          </div>
+
+          <div className="absolute inset-0 flex items-stretch gap-[2px] sm:gap-1">
+            {recent.map((call, index) => {
+              const value = values[index];
+              const positive = value >= 0;
+              const status = statusLabel(call.outcomeStatus);
+
+              return (
+                <div
+                  key={call.analysisId}
+                  className="group relative flex-1"
+                  title={`${call.recommendation === 'LONG_YES' ? 'YES' : 'NO'} · ${value >= 0 ? '+' : ''}${value.toFixed(1)}¢ edge · ${status} · ${new Date(call.executedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+                >
+                  <div
+                    className={cn(
+                      'absolute left-1/2 w-[70%] max-w-[18px] -translate-x-1/2 rounded-sm transition-opacity',
+                      positive ? 'bg-yes/75' : 'bg-no/75',
+                      call.outcomeStatus === 'pending' ? 'opacity-60' : 'opacity-100',
+                      'group-hover:opacity-100'
+                    )}
+                    style={
+                      positive
+                        ? { bottom: '50%', height: `${heightFor(value)}%` }
+                        : { top: '50%', height: `${heightFor(value)}%` }
+                    }
+                  />
+                  {call.outcomeStatus === 'pending' && (
+                    <span
+                      className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ai bg-surface"
+                      aria-hidden="true"
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between pl-10 font-mono text-[0.55rem] text-muted/60">
+        <span>
+          {new Date(recent[0].executedAt).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+        <span>
+          {recent.length < ordered.length
+            ? `last ${recent.length} calls`
+            : `${recent.length} call${recent.length === 1 ? '' : 's'}`}
+        </span>
+        <span>
+          {new Date(recent[recent.length - 1].executedAt).toLocaleDateString(
+            undefined,
+            { month: 'short', day: 'numeric' }
+          )}
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-10 text-[0.58rem] text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-yes" aria-hidden="true" />
+          Positive edge
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-no" aria-hidden="true" />
+          Negative edge
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-ai" aria-hidden="true" />
+          Pending
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function CallRow({
+  rec,
+}: {
+  rec: {
+    recommendation: 'LONG_YES' | 'LONG_NO';
+    entryPrice: number | null;
+    targetPrice: number | null;
+    stopLossPrice: number | null;
+    outcomeHitPrice: number | null;
+    outcomeStatus: 'success' | 'failure' | 'expired' | 'pending';
+    edge: number;
+    executedAt: string;
+  };
+}) {
+  const statusLabel =
+    rec.outcomeStatus === 'success'
+      ? 'Target hit'
+      : rec.outcomeStatus === 'failure'
+        ? 'Stop hit'
+        : rec.outcomeStatus === 'expired'
+          ? 'Expired'
+          : 'Pending';
+  const statusClass =
+    rec.outcomeStatus === 'success'
+      ? 'border-yes/25 bg-yes/10 text-yes'
+      : rec.outcomeStatus === 'failure'
+        ? 'border-no/25 bg-no/10 text-no'
+        : rec.outcomeStatus === 'pending'
+          ? 'border-ai/25 bg-ai/10 text-ai'
+          : 'border-border bg-surface-2 text-muted';
+  const cents = (value: number | null) =>
+    value === null ? '-' : `${Math.round(value * 100)}¢`;
+
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-2.5">
+      <Badge tone={rec.recommendation === 'LONG_YES' ? 'yes' : 'no'} size="sm">
+        {rec.recommendation === 'LONG_YES' ? 'YES' : 'NO'}
+      </Badge>
+      <div className="min-w-0">
+        <div className="font-mono text-[0.68rem] text-fg">
+          {cents(rec.entryPrice)} →{' '}
+          {rec.outcomeStatus === 'success' && rec.targetPrice !== null
+            ? cents(rec.targetPrice)
+            : rec.outcomeStatus === 'failure' && rec.stopLossPrice !== null
+              ? cents(rec.stopLossPrice)
+              : cents(rec.outcomeHitPrice)}
+        </div>
+        <div className="truncate text-[0.58rem] text-muted">
+          Target {cents(rec.targetPrice)} · Stop {cents(rec.stopLossPrice)} ·
+          Edge{' '}
+          <span className={rec.edge > 0 ? 'text-yes' : rec.edge < 0 ? 'text-no' : ''}>
+            {rec.edge > 0 ? '+' : ''}
+            {Math.round(rec.edge * 100)}¢
+          </span>{' '}
+          ·{' '}
+          {new Date(rec.executedAt).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+          })}
+        </div>
+      </div>
+      <span
+        className={cn(
+          'whitespace-nowrap rounded border px-1.5 py-0.5 text-[0.55rem] font-medium',
+          statusClass
+        )}
+      >
+        {statusLabel}
+      </span>
+    </div>
+  );
 }
 
 // ─── Agent Signals Panel ────────────────────────────────────────────────────
@@ -1491,36 +2132,115 @@ interface AgentSignalData {
   timestamp?: string;
 }
 
-function AgentSignalsPanel({ signals }: { signals: AgentSignalData[] }) {
-  if (!signals || signals.length === 0) return null;
+function ResearchPanel({
+  signals,
+  riskPerspectives,
+}: {
+  signals: AgentSignalData[];
+  riskPerspectives?: string;
+}) {
+  const sections =
+    riskPerspectives && riskPerspectives !== 'Risk perspectives unavailable.'
+      ? parseRiskSections(riskPerspectives)
+      : [];
+  const hasSignals = signals.length > 0;
+  const hasRisk = sections.length > 0;
+  const [active, setActive] = useState<'signals' | 'risk'>('signals');
+
+  if (!hasSignals && !hasRisk) return null;
+
+  const tabs = [
+    hasSignals && { id: 'signals' as const, label: `Agent signals (${signals.length})` },
+    hasRisk && { id: 'risk' as const, label: 'Risk views' },
+  ].filter(Boolean) as { id: 'signals' | 'risk'; label: string }[];
 
   return (
-    <Card className="p-5 mt-4">
-      <Expandable
-        summary={
-          <span className="flex items-center gap-1.5">
-            Agent Signals
-            <InfoHint label="What agent signals mean">
-              Each agent predicts the outcome it thinks is most likely (YES or NO)
-              and how confident it is in that call. The ¢ figure is that
-              outcome&apos;s <strong className="text-fg">fair value</strong> —
-              what the agent thinks it is really worth. If an agent&apos;s fair
-              value is above the market price, it sees that side as underpriced.
-              NEUTRAL agents have no strong view and are left out of the final
-              score.
-            </InfoHint>
-          </span>
-        }
-        meta={`${signals.length} agents`}
-        defaultOpen={false}
-      >
-        <div className="space-y-3 pt-2">
-          {signals.map((signal) => (
-            <AgentSignalRow key={signal.agentName} signal={signal} />
+    <section id="agent-research" className="scroll-mt-24 overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-sm font-semibold text-fg">Agent research</h2>
+          <InfoHint label="What agent signals mean">
+            Each agent predicts the outcome it thinks is most likely (YES or NO)
+            and how confident it is in that call. The ¢ figure is that
+            outcome&apos;s <strong className="text-fg">fair value</strong> -
+            what the agent thinks it is really worth. If an agent&apos;s fair
+            value is above the market price, it sees that side as underpriced.
+            Neutral agents are left out of the final score.
+          </InfoHint>
+        </div>
+
+        <div className="flex w-fit gap-0.5 rounded-lg bg-surface-2 p-0.5">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActive(tab.id)}
+              className={cn(
+                'rounded-md px-2.5 py-1.5 text-[0.7rem] font-medium transition-colors',
+                active === tab.id
+                  ? 'bg-surface text-fg shadow-[var(--shadow-sm)]'
+                  : 'text-muted hover:text-fg'
+              )}
+            >
+              {tab.label}
+            </button>
           ))}
         </div>
-      </Expandable>
-    </Card>
+      </div>
+
+      <div className="border-t border-border/60">
+        {active === 'signals' ? (
+          <AgentSignalsContent signals={signals} />
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
+            {sections.map((section) => (
+              <RiskPerspectiveCard key={section.label} section={section} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AgentSignalsContent({ signals }: { signals: AgentSignalData[] }) {
+  const sorted = [...signals].sort((a, b) => b.confidence - a.confidence);
+  const yesCount = signals.filter(
+    (signal) => signal.direction === 'YES' || signal.direction === 'LONG_YES'
+  ).length;
+  const noCount = signals.filter(
+    (signal) => signal.direction === 'NO' || signal.direction === 'LONG_NO'
+  ).length;
+  const neutralCount = signals.length - yesCount - noCount;
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-xs sm:px-5">
+        <span className="flex items-center gap-1.5 text-muted">
+          <span className="h-1.5 w-1.5 rounded-full bg-yes" aria-hidden="true" />
+          {yesCount} lean YES
+        </span>
+        <span className="flex items-center gap-1.5 text-muted">
+          <span className="h-1.5 w-1.5 rounded-full bg-no" aria-hidden="true" />
+          {noCount} lean NO
+        </span>
+        {neutralCount > 0 && (
+          <span className="flex items-center gap-1.5 text-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-muted" aria-hidden="true" />
+            {neutralCount} neutral
+          </span>
+        )}
+        <span className="ml-auto hidden font-mono text-[0.6rem] text-muted/60 sm:block">
+          sorted by confidence
+        </span>
+      </div>
+
+      <div className="divide-y divide-border/60 border-t border-border/60">
+        {sorted.map((signal) => (
+          <AgentSignalRow key={signal.agentName} signal={signal} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1529,101 +2249,113 @@ function AgentSignalRow({ signal }: { signal: AgentSignalData }) {
   const isNo = signal.direction === 'NO' || signal.direction === 'LONG_NO';
 
   const directionLabel = isYes ? 'YES' : isNo ? 'NO' : 'NEUTRAL';
-  const directionColor = isYes ? 'text-yes' : isNo ? 'text-no' : 'text-muted';
-  const directionBg = isYes ? 'bg-yes/10 border-yes/20' : isNo ? 'bg-no/10 border-no/20' : 'bg-surface-2 border-border';
+  const directionClass = isYes
+    ? 'border-yes/25 bg-yes/[0.08] text-yes'
+    : isNo
+      ? 'border-no/25 bg-no/[0.06] text-no'
+      : 'border-border bg-surface-2 text-muted';
   const confidencePercent = Math.round(signal.confidence * 100);
-  // Display fair value in the recommended token's space:
-  // YES agents → show YES token fair value (fairProbability)
-  // NO agents → show NO token fair value (1 - fairProbability)
   const displayFairCents = isNo
     ? Math.round((1 - signal.fairProbability) * 100)
     : Math.round(signal.fairProbability * 100);
 
+  const renderItem = (item: AgentSignalData['keyDrivers'][number]) =>
+    typeof item === 'string'
+      ? item
+      : (item as { description?: string })?.description || JSON.stringify(item);
+
   return (
-    <Expandable
-      summary={
-        <div className="flex items-center gap-3 w-full">
-          <span className={cn('text-xs font-bold w-14 shrink-0', directionColor)}>
-            {directionLabel}
-          </span>
-          <span className="text-sm font-medium flex-1 truncate">
+    <details className="group">
+      <summary className="grid cursor-pointer grid-cols-[3.1rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 sm:grid-cols-[3.6rem_minmax(0,1fr)_7.5rem_4.2rem] sm:px-5">
+        <span
+          className={cn(
+            'inline-flex w-fit items-center rounded border px-1.5 py-0.5 text-[0.58rem] font-semibold',
+            directionClass
+          )}
+        >
+          {directionLabel}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[0.82rem] text-fg">
             {formatAgentDisplayName(signal.agentName)}
           </span>
-          <span className="text-xs font-mono text-muted shrink-0">
-            {confidencePercent}%
+          <span className="mt-1 flex items-center gap-2 sm:hidden">
+            <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
+              <span
+                className={cn(
+                  'block h-full rounded-full',
+                  isYes ? 'bg-yes' : isNo ? 'bg-no' : 'bg-muted'
+                )}
+                style={{ width: `${confidencePercent}%` }}
+              />
+            </span>
+            <span className="w-8 text-right font-mono text-[0.65rem] tabular-nums text-muted">
+              {confidencePercent}%
+            </span>
           </span>
-          <span className={cn(
-            'text-[0.65rem] font-mono px-1.5 py-0.5 rounded border shrink-0',
-            directionBg
-          )}>
-            {displayFairCents}¢
-          </span>
-        </div>
-      }
-    >
-      <div className="space-y-3 pt-2">
-        {/* Confidence bar */}
-        <div>
-          <div className="flex justify-between text-[0.65rem] text-muted mb-1">
-            <span>Confidence</span>
-            <span className="font-mono">{confidencePercent}%</span>
-          </div>
-          <div className="h-1 bg-surface-2 rounded-full overflow-hidden">
-            <div
+        </span>
+        <span className="hidden items-center gap-2 sm:flex">
+          <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
+            <span
               className={cn(
-                'h-full rounded-full transition-all',
+                'block h-full rounded-full',
                 isYes ? 'bg-yes' : isNo ? 'bg-no' : 'bg-muted'
               )}
               style={{ width: `${confidencePercent}%` }}
             />
-          </div>
+          </span>
+          <span className="w-8 text-right font-mono text-[0.65rem] tabular-nums text-muted">
+            {confidencePercent}%
+          </span>
+        </span>
+        <span className="text-right font-mono text-[0.78rem] tabular-nums text-fg">
+          {displayFairCents}¢
+        </span>
+      </summary>
+
+      <div className="bg-surface-2/25 px-4 pb-4 pt-1 sm:pl-[4.85rem] sm:pr-5">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[0.65rem] text-muted">
+          <span>
+            Confidence <span className="font-mono text-fg">{confidencePercent}%</span>
+          </span>
+          <span>
+            {isNo ? 'NO' : 'YES'} fair value{' '}
+            <span className="font-mono text-fg">{displayFairCents}¢</span>
+          </span>
         </div>
 
-        {/* Fair probability */}
-        <div className="flex justify-between text-xs">
-          <span className="text-muted">{isNo ? 'NO' : 'YES'} Fair Value</span>
-          <span className="font-mono font-medium">{displayFairCents}¢</span>
-        </div>
-
-        {/* Key Drivers */}
         {signal.keyDrivers && signal.keyDrivers.length > 0 && (
-          <div>
-            <h4 className="text-[0.65rem] text-muted uppercase tracking-wider mb-1.5">
-              Key Drivers
-            </h4>
+          <div className="mt-3">
+            <h4 className="mb-1.5 text-[0.68rem] font-medium text-fg">Key drivers</h4>
             <ul className="space-y-1">
               {signal.keyDrivers.map((driver, i) => (
-                <li key={i} className="flex gap-2 text-xs text-fg/80">
-                  <span className="text-accent shrink-0">•</span>
-                  <span className="leading-relaxed">
-                    {typeof driver === 'string' ? driver : (driver as any)?.description || JSON.stringify(driver)}
-                  </span>
+                <li key={i} className="flex gap-2 text-xs leading-relaxed text-muted">
+                  <span className="text-accent" aria-hidden="true">•</span>
+                  <span>{renderItem(driver)}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* Risk Factors */}
         {signal.riskFactors && signal.riskFactors.length > 0 && (
-          <div>
-            <h4 className="text-[0.65rem] text-muted uppercase tracking-wider mb-1.5">
-              Risk Factors
-            </h4>
+          <div className="mt-3">
+            <h4 className="mb-1.5 text-[0.68rem] font-medium text-fg">Risks</h4>
             <ul className="space-y-1">
               {signal.riskFactors.map((risk, i) => (
-                <li key={i} className="flex gap-2 text-xs text-fg/80">
-                  <span className="text-warning shrink-0">⚠</span>
-                  <span className="leading-relaxed">
-                    {typeof risk === 'string' ? risk : (risk as any)?.description || JSON.stringify(risk)}
-                  </span>
+                <li key={i} className="flex gap-2 text-xs leading-relaxed text-muted">
+                  <AlertTriangle
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning"
+                    aria-hidden="true"
+                  />
+                  <span>{renderItem(risk)}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
       </div>
-    </Expandable>
+    </details>
   );
 }
 
@@ -1634,30 +2366,7 @@ function formatAgentDisplayName(name: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ─── Risk Perspectives Panel ────────────────────────────────────────────────
-
-function RiskPerspectivesPanel({ riskPerspectives }: { riskPerspectives?: string }) {
-  if (!riskPerspectives || riskPerspectives === 'Risk perspectives unavailable.') return null;
-
-  const sections = parseRiskSections(riskPerspectives);
-  if (sections.length === 0) return null;
-
-  return (
-    <Card className="p-5 mt-4">
-      <Expandable
-        summary="Risk Perspectives"
-        meta="3 strategies"
-        defaultOpen={false}
-      >
-        <div className="space-y-4 pt-2">
-          {sections.map((section) => (
-            <RiskPerspectiveCard key={section.label} section={section} />
-          ))}
-        </div>
-      </Expandable>
-    </Card>
-  );
-}
+// ─── Risk Perspectives ──────────────────────────────────────────────────────
 
 interface RiskPerspective {
   positionSizePct: number;
@@ -1672,13 +2381,13 @@ interface RiskPerspective {
 interface RiskSection {
   label: string;
   variant: 'aggressive' | 'conservative' | 'neutral';
-  icon: string;
+  icon: LucideIcon;
   data: RiskPerspective | null;
   raw: string;
 }
 
 function RiskPerspectiveCard({ section }: { section: RiskSection }) {
-  const { label, variant, icon, data, raw } = section;
+  const { label, variant, icon: Icon, data, raw } = section;
 
   const borderColor = variant === 'aggressive' ? 'border-no/20' : variant === 'conservative' ? 'border-yes/20' : 'border-ai/20';
   const bgColor = variant === 'aggressive' ? 'bg-no/[0.04]' : variant === 'conservative' ? 'bg-yes/[0.04]' : 'bg-ai/[0.04]';
@@ -1686,13 +2395,13 @@ function RiskPerspectiveCard({ section }: { section: RiskSection }) {
 
   if (!data) {
     return (
-      <div className={cn('rounded-lg p-4 border', bgColor, borderColor)}>
-        <div className="flex items-center gap-2 mb-2">
-          <span className={cn('text-xs font-bold uppercase tracking-wider', labelColor)}>
-            {icon} {label}
+      <div className={cn('h-full rounded-xl border p-4', bgColor, borderColor)}>
+        <div className="mb-2 flex items-center gap-2">
+          <span className={cn('flex items-center gap-1.5 text-xs font-semibold', labelColor)}>
+            <Icon className="h-3.5 w-3.5" aria-hidden="true" /> {label}
           </span>
         </div>
-        <p className="text-sm text-fg/80 leading-relaxed whitespace-pre-wrap">{raw}</p>
+        <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted">{raw}</p>
       </div>
     );
   }
@@ -1710,42 +2419,36 @@ function RiskPerspectiveCard({ section }: { section: RiskSection }) {
     data.entryStrategy === 'limit' ? 'Limit Order' : 'Market Order';
 
   return (
-    <div className={cn('rounded-lg p-4 border', bgColor, borderColor)}>
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className={cn('text-xs font-bold uppercase tracking-wider', labelColor)}>
-          {icon} {label}
+    <div className={cn('h-full rounded-xl border p-4', bgColor, borderColor)}>
+      <div className="mb-3 flex items-center gap-2">
+        <span className={cn('flex items-center gap-1.5 text-xs font-semibold', labelColor)}>
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" /> {label}
         </span>
-        <span className={cn('ml-auto text-lg font-bold font-mono', labelColor)}>
+        <span className={cn('ml-auto font-mono text-lg font-bold tabular-nums', labelColor)}>
           {positionPct % 1 === 0 ? positionPct : positionPct.toFixed(1)}%
         </span>
       </div>
 
-      {/* Key metrics grid */}
-      <div className="grid grid-cols-1 xs:grid-cols-2 gap-x-4 gap-y-2 mb-3">
-        <div className="flex justify-between items-center">
-          <span className="text-[0.7rem] text-muted">Position Size</span>
-          <span className="text-xs font-mono font-medium">{positionPct % 1 === 0 ? positionPct : positionPct.toFixed(1)}%</span>
-        </div>
-        <div className="flex justify-between items-center">
+      <div className="mb-3 grid grid-cols-1 gap-x-4 gap-y-2 xs:grid-cols-2">
+        <div className="flex items-center justify-between">
           <span className="text-[0.7rem] text-muted">Kelly</span>
-          <span className="text-xs font-mono font-medium">{data.kellyFraction.toFixed(2)}×</span>
+          <span className="font-mono text-xs font-medium">{data.kellyFraction.toFixed(2)}×</span>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-[0.7rem] text-muted">Stop Loss</span>
-          <span className="text-xs font-mono font-medium text-no">-{stopLossPct % 1 === 0 ? stopLossPct : stopLossPct.toFixed(1)}¢</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-[0.7rem] text-muted">Take Profit</span>
-          <span className="text-xs font-mono font-medium text-yes">+{takeProfitPct % 1 === 0 ? takeProfitPct : takeProfitPct.toFixed(1)}¢</span>
-        </div>
-        <div className="flex justify-between items-center">
+        <div className="flex items-center justify-between">
           <span className="text-[0.7rem] text-muted">Entry</span>
           <span className="text-xs font-medium">{entryLabel}</span>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-[0.7rem] text-muted">Max Drawdown</span>
-          <span className="text-xs font-mono font-medium">{maxDrawdownPct % 1 === 0 ? maxDrawdownPct : maxDrawdownPct.toFixed(1)}%</span>
+        <div className="flex items-center justify-between">
+          <span className="text-[0.7rem] text-muted">Stop loss</span>
+          <span className="font-mono text-xs font-medium text-no">-{stopLossPct % 1 === 0 ? stopLossPct : stopLossPct.toFixed(1)}¢</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[0.7rem] text-muted">Take profit</span>
+          <span className="font-mono text-xs font-medium text-yes">+{takeProfitPct % 1 === 0 ? takeProfitPct : takeProfitPct.toFixed(1)}¢</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[0.7rem] text-muted">Max drawdown</span>
+          <span className="font-mono text-xs font-medium">{maxDrawdownPct % 1 === 0 ? maxDrawdownPct : maxDrawdownPct.toFixed(1)}%</span>
         </div>
       </div>
 
@@ -1780,10 +2483,10 @@ function RiskPerspectiveCard({ section }: { section: RiskSection }) {
 }
 
 function parseRiskSections(raw: string): RiskSection[] {
-  const configs: Record<string, { label: string; variant: 'aggressive' | 'conservative' | 'neutral'; icon: string }> = {
-    aggressive: { label: 'Aggressive', variant: 'aggressive', icon: '🔥' },
-    conservative: { label: 'Conservative', variant: 'conservative', icon: '🛡️' },
-    neutral: { label: 'Neutral', variant: 'neutral', icon: '⚖️' },
+  const configs: Record<string, { label: string; variant: 'aggressive' | 'conservative' | 'neutral'; icon: LucideIcon }> = {
+    aggressive: { label: 'Aggressive', variant: 'aggressive', icon: Flame },
+    conservative: { label: 'Conservative', variant: 'conservative', icon: Shield },
+    neutral: { label: 'Neutral', variant: 'neutral', icon: Scale },
   };
 
   const sections: RiskSection[] = [];
@@ -1871,32 +2574,24 @@ function tryParseRiskJson(text: string): RiskPerspective | null {
 
 function MarketDetailSkeleton() {
   return (
-    <div className="animate-pulse">
-      {/* Breadcrumb skeleton */}
-      <div className="h-4 w-32 rounded bg-surface-2 mb-3 sm:mb-4" />
+    <div className="w-full animate-pulse">
+      <div className="h-3 w-36 rounded bg-surface-2" />
 
-      {/* Header skeleton */}
-      <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl bg-surface-2" />
-        <div className="flex-1 space-y-2 sm:space-y-3">
-          <div className="h-5 sm:h-6 w-3/4 rounded bg-surface-2" />
-          <div className="h-4 w-1/2 rounded bg-surface-2" />
-          <div className="h-4 w-[160px] sm:w-[200px] rounded bg-surface-2" />
+      <div className="mt-6 flex flex-col gap-6 border-b border-border pb-8 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex-1 space-y-3">
+          <div className="h-5 w-28 rounded-full bg-surface-2" />
+          <div className="h-10 w-3/4 rounded bg-surface-2 sm:h-12" />
+          <div className="h-5 w-1/2 rounded bg-surface-2" />
         </div>
+        <div className="h-[104px] w-full rounded-2xl bg-surface-2 lg:w-[300px]" />
       </div>
+      <div className="mt-7 h-2 w-full rounded-full bg-surface-2" />
 
-      {/* Two-column skeleton */}
-      <div className="hidden lg:grid lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_440px] 2xl:grid-cols-[1fr_480px] gap-6">
-        <div className="space-y-3 sm:space-y-4">
-          <div className="h-[200px] sm:h-[240px] md:h-[280px] rounded-[12px] bg-surface-2" />
-          <div className="h-[140px] sm:h-[160px] rounded-[12px] bg-surface-2" />
-        </div>
-        <div className="h-[400px] sm:h-[500px] rounded-[12px] bg-surface-2" />
-      </div>
-      <div className="flex flex-col gap-4 lg:hidden">
-        <div className="h-[200px] rounded-[12px] bg-surface-2" />
-        <div className="h-[300px] rounded-[12px] bg-surface-2" />
-        <div className="h-[140px] rounded-[12px] bg-surface-2" />
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="h-[380px] rounded-2xl bg-surface-2" />
+        <div className="h-[420px] rounded-2xl bg-surface-2" />
+        <div className="h-[300px] rounded-2xl bg-surface-2" />
+        <div className="h-[240px] rounded-2xl bg-surface-2" />
       </div>
     </div>
   );
@@ -2004,7 +2699,8 @@ export default function MarketDetailPage() {
               href="/markets"
               className="inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
             >
-              ← Back to Markets
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to Markets
             </Link>
           </Card>
         </div>
@@ -2012,80 +2708,78 @@ export default function MarketDetailPage() {
     );
   }
 
+  const aiFairCents =
+    analysis?.metadata?.consensusProbability != null &&
+      analysis.metadata.consensusProbability > 0
+      ? Math.round(analysis.metadata.consensusProbability * 100)
+      : null;
+
   return (
     <AppShell>
-      {/* Breadcrumb */}
-      <Breadcrumb marketTitle={market.question} />
+      <div className="w-full">
+        <MarketMasthead market={marketWithPrices!} analysis={analysis} />
 
-      {/* Market Header */}
-      <MarketHeader market={marketWithPrices!} recommendation={analysis?.action} />
+        {plan === 'free' && (
+          <div className="mt-5">
+            <UpgradeNudge />
+          </div>
+        )}
 
-      {/* Upgrade Prompt for free users */}
-      {plan === 'free' && (
-        <div className="mb-4 sm:mb-6">
-          <UpgradePrompt
-            variant="free-to-starter"
-            message={
-              <>
-                You&apos;re on the <strong>Free plan</strong> - upgrade to unlock
-                recurring analysis, real-time alerts, and more credits.
-              </>
-            }
-          />
-        </div>
-      )}
+        <div className="mt-5 grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]">
+          {/* Chart */}
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+            <ChartPanel
+              conditionId={conditionId}
+              yesTokenId={yesTokenId}
+              noTokenId={noTokenId}
+              aiCents={aiFairCents}
+              recommendation={analysis?.action}
+            />
+          </div>
 
-      {/* Layout: On mobile (< lg) everything stacks in a single column with AI panel after chart.
-           On desktop (lg+) it's a two-column layout with left content + sticky right sidebar. */}
+          {/* AI desk - sticky on desktop, directly after the chart on mobile */}
+          <div className="min-w-0 space-y-3 lg:sticky lg:top-[72px] lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:self-start">
+            <AIPanel
+              marketSlug={marketId ?? ''}
+              yesCents={getYesProbability(marketWithPrices!)}
+              onQuickBuy={(side) => setTradeModal({ side })}
+              onRequestAnalysis={() => setIsAnalysisModalOpen(true)}
+              disabled={isClosed}
+            />
+            {plan === 'pro' || plan === 'elite' ? (
+              <PMActivationCard slug={market.slug} conditionId={market.conditionId} />
+            ) : (
+              <PortfolioManagerTeaser />
+            )}
+            <MarketDetails market={market} />
+          </div>
 
-      {/* Mobile layout (< lg): Chart → AI Panel → rest */}
-      <div className="flex flex-col gap-4 lg:hidden w-full min-w-0">
-        <ChartPanel conditionId={conditionId} yesTokenId={yesTokenId} noTokenId={noTokenId} />
+          {/* Market data + research */}
+          <div className="min-w-0 space-y-3 lg:col-start-1 lg:row-start-2">
+            <div
+              className={cn(
+                'grid items-start gap-3',
+                market.description &&
+                'xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]'
+              )}
+            >
+              <OrderBookPanel market={market} />
+              <MarketBrief market={market} />
+            </div>
 
-        <div className="space-y-3">
-          <AIPanel
-            marketSlug={marketId ?? ''}
-            yesCents={getYesProbability(marketWithPrices!)}
-            onQuickBuy={(side) => setTradeModal({ side })}
-            onRequestAnalysis={() => setIsAnalysisModalOpen(true)}
-            disabled={isClosed}
-          />
-          <PMActivationCard slug={market.slug} conditionId={market.conditionId} />
-        </div>
+            <ResearchPanel
+              signals={analysis?.agentSignals ?? []}
+              riskPerspectives={analysis?.riskPerspectivesRaw}
+            />
 
-        <OrderBookPanel market={market} />
-        <MarketDescription market={market} />
-        <AgentSignalsPanel signals={analysis?.agentSignals ?? []} />
-        <RiskPerspectivesPanel riskPerspectives={analysis?.riskPerspectivesRaw} />
-        <AnalysisHistoryPanel marketId={marketId} conditionId={conditionId} yesTokenId={yesTokenId} />
-      </div>
-
-      {/* Desktop layout (lg+): two-column grid, left content + sticky right sidebar */}
-      <div className="hidden lg:grid lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_440px] 2xl:grid-cols-[1fr_480px] gap-6 items-start w-full min-w-0">
-        {/* Left Column */}
-        <div className="min-w-0 w-full">
-          <ChartPanel conditionId={conditionId} yesTokenId={yesTokenId} noTokenId={noTokenId} />
-          <OrderBookPanel market={market} />
-          <MarketDescription market={market} />
-          <AgentSignalsPanel signals={analysis?.agentSignals ?? []} />
-          <RiskPerspectivesPanel riskPerspectives={analysis?.riskPerspectivesRaw} />
-          <AnalysisHistoryPanel marketId={marketId} conditionId={conditionId} yesTokenId={yesTokenId} />
-        </div>
-
-        {/* Right Column - sticky sidebar */}
-        <div className="sticky top-[72px] self-start space-y-4 min-w-0 w-full">
-          <AIPanel
-            marketSlug={marketId ?? ''}
-            yesCents={getYesProbability(marketWithPrices!)}
-            onQuickBuy={(side) => setTradeModal({ side })}
-            onRequestAnalysis={() => setIsAnalysisModalOpen(true)}
-            disabled={isClosed}
-          />
-          <PMActivationCard slug={market.slug} conditionId={market.conditionId} />
+            <AnalysisHistoryPanel
+              marketId={marketId}
+              conditionId={conditionId}
+              yesTokenId={yesTokenId}
+            />
+          </div>
         </div>
       </div>
-
-
 
       {/* Analysis Modal with eleven-stage progress pipeline */}
       <AnalysisModal

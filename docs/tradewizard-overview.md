@@ -43,7 +43,7 @@ Results are delivered through multiple channels - in-app WebSocket, email, push,
 For users on the Pro and Elite plans, TradeWizard offers an optional autonomous trading agent. A user activates it on a specific market by providing three things the system cannot change on its own:
 
 - **The market** to trade
-- **The capital amount** to commit (minimum 5 USDC.e)
+- **The capital amount** to commit (minimum $5)
 - **The persona** that governs decision-making
 
 The Portfolio Manager then consumes recurring analyses for that market and decides entry, position sizing, stop-loss, and take-profit per trade. It does not generate its own analysis - it acts on the intelligence layer's output. Orders are placed on the Polymarket CLOB. A Position Guard monitors open positions, and a Risk Engine enforces loss limits, cooldowns, and a kill switch. The user can pause, resume, stop, or kill all sessions at any time.
@@ -79,11 +79,11 @@ The agents execute in parallel using `Promise.allSettled`, so a single slow or f
 
 Between the AI-generated signals and the user, three non-AI stages act as hard validation gates. This is the architectural decision that separates TradeWizard from a chatbot that recommends trades.
 
-**Gate 1 - Signal Fusion.** A pure-function stage (no LLM) that aggregates agent signals through weighted fusion. Weights combine agent type, individual confidence, and historical accuracy. When agent estimates diverge sharply, a divergence penalty reduces overall confidence. The output is a single fused probability with a conflict map.
+**Gate 1 - Signal Fusion.** A pure-function stage (no LLM) that aggregates agent signals through market-anchored log-odds fusion. The ensemble's deviation from the current market price is shrunk by a configurable factor (`FUSION_SHRINKAGE`, default 0.15), so the fused probability stays tethered to the market rather than drifting with model enthusiasm. Weights combine agent type, individual confidence, and Brier-calibrated historical accuracy. When agent estimates diverge sharply, a divergence penalty reduces overall confidence. The output is a single fused probability with a conflict map.
 
 **Gate 2 - Adversarial Cross-Examination.** An AI stage that generates competing bull and bear theses, then applies five structured tests to each: evidence, causality, timing, liquidity, and tail risk. Each test produces a scored, structured outcome - the debate result is data, not prose.
 
-**Gate 3 - Consensus Engine.** A pure-function stage (no LLM) that computes a weighted consensus probability and a disagreement index. If disagreement exceeds 30%, consensus fails and the recommendation is forced to `NO_TRADE`. Separately, if the final expected value is non-positive, the recommendation is rejected and replaced with `NO_TRADE`.
+**Gate 3 - Consensus Engine.** A pure-function stage (no LLM) that uses the anchored fused probability as the probability source; the bull/bear role-play theses only modify confidence. It computes a disagreement index and a confidence floor. If disagreement exceeds 30% or confidence falls below 20%, consensus fails and the recommendation is forced to `NO_TRADE`. A divergence circuit breaker blocks implausible edges above 15% instead of fading the market. Separately, if the final expected value is non-positive, the recommendation is rejected and replaced with `NO_TRADE`.
 
 After consensus, three risk-philosophy agents (aggressive, conservative, neutral) run in parallel to provide position-sizing perspectives. They do not influence the probability estimate - sizing and belief are kept architecturally separate.
 
@@ -91,7 +91,7 @@ After consensus, three risk-philosophy agents (aggressive, conservative, neutral
 
 Every recommendation that carries a trade action enters a pending state. A scorer runs on a schedule, checks the recommendation against live market prices, and marks it a success (take-profit reached), a failure (stop-loss reached), or expired (no resolution within the window).
 
-When a recommendation resolves, every contributing agent is scored: agents that took the correct side gain accuracy, agents that took the wrong side lose it, and agents that stayed neutral are excluded. This accuracy data feeds directly back into the weighting used by the next analysis - an agent's influence scales with its proven track record (from half-weight for poor performers up to double-weight for strong ones). The system measurably self-corrects toward the agents that have been right.
+When a recommendation resolves, every contributing agent is scored: agents that took the correct side gain accuracy, agents that took the wrong side lose it, and agents that stayed neutral are excluded. This data feeds directly back into the next analysis as Brier-calibrated fusion weights - an agent's influence reflects both its accuracy and the calibration of its probability estimates, not just a binary win/loss record. The system measurably self-corrects toward the agents that have been right and well-calibrated.
 
 Each agent's historical signals are stored per-market, and each agent sees only its own history during analysis. This is deliberate: exposing cross-agent history caused agents to anchor on each other rather than reason independently, which would undermine the disagreement signal the consensus engine depends on.
 
@@ -209,7 +209,7 @@ Add-on credits can be purchased at any time: 20 credits for $4.99, 45 credits fo
 
 ### 7.3 On-Chain Billing
 
-Payments are made on-chain in USDC.e on Polygon. Subscriptions and credit packs are verified by on-chain transaction hash. Auto-renewal works through a pre-approved ERC-20 allowance, so there is no card processor in the loop. Cancellation takes effect at the end of the billing period.
+Payments are made on-chain in pUSD (Polymarket USD) on Polygon, with legacy USDC.e read compatibility during the migration. Subscriptions and credit packs are verified by on-chain transaction hash. Auto-renewal works through a pre-approved ERC-20 allowance, so there is no card processor in the loop. Cancellation takes effect at the end of the billing period.
 
 ---
 

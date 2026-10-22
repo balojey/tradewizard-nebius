@@ -18,7 +18,7 @@ export default function usePublicMarketPrices(markets: PolymarketMarket[]) {
       try {
         const ids = JSON.parse(market.clobTokenIds);
         acc.push(...ids);
-      } catch (error) {
+      } catch {
         console.warn(`Failed to parse token IDs for market ${market.id}`);
       }
     }

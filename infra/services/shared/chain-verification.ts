@@ -29,7 +29,7 @@ import { polygon } from 'viem/chains';
 const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
 const USDC_CONTRACT_ADDRESS = (process.env.USDC_CONTRACT_ADDRESS ||
   '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174') as Address;
-/** pUSD (Polymarket USD) — canonical collateral during the migration. */
+/** pUSD (Polymarket USD) - canonical collateral during the migration. */
 const PUSD_CONTRACT_ADDRESS = (process.env.PUSD_CONTRACT_ADDRESS ||
   '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB') as Address;
 /** Tokens accepted for payment/balance during the migration window. */

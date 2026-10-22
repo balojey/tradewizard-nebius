@@ -38,6 +38,13 @@ export interface HistoricalEntry {
   consensusProbability: number;
   marketProbability: number;
   signals: HistoricalSignal[];
+  /** Realized outcome of the prior recommendation, when scored. */
+  outcomeStatus?: string;
+  outcomeHitPrice?: number | null;
+  outcomeResolvedAt?: string | null;
+  entryPrice?: number | null;
+  targetPrice?: number | null;
+  stopLossPrice?: number | null;
 }
 
 // ─── Module-scoped credential cache (reused across warm invocations) ───────────
@@ -176,7 +183,13 @@ export async function fetchHistoricalContext(
         executed_at,
         recommendation,
         consensus_probability,
-        market_probability_at_execution
+        market_probability_at_execution,
+        entry_price,
+        target_price,
+        stop_loss_price,
+        outcome_status,
+        outcome_hit_price,
+        outcome_resolved_at
       FROM analysis_results
       WHERE market_id = $1
       ORDER BY executed_at DESC
@@ -195,6 +208,12 @@ export async function fetchHistoricalContext(
       recommendation: string | null;
       consensus_probability: string | null;
       market_probability_at_execution: string | null;
+      entry_price: string | null;
+      target_price: string | null;
+      stop_loss_price: string | null;
+      outcome_status: string | null;
+      outcome_hit_price: string | null;
+      outcome_resolved_at: Date | string | null;
     }>;
 
     const resultIds = resultRows.map((row) => row.id);
@@ -262,6 +281,18 @@ export async function fetchHistoricalContext(
     const history: HistoricalEntry[] = [];
     for (const rid of resultIds) {
       const meta = resultMeta.get(rid)!;
+      const toNumberOrNull = (value: unknown): number | null => {
+        if (value === null || value === undefined) return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      const toIsoOrNull = (value: unknown): string | null => {
+        if (value === null || value === undefined) return null;
+        if (value instanceof Date) return value.toISOString();
+        const parsed = new Date(String(value));
+        return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString();
+      };
+
       history.push({
         timestamp: meta.executed_at instanceof Date
           ? meta.executed_at.toISOString()
@@ -270,6 +301,12 @@ export async function fetchHistoricalContext(
         consensusProbability: parseFloat(String(meta.consensus_probability ?? '0.5')),
         marketProbability: parseFloat(String(meta.market_probability_at_execution ?? '0.5')),
         signals: signalsByResult.get(rid) || [],
+        outcomeStatus: meta.outcome_status ?? undefined,
+        outcomeHitPrice: toNumberOrNull(meta.outcome_hit_price),
+        outcomeResolvedAt: toIsoOrNull(meta.outcome_resolved_at),
+        entryPrice: toNumberOrNull(meta.entry_price),
+        targetPrice: toNumberOrNull(meta.target_price),
+        stopLossPrice: toNumberOrNull(meta.stop_loss_price),
       });
     }
 
@@ -297,18 +334,42 @@ export async function fetchHistoricalContext(
 
 // ─── Dynamic Agent Performance Weights ─────────────────────────────────────────
 
+interface SignalOutcomeRow {
+  agent_name: string;
+  direction: string;
+  fair_probability: string | number;
+  outcome: number; // 1 = YES, 0 = NO
+}
+
+const WEIGHTED_SIGNAL_QUERY = `
+  SELECT
+    am.agent_name,
+    am.direction,
+    am.fair_probability,
+    CASE
+      WHEN ar.recommendation = 'LONG_YES' AND ar.outcome_status = 'success' THEN 1
+      WHEN ar.recommendation = 'LONG_YES' AND ar.outcome_status = 'failure' THEN 0
+      WHEN ar.recommendation = 'LONG_NO'  AND ar.outcome_status = 'success' THEN 0
+      WHEN ar.recommendation = 'LONG_NO'  AND ar.outcome_status = 'failure' THEN 1
+    END AS outcome
+  FROM agent_memory am
+  JOIN analysis_results ar ON ar.id = am.result_id
+  WHERE ar.outcome_status IN ('success', 'failure')
+    AND ar.recommendation IN ('LONG_YES', 'LONG_NO')
+    AND am.direction != 'NEUTRAL'
+`;
+
 /**
  * Fetches agent performance weights for signal fusion.
  *
  * Strategy:
- * 1. Try per-market accuracy (from scored recommendations on this specific market)
- * 2. Fall back to global accuracy (from all scored recommendations in last 30 days)
+ * 1. Try per-market calibration (from scored recommendations on this market)
+ * 2. Fall back to global calibration (scored recommendations in last 30 days)
  * 3. Fall back to empty map (all agents get default weight 1.0)
  *
- * The returned map is agentName (snake_case) → performance score (0.5–2.0).
- * Accuracy is normalized: 50% accuracy → 1.0, 100% → 2.0, 0% → 0.5.
- * This means high-performing agents get up to 2x influence, low-performing agents
- * get down to 0.5x influence - gradual reweighting, not dramatic swings.
+ * Weights are based on Brier calibration, blended with directional accuracy.
+ * This is deliberately better than direction-only scoring: an agent that is
+ * directionally right but badly overconfident still gets penalized.
  *
  * Minimum 2 signals required per agent to be included in the map.
  * Agents not in the map will use the default TYPE_WEIGHTS × 1.0 in fuseSignals.
@@ -335,69 +396,38 @@ export async function fetchAgentPerformanceWeights(
 
     await client.connect();
 
-    // Step 1: Try per-market accuracy
-    const marketResult = await client.query(
-      `SELECT
-         am.agent_name,
-         COUNT(*) AS total_signals,
-         SUM(CASE
-           WHEN (am.direction = CASE WHEN ar.recommendation = 'LONG_YES' THEN 'YES' ELSE 'NO' END
-                 AND ar.outcome_status = 'success')
-             OR (am.direction != CASE WHEN ar.recommendation = 'LONG_YES' THEN 'YES' ELSE 'NO' END
-                 AND ar.outcome_status = 'failure')
-           THEN 1 ELSE 0
-         END) AS correct_signals
-       FROM agent_memory am
-       JOIN analysis_results ar ON ar.id = am.result_id
-       WHERE ar.market_id = $1
-         AND ar.outcome_status IN ('success', 'failure')
-         AND am.direction != 'NEUTRAL'
-       GROUP BY am.agent_name
-       HAVING COUNT(*) >= 2`,
+    // Step 1: Try per-market calibration.
+    const marketResult = await client.query<SignalOutcomeRow>(
+      `${WEIGHTED_SIGNAL_QUERY} AND ar.market_id = $1`,
       [marketId]
     );
 
-    // If we have per-market data (at least 3 agents scored), use it
-    if (marketResult.rows.length >= 3) {
-      const weights = buildWeightsFromRows(marketResult.rows);
+    const marketWeights = buildWeightsFromSignalRows(marketResult.rows);
+    if (Object.keys(marketWeights).length >= 3) {
       console.log(
-        `[AgentWeights] Using per-market weights for market=${marketId.slice(0, 16)} (${marketResult.rows.length} agents scored)`
+        `[AgentWeights] Using per-market Brier weights for market=${marketId.slice(0, 16)} ` +
+        `(${Object.keys(marketWeights).length} agents calibrated)`
       );
-      return weights;
+      return marketWeights;
     }
 
-    // Step 2: Fall back to global accuracy (last 30 days)
-    const globalResult = await client.query(
-      `SELECT
-         am.agent_name,
-         COUNT(*) AS total_signals,
-         SUM(CASE
-           WHEN (am.direction = CASE WHEN ar.recommendation = 'LONG_YES' THEN 'YES' ELSE 'NO' END
-                 AND ar.outcome_status = 'success')
-             OR (am.direction != CASE WHEN ar.recommendation = 'LONG_YES' THEN 'YES' ELSE 'NO' END
-                 AND ar.outcome_status = 'failure')
-           THEN 1 ELSE 0
-         END) AS correct_signals
-       FROM agent_memory am
-       JOIN analysis_results ar ON ar.id = am.result_id
-       WHERE ar.outcome_status IN ('success', 'failure')
-         AND ar.outcome_resolved_at > NOW() - INTERVAL '30 days'
-         AND am.direction != 'NEUTRAL'
-       GROUP BY am.agent_name
-       HAVING COUNT(*) >= 2`
+    // Step 2: Fall back to global calibration (last 30 days).
+    const globalResult = await client.query<SignalOutcomeRow>(
+      `${WEIGHTED_SIGNAL_QUERY} AND ar.outcome_resolved_at > NOW() - INTERVAL '30 days'`
     );
 
-    if (globalResult.rows.length >= 3) {
-      const weights = buildWeightsFromRows(globalResult.rows);
+    const globalWeights = buildWeightsFromSignalRows(globalResult.rows);
+    if (Object.keys(globalWeights).length >= 3) {
       console.log(
-        `[AgentWeights] Using global weights (${globalResult.rows.length} agents scored in last 30d)`
+        `[AgentWeights] Using global Brier weights (${Object.keys(globalWeights).length} agents calibrated in last 30d)`
       );
-      return weights;
+      return globalWeights;
     }
 
     // Step 3: Not enough data - return empty map (all agents use default weight 1.0)
     console.log(
-      `[AgentWeights] Insufficient performance data - using default weights (market: ${marketResult.rows.length}, global: ${globalResult.rows.length} agents)`
+      `[AgentWeights] Insufficient calibration data - using default weights ` +
+      `(market: ${Object.keys(marketWeights).length}, global: ${Object.keys(globalWeights).length} agents)`
     );
     return {};
   } catch (error) {
@@ -417,27 +447,69 @@ export async function fetchAgentPerformanceWeights(
   }
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 /**
- * Convert DB rows (agent_name, total_signals, correct_signals) into a
- * performance weight map. Normalizes accuracy to a 0.5–2.0 range:
- *   - 50% accuracy → 1.0 (neutral)
- *   - 100% accuracy → 2.0 (double influence)
- *   - 0% accuracy → 0.5 (half influence)
+ * Convert per-signal rows into Brier-calibrated weights.
+ *
+ * Brier score = mean((P(YES) - realized_outcome)^2).
+ * A coin-flip forecaster has a Brier score of 0.25. Skill is normalized
+ * against that baseline:
+ *   - perfect (Brier 0)      → 2.0x influence
+ *   - coin flip (Brier 0.25) → 1.0x influence
+ *   - worse than coin flip   → down to 0.4x influence
+ *
+ * The final weight blends 70% Brier skill and 30% directional accuracy so a
+ * well-calibrated but unlucky agent is not punished as harshly as a
+ * confidently wrong one.
  */
-function buildWeightsFromRows(
-  rows: Array<{ agent_name: string; total_signals: string | number; correct_signals: string | number }>
+export function buildWeightsFromSignalRows(
+  rows: SignalOutcomeRow[]
 ): Record<string, number> {
-  const weights: Record<string, number> = {};
+  const byAgent = new Map<
+    string,
+    { brierSum: number; correctDirections: number; count: number }
+  >();
 
   for (const row of rows) {
-    const total = Number(row.total_signals);
-    const correct = Number(row.correct_signals);
-    if (total === 0) continue;
+    const outcome = Number(row.outcome);
+    const probability = Number(row.fair_probability);
+    if (!Number.isFinite(outcome) || !Number.isFinite(probability)) continue;
 
-    const accuracy = correct / total; // 0.0–1.0
-    // Normalize: 0% → 0.5, 50% → 1.0, 100% → 2.0
-    const weight = 0.5 + accuracy * 1.5;
-    weights[row.agent_name] = weight;
+    const p = clamp(probability, 0.001, 0.999);
+    const brier = (p - outcome) ** 2;
+    const predictedYes = row.direction === 'YES' || (row.direction !== 'NO' && p >= 0.5);
+    const correctDirection = (predictedYes ? 1 : 0) === outcome ? 1 : 0;
+
+    const existing = byAgent.get(row.agent_name) ?? {
+      brierSum: 0,
+      correctDirections: 0,
+      count: 0,
+    };
+    existing.brierSum += brier;
+    existing.correctDirections += correctDirection;
+    existing.count += 1;
+    byAgent.set(row.agent_name, existing);
+  }
+
+  const weights: Record<string, number> = {};
+
+  for (const [agentName, stats] of byAgent) {
+    if (stats.count < 2) continue;
+
+    const brier = stats.brierSum / stats.count;
+    const accuracy = stats.correctDirections / stats.count;
+
+    // 0.25 is the coin-flip Brier baseline.
+    const brierSkill = 1 - brier / 0.25; // perfect=1, coinflip=0, worse<0
+    const brierWeight = clamp(1 + brierSkill, 0.4, 2.0);
+    const accuracyWeight = clamp(0.5 + accuracy * 1.5, 0.5, 2.0);
+
+    weights[agentName] = Number(
+      (0.7 * brierWeight + 0.3 * accuracyWeight).toFixed(3)
+    );
   }
 
   return weights;

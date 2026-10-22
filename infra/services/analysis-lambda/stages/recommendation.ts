@@ -24,7 +24,7 @@ import type {
   Thesis,
   TradeRecommendation,
 } from '../lib/types';
-import type { ConsensusEngineOutput } from './consensus-engine';
+import { MAX_ACTIONABLE_DIVERGENCE, type ConsensusEngineOutput } from './consensus-engine';
 import type { RiskPhilosophyResult } from './risk-philosophy';
 
 // ============================================================================
@@ -32,6 +32,12 @@ import type { RiskPhilosophyResult } from './risk-philosophy';
 // ============================================================================
 
 const RECOMMENDATION_TIMEOUT_MS = 180_000; // 180 seconds
+
+/** Minimum target-distance / stop-distance ratio for an actionable trade. */
+const MIN_RISK_REWARD_RATIO = 1.5;
+
+/** Highest target price allowed after deterministic correction. */
+const MAX_TARGET_PRICE = 0.98;
 
 // ============================================================================
 // System Prompt
@@ -81,21 +87,24 @@ The ordering is ALWAYS: stop_loss < entry < target. You buy at entry, profit at 
 - Must be ABOVE entry zone (you profit when your token appreciates).
 - Based on consensus probability and confidence band.
 - Account for market friction (spread, slippage on exit).
+- **Risk/reward rule**: the distance from entry to target must be at least 1.5x the distance from entry to stop loss. A trade that risks more than it can reasonably gain is not actionable.
 
 ### Stop Loss
 - Maximum acceptable loss level for the token being bought.
 - Must be BELOW entry zone (you lose when your token depreciates).
 - Based on the point where the thesis would be invalidated.
-- Account for normal market noise vs. genuine signal.
+- Account for normal market noise vs. genuine signal. Use the provided volatility: a stop inside normal noise will be hit by randomness.
+- If the market resolves soon, require a tighter, evidence-based stop rather than a wide speculative one.
 
 ### Expected Value
-- Calculate EV = (win_probability * profit) - (loss_probability * loss).
+- The platform recomputes EV deterministically using the consensus-derived win probability, floored by the market-implied probability unless the edge is large enough to be credible.
+- EV = (win_probability * (target_mid - entry_mid)) - ((1 - win_probability) * (entry_mid - stop_loss)).
 - Must be positive for any trade recommendation.
-- If EV is negative, recommend NO_TRADE regardless of edge.
-- **win_probability** is YOUR probability of winning this specific trade:
-  - For LONG_YES: probability that the YES outcome occurs (your token goes to 1.00).
-  - For LONG_NO: probability that the NO outcome occurs, i.e., YES does NOT happen (your token goes to 1.00).
-  - This should align with the consensus probability (for LONG_YES) or 1 - consensus (for LONG_NO).
+- If EV is negative at that conservative win probability, output NO_TRADE.
+- **win_probability** is the probability of winning:
+  - For LONG_YES: consensus P(YES), floored at the current market P(YES).
+  - For LONG_NO: 1 - consensus P(YES), floored at 1 - current market P(YES).
+- Do not invent a win probability that contradicts consensus or the market.
 
 ### Explanation
 Provide a clear, human-readable explanation:
@@ -132,8 +141,10 @@ Return a JSON object:
 - Be specific about entry/exit levels - vague ranges are not actionable.
 - Account for slippage in EV calculations.
 - If consensus failed (high disagreement), always recommend NO_TRADE.
+- If the consensus engine blocked the trade because the model disagreed with the market too much, always recommend NO_TRADE.
 - The explanation must be honest about uncertainty.
 - ALL prices must satisfy: stop_loss < entry_zone[0] ≤ entry_zone[1] < target_zone[0] ≤ target_zone[1].
+- The target distance must be at least 1.5x the stop distance. If you cannot construct such a trade, output NO_TRADE.
 - For LONG_NO: convert YES probabilities to NO prices (1 - YES_prob) before outputting.`;
 
 // ============================================================================
@@ -163,6 +174,16 @@ export interface RecommendationInput {
   agentsUsed: string[];
   totalLlmCalls: number;
   executionStartTime: number;
+  /** Recent price volatility (standard deviation of price). */
+  volatility?: number;
+  /** Market resolution date (ISO 8601) if available. */
+  marketEndDate?: string;
+  /** Deterministic liquidity risk derived from spread/depth. */
+  liquidityRisk?: 'low' | 'medium' | 'high';
+  /** Total market liquidity in USDC, if available. */
+  liquidity?: number;
+  /** Current bid-ask spread in probability points. */
+  spread?: number;
 }
 
 // ============================================================================
@@ -205,23 +226,33 @@ export async function runRecommendation(
     const parsed = extractJson(responseText);
 
     if (parsed) {
-      const recommendation = parseRecommendation(parsed, input);
-      if (recommendation) {
+      const outcome = parseRecommendation(parsed, input);
+      if (outcome.ok) {
         const durationMs = Date.now() - startTime;
         console.log(
-          `[Recommendation] Completed in ${durationMs}ms - action: ${recommendation.action}`,
+          `[Recommendation] Completed in ${durationMs}ms - action: ${outcome.recommendation.action}, ` +
+          `risk/reward: ${outcome.recommendation.metadata.riskRewardRatio?.toFixed(2) ?? 'n/a'}`,
         );
-        return { recommendation, durationMs, usedFallback: false };
+        return { recommendation: outcome.recommendation, durationMs, usedFallback: false };
       }
+
+      console.warn(
+        `[Recommendation] Rejected by deterministic validation: ${outcome.reason} - using NO_TRADE fallback`,
+      );
+      return createFallbackResult(input, startTime, outcome.reason);
     }
 
-    // JSON extraction or parsing failed - use NO_TRADE fallback
+    // JSON extraction failed - use NO_TRADE fallback
     console.warn('[Recommendation] Failed to parse recommendation - using NO_TRADE fallback');
-    return createFallbackResult(input, startTime);
+    return createFallbackResult(
+      input,
+      startTime,
+      'the model response did not contain a valid JSON recommendation',
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[Recommendation] Failed: ${message} - using NO_TRADE fallback`);
-    return createFallbackResult(input, startTime);
+    return createFallbackResult(input, startTime, message);
   }
 }
 
@@ -236,6 +267,40 @@ function buildRecommendationPrompt(input: RecommendationInput): string {
   const sections: string[] = [];
 
   sections.push(`## Market Question\n${input.marketQuestion}`);
+
+  // Deterministic market context. The recommendation agent needs volatility,
+  // time-to-resolution and liquidity to generate sensible TP/SL levels.
+  const marketContext: string[] = [
+    `## Market Context`,
+    `- Current market P(YES): ${input.marketProbability.toFixed(3)}`,
+  ];
+  if (input.marketEndDate) {
+    const end = new Date(input.marketEndDate);
+    if (!Number.isNaN(end.getTime())) {
+      const hours = Math.max(0, (end.getTime() - Date.now()) / 3_600_000);
+      const horizon =
+        hours < 48 ? `${hours.toFixed(1)} hours` : `${(hours / 24).toFixed(1)} days`;
+      marketContext.push(`- Resolution: ${input.marketEndDate} (${horizon} away)`);
+    } else {
+      marketContext.push(`- Resolution: ${input.marketEndDate}`);
+    }
+  }
+  if (input.volatility !== undefined) {
+    marketContext.push(`- Recent price volatility (sigma): ${input.volatility.toFixed(4)}`);
+  }
+  if (input.liquidity !== undefined) {
+    marketContext.push(
+      `- Liquidity: $${input.liquidity.toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
+    );
+  }
+  if (input.spread !== undefined) {
+    marketContext.push(`- Bid-ask spread: ${(input.spread * 100).toFixed(2)} cents`);
+  }
+  marketContext.push(
+    `- Minimum risk/reward ratio: ${MIN_RISK_REWARD_RATIO.toFixed(1)}:1 ` +
+      `(target distance must be at least ${MIN_RISK_REWARD_RATIO}x stop distance).`,
+  );
+  sections.push(marketContext.join('\n'));
 
   sections.push(
     `## Consensus Result\n` +
@@ -295,8 +360,10 @@ function buildRecommendationPrompt(input: RecommendationInput): string {
             `and your stop_loss should be LOWER (YES token depreciates). ` +
             `Ordering: stop_loss < entry_zone[0] ≤ entry_zone[1] < target_zone[0] ≤ target_zone[1].`
           : `IMPORTANT: The consensus engine determined NO_TRADE. ` +
-            `The edge (${input.consensusOutput.edge.toFixed(3)}) is insufficient or consensus failed ` +
-            `(disagreement: ${input.consensusOutput.consensusResult.disagreementIndex.toFixed(3)}). ` +
+            `The edge (${input.consensusOutput.edge.toFixed(3)}) is insufficient, consensus failed ` +
+            `(disagreement: ${input.consensusOutput.consensusResult.disagreementIndex.toFixed(3)}), ` +
+            `or the divergence circuit breaker blocked an implausibly large disagreement with the market ` +
+            `(${input.consensusOutput.divergenceGuardTriggered ? 'triggered' : 'not triggered'}). ` +
             `You MUST output action "NO_TRADE". Set entry_zone and target_zone to [0, 0] and stop_loss to 0. ` +
             `Set expected_value to 0 and win_probability to 0. ` +
             `Focus your explanation on WHY this market is not tradeable right now: ` +
@@ -311,19 +378,25 @@ function buildRecommendationPrompt(input: RecommendationInput): string {
 // Parsing
 // ============================================================================
 
+type RecommendationParseResult =
+  | { ok: true; recommendation: TradeRecommendation }
+  | { ok: false; reason: string };
+
 /**
- * Parse a TradeRecommendation from the extracted JSON object.
- * Returns null if required fields cannot be extracted.
+ * Parse and validate a TradeRecommendation from the extracted JSON object.
  *
- * Includes direction-aware validation:
+ * Direction-aware validation:
  * - All prices must be in traded-token space (NO-price for LONG_NO, YES-price for LONG_YES).
  * - Enforces ordering: stopLoss < entryZone[0] ≤ entryZone[1] < targetZone[0] ≤ targetZone[1].
  * - If LLM outputs in wrong space (detected by inverted ordering), auto-converts.
+ * - Enforces a minimum 1.5:1 target/stop distance ratio.
+ * - Recomputes expected value deterministically from the consensus-derived
+ *   win probability; negative EV is rejected.
  */
-function parseRecommendation(
+export function parseRecommendation(
   json: Record<string, unknown>,
   input: RecommendationInput,
-): TradeRecommendation | null {
+): RecommendationParseResult {
   // Action - must match consensus action (agent can't override consensus)
   const action = input.consensusOutput.action;
 
@@ -332,34 +405,36 @@ function parseRecommendation(
 
   // Entry zone
   let entryZone = parseNumberTuple(json.entry_zone ?? json.entryZone);
-  if (!entryZone && !isNoTrade) return null;
-
   // Target zone
   let targetZone = parseNumberTuple(json.target_zone ?? json.targetZone);
-  if (!targetZone && !isNoTrade) return null;
-
   // Stop loss
   let stopLoss = normalizeNumber(json.stop_loss ?? json.stopLoss, 0, 1);
-  if (stopLoss === null && !isNoTrade) return null;
 
-  // ── Direction-aware validation & auto-correction ──
-  if (!isNoTrade && entryZone && targetZone && stopLoss !== null) {
-    const corrected = validateAndCorrectPrices(action, entryZone, targetZone, stopLoss, input.marketProbability);
-    if (corrected) {
-      entryZone = corrected.entryZone;
-      targetZone = corrected.targetZone;
-      stopLoss = corrected.stopLoss;
-    } else {
-      // Prices are unsalvageable - reject
+  if (!isNoTrade) {
+    if (!entryZone) return { ok: false, reason: 'missing entry_zone' };
+    if (!targetZone) return { ok: false, reason: 'missing target_zone' };
+    if (stopLoss === null) return { ok: false, reason: 'missing stop_loss' };
+
+    const corrected = validateAndCorrectPrices(
+      action,
+      entryZone,
+      targetZone,
+      stopLoss,
+      input.marketProbability,
+    );
+    if (!corrected) {
       console.warn(
         `[Recommendation] Price validation failed and could not auto-correct. ` +
         `action=${action}, entry=${JSON.stringify(entryZone)}, target=${JSON.stringify(targetZone)}, sl=${stopLoss}`,
       );
-      return null;
+      return { ok: false, reason: 'price ordering could not be validated' };
     }
 
-    // ── Entry zone proximity check ──
-    // Ensure entry is within ±30% of the current token price.
+    entryZone = corrected.entryZone;
+    targetZone = corrected.targetZone;
+    stopLoss = corrected.stopLoss;
+
+    // Entry zone proximity check: ensure entry is within ±30% of current token price.
     const currentTokenPrice = action === 'LONG_NO'
       ? 1 - input.marketProbability
       : input.marketProbability;
@@ -368,56 +443,113 @@ function parseRecommendation(
       console.warn(
         `[Recommendation] Rejecting recommendation: entry zone too far from market price.`,
       );
-      return null;
+      return { ok: false, reason: 'entry zone is too far from the current market price' };
     }
   }
 
-  // Expected value
-  const expectedValue = normalizeNumber(json.expected_value ?? json.expectedValue, -10, 10);
-  if (expectedValue === null && !isNoTrade) return null;
+  let expectedValue = 0;
+  let winProbability = 0;
+  let riskRewardRatio = 0;
 
-  // ── Negative EV rejection ──
-  // A trade with negative expected value should NEVER be recommended.
-  // If the LLM output LONG_YES/LONG_NO with EV <= 0, reject to NO_TRADE fallback.
-  if (!isNoTrade && expectedValue !== null && expectedValue <= 0) {
-    console.warn(
-      `[Recommendation] Rejecting ${action}: expected value ${expectedValue.toFixed(4)} <= 0. ` +
-      `Negative EV trades are never actionable.`,
-    );
-    return null;
-  }
+  if (!isNoTrade && entryZone && targetZone && stopLoss !== null) {
+    const entryMid = (entryZone[0] + entryZone[1]) / 2;
+    let targetLow = targetZone[0];
+    let targetHigh = targetZone[1];
+    let targetMid = (targetLow + targetHigh) / 2;
 
-  // Win probability
-  const winProbability = normalizeNumber(json.win_probability ?? json.winProbability, 0, 1);
-  if (winProbability === null && !isNoTrade) return null;
+    const stopDistance = entryMid - stopLoss;
+    let targetDistance = targetMid - entryMid;
 
-  // ── Win probability sanity check ──
-  // The LLM's win_probability should not wildly disagree with the consensus probability.
-  // Allow ±25% absolute deviation from consensus - beyond that, the LLM is hallucinating.
-  if (!isNoTrade && winProbability !== null) {
-    const consensusProb = input.consensusOutput.consensusResult.probability;
-    // For LONG_NO, the "win" probability is the chance the NO side wins (1 - consensus)
-    const expectedWinProb = action === 'LONG_NO' ? 1 - consensusProb : consensusProb;
-    const winProbDeviation = Math.abs(winProbability - expectedWinProb);
-    if (winProbDeviation > 0.25) {
+    if (targetDistance <= 0) {
+      return { ok: false, reason: 'target is not above entry' };
+    }
+    if (stopDistance <= 0) {
+      return { ok: false, reason: 'stop loss is not below entry' };
+    }
+
+    // Enforce a minimum risk/reward ratio. Expand the target (do not tighten
+    // the stop) so the trade has enough room to pay for the risk.
+    if (targetDistance < MIN_RISK_REWARD_RATIO * stopDistance) {
+      const requiredTargetMid = entryMid + MIN_RISK_REWARD_RATIO * stopDistance;
+      if (requiredTargetMid > MAX_TARGET_PRICE) {
+        return {
+          ok: false,
+          reason:
+            `risk/reward ratio ${(targetDistance / stopDistance).toFixed(2)} is below ` +
+            `${MIN_RISK_REWARD_RATIO} and the required target ${requiredTargetMid.toFixed(3)} ` +
+            `exceeds the maximum ${MAX_TARGET_PRICE}`,
+        };
+      }
+
+      const previousTargetMid = targetMid;
+      if (targetHigh >= requiredTargetMid) {
+        targetLow = requiredTargetMid;
+      } else {
+        targetLow = requiredTargetMid;
+        targetHigh = requiredTargetMid;
+      }
+      targetZone = [targetLow, targetHigh];
+      targetMid = (targetLow + targetHigh) / 2;
+      targetDistance = targetMid - entryMid;
+
       console.warn(
-        `[Recommendation] Win probability ${winProbability.toFixed(3)} deviates ${(winProbDeviation * 100).toFixed(1)}% ` +
-        `from expected ${expectedWinProb.toFixed(3)} (consensus-derived). Clamping to consensus value.`,
+        `[Recommendation] Expanded target from ${previousTargetMid.toFixed(3)} to ` +
+        `${targetMid.toFixed(3)} to meet ${MIN_RISK_REWARD_RATIO}:1 risk/reward ` +
+        `(entry ${entryMid.toFixed(3)}, stop ${stopLoss.toFixed(3)}).`,
       );
-      // Don't reject - just override with the consensus-derived value
+    }
+
+    riskRewardRatio = targetDistance / stopDistance;
+
+    const consensusProb = Math.max(
+      0,
+      Math.min(1, input.consensusOutput.consensusResult.probability),
+    );
+    const marketProb = Math.max(0, Math.min(1, input.marketProbability));
+
+    const consensusWinProbability =
+      action === 'LONG_NO' ? 1 - consensusProb : consensusProb;
+    const marketWinProbability =
+      action === 'LONG_NO' ? 1 - marketProb : marketProb;
+
+    // Use the market-implied probability as a floor unless the model has a
+    // genuinely credible edge. This prevents the system from overpaying for a
+    // cheap underdog just because its ensemble is modestly bearish.
+    const hasCredibleEdge =
+      Math.abs(input.consensusOutput.edge) >= 0.10 &&
+      input.consensusOutput.consensusResult.confidence >= 0.5;
+
+    winProbability = hasCredibleEdge
+      ? consensusWinProbability
+      : Math.min(consensusWinProbability, marketWinProbability);
+
+    expectedValue =
+      winProbability * targetDistance - (1 - winProbability) * stopDistance;
+
+    if (expectedValue <= 0) {
+      console.warn(
+        `[Recommendation] Rejecting ${action}: expected value ${expectedValue.toFixed(4)} <= 0 ` +
+        `at consensus-derived win probability ${winProbability.toFixed(3)}. ` +
+        `Levels: entry=${entryMid.toFixed(3)}, target=${targetMid.toFixed(3)}, stop=${stopLoss.toFixed(3)}.`,
+      );
+      return {
+        ok: false,
+        reason:
+          `expected value is ${expectedValue.toFixed(4)} at the consensus-derived ` +
+          `win probability ${winProbability.toFixed(3)}`,
+      };
     }
   }
 
-  // Liquidity risk
   const liquidityRiskRaw = json.liquidity_risk ?? json.liquidityRisk;
-  const liquidityRisk = parseLiquidityRisk(liquidityRiskRaw);
+  const liquidityRisk =
+    parseLiquidityRisk(liquidityRiskRaw) ?? input.liquidityRisk ?? 'medium';
 
-  // Explanation
   const explanation = parseExplanation(json.explanation, input);
 
   // Build metadata from upstream context
   const executionDurationMs = Date.now() - input.executionStartTime;
-  const metadata = {
+  const metadata: TradeRecommendation['metadata'] = {
     consensusProbability: input.consensusOutput.consensusResult.probability,
     marketProbability: input.marketProbability,
     edge: input.consensusOutput.edge,
@@ -430,27 +562,26 @@ function parseRecommendation(
     agentsUsed: input.agentsUsed,
     marketQuestion: input.marketQuestion,
     disagreementIndex: input.consensusOutput.consensusResult.disagreementIndex,
+    riskRewardRatio: isNoTrade ? undefined : riskRewardRatio,
+    volatility: input.volatility,
+    marketEndDate: input.marketEndDate,
+    divergenceGuardTriggered: input.consensusOutput.divergenceGuardTriggered,
   };
 
   return {
-    marketId: input.marketId,
-    action,
-    entryZone: isNoTrade ? [0, 0] : (entryZone ?? [0, 0]),
-    targetZone: isNoTrade ? [0, 0] : (targetZone ?? [0, 0]),
-    stopLoss: isNoTrade ? 0 : (stopLoss ?? 0),
-    expectedValue: isNoTrade ? 0 : (expectedValue ?? 0),
-    winProbability: (() => {
-      if (isNoTrade) return 0;
-      if (winProbability === null) return input.consensusOutput.consensusResult.probability;
-      // Use consensus-derived value if LLM's win_probability deviates >25%
-      const consensusProb = input.consensusOutput.consensusResult.probability;
-      const expectedWinProb = action === 'LONG_NO' ? 1 - consensusProb : consensusProb;
-      const deviation = Math.abs(winProbability - expectedWinProb);
-      return deviation > 0.25 ? expectedWinProb : winProbability;
-    })(),
-    liquidityRisk,
-    explanation,
-    metadata,
+    ok: true,
+    recommendation: {
+      marketId: input.marketId,
+      action,
+      entryZone: isNoTrade ? [0, 0] : (entryZone ?? [0, 0]),
+      targetZone: isNoTrade ? [0, 0] : (targetZone ?? [0, 0]),
+      stopLoss: isNoTrade ? 0 : (stopLoss ?? 0),
+      expectedValue: isNoTrade ? 0 : expectedValue,
+      winProbability: isNoTrade ? 0 : winProbability,
+      liquidityRisk,
+      explanation,
+      metadata,
+    },
   };
 }
 
@@ -505,6 +636,7 @@ function parseExplanation(
 function createFallbackResult(
   input: RecommendationInput,
   startTime: number,
+  reason?: string,
 ): RecommendationStageResult {
   const executionDurationMs = Date.now() - input.executionStartTime;
 
@@ -513,23 +645,55 @@ function createFallbackResult(
   const isNoTradeAction = input.consensusOutput.action === 'NO_TRADE';
   const edge = input.consensusOutput.edge;
   const disagreement = input.consensusOutput.consensusResult.disagreementIndex;
+  const divergenceGuard =
+    input.consensusOutput.divergenceGuardTriggered === true ||
+    Math.abs(edge) > MAX_ACTIONABLE_DIVERGENCE;
 
   let summary: string;
   let coreThesis: string;
   let uncertaintyNote: string;
+  let failureScenarios: string[];
 
-  if (isConsensusFailed) {
+  if (divergenceGuard) {
+    summary =
+      `NO_TRADE: Model-market divergence of ${(Math.abs(edge) * 100).toFixed(1)}% is too large to trust. ` +
+      `This looks like model error, not a tradable mispricing.`;
+    coreThesis =
+      `Our consensus fair value (${input.consensusOutput.consensusResult.probability.toFixed(3)}) ` +
+      `differs from the market (${input.marketProbability.toFixed(3)}) by more than the ` +
+      `${(MAX_ACTIONABLE_DIVERGENCE * 100).toFixed(0)}% credibility limit. In a liquid market, ` +
+      `that usually means the model is missing information rather than that the crowd is wrong.`;
+    uncertaintyNote =
+      `The divergence circuit breaker is a capital-protection mechanism. Wait for the model and ` +
+      `market to converge, or for specific new evidence that explains the gap.`;
+    failureScenarios = [
+      'Model-market divergence too large to be credible',
+      'Ensemble is likely miscalibrated for this market',
+    ];
+  } else if (isConsensusFailed) {
     summary = `NO_TRADE: Consensus failed with ${(disagreement * 100).toFixed(1)}% disagreement among agents. Too much uncertainty to take a position.`;
     coreThesis = `Agent disagreement index (${disagreement.toFixed(3)}) exceeds the 30% threshold, indicating fundamentally conflicting views on this market's direction.`;
     uncertaintyNote = `High disagreement suggests the market is in a genuinely uncertain state where different analytical frameworks reach opposing conclusions. Wait for clarity before entering.`;
-  } else if (isNoTradeAction && Math.abs(edge) < 0.05) {
-    summary = `NO_TRADE: Edge of ${(edge * 100).toFixed(1)}% is below the minimum ${5}% threshold. Insufficient mispricing to justify transaction costs.`;
+    failureScenarios = ['Agent disagreement too high', 'Conflicting directional signals'];
+  } else if (isNoTradeAction && Math.abs(edge) < 0.07) {
+    summary = `NO_TRADE: Edge of ${(edge * 100).toFixed(1)}% is below the minimum ${7}% threshold. Insufficient mispricing to justify transaction costs.`;
     coreThesis = `The market price (${input.marketProbability.toFixed(3)}) is close to our consensus fair value (${input.consensusOutput.consensusResult.probability.toFixed(3)}). No exploitable mispricing exists.`;
     uncertaintyNote = `The market appears efficiently priced for this event. A significant catalyst or new information would be needed to create a tradeable edge.`;
+    failureScenarios = ['Insufficient edge to cover transaction costs', 'Market efficiently priced'];
+  } else if (reason) {
+    summary = `NO_TRADE: The proposed trade failed deterministic risk validation: ${reason}.`;
+    coreThesis =
+      `The direction may be supported, but the proposed levels or expected value were not ` +
+      `actionable. We refuse to recommend a trade whose risk is not paid for by its reward.`;
+    uncertaintyNote =
+      `Risk/reward, entry proximity, and expected-value checks are applied after the model ` +
+      `responds. A failed check falls back to NO_TRADE to protect capital.`;
+    failureScenarios = ['Deterministic risk validation failed', reason];
   } else {
     summary = 'Recommendation generation failed - NO_TRADE issued as safety fallback.';
     coreThesis = 'Unable to synthesize a valid recommendation from upstream data.';
     uncertaintyNote = 'Full analysis could not be completed. No trade recommended.';
+    failureScenarios = ['Recommendation agent failure'];
   }
 
   const recommendation: TradeRecommendation = {
@@ -540,16 +704,12 @@ function createFallbackResult(
     stopLoss: 0,
     expectedValue: 0,
     winProbability: 0,
-    liquidityRisk: 'high',
+    liquidityRisk: input.liquidityRisk ?? 'high',
     explanation: {
       summary,
       coreThesis,
       keyCatalysts: [],
-      failureScenarios: isConsensusFailed
-        ? ['Agent disagreement too high', 'Conflicting directional signals']
-        : isNoTradeAction
-          ? ['Insufficient edge to cover transaction costs', 'Market efficiently priced']
-          : ['Recommendation agent failure'],
+      failureScenarios,
       uncertaintyNote,
       riskPerspectives: input.riskPhilosophy.summary,
     },
@@ -566,6 +726,9 @@ function createFallbackResult(
       agentsUsed: input.agentsUsed,
       marketQuestion: input.marketQuestion,
       disagreementIndex: input.consensusOutput.consensusResult.disagreementIndex,
+      volatility: input.volatility,
+      marketEndDate: input.marketEndDate,
+      divergenceGuardTriggered: input.consensusOutput.divergenceGuardTriggered,
     },
   };
 
@@ -886,14 +1049,16 @@ function normalizeStringArray(value: unknown, defaults: string[]): string[] {
 /**
  * Parse liquidity risk level, defaulting to "medium" for unknown values.
  */
-function parseLiquidityRisk(value: unknown): 'low' | 'medium' | 'high' {
+function parseLiquidityRisk(
+  value: unknown,
+): 'low' | 'medium' | 'high' | null {
   if (typeof value === 'string') {
     const lower = value.toLowerCase().trim();
     if (lower === 'low' || lower === 'medium' || lower === 'high') {
       return lower;
     }
   }
-  return 'medium';
+  return null;
 }
 
 /**

@@ -1,16 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Expandable } from '@/components/ui/Expandable';
-import { InfoHint } from '@/components/ui/InfoHint';
-import { ProbabilityBar } from '@/components/ui/ProbabilityBar';
+import { Markdown } from '@/components/ui/Markdown';
+import { Modal } from '@/components/ui/Modal';
 import { useMarketAnalysis } from '@/hooks/useMarketAnalysis';
 import { useAnalysisStatus, type AnalysisStatus } from '@/hooks/useAnalysisStatus';
 import { useAnalysisSubscriptions, useCancelAnalysisSubscription } from '@/hooks/useAnalysisSubscriptions';
 import { cn } from '@/utils/classNames';
+import { AlertTriangle, ArrowDown, ArrowUp, Brain, ChevronRight, Sparkles } from 'lucide-react';
 
 interface AIPanelProps {
   marketSlug: string;
@@ -25,9 +23,11 @@ interface AIPanelProps {
 export function AIPanel({ marketSlug, yesCents: liveYesCents, onQuickBuy, onRequestAnalysis, disabled = false }: AIPanelProps) {
   const { data: analysis, isLoading: analysisLoading } = useMarketAnalysis(marketSlug);
   const analysisStatus = useAnalysisStatus(marketSlug);
+  const [webResearchOpen, setWebResearchOpen] = useState(false);
 
   // Agent signals come from the analysis detail (merged by results-api from S3)
   const signals = analysis?.agentSignals ?? [];
+  const webResearch = analysis?.webResearchSummary?.trim() ?? '';
 
   const action = analysis?.action;
   const edge = analysis?.metadata?.edge ?? 0;
@@ -38,362 +38,615 @@ export function AIPanel({ marketSlug, yesCents: liveYesCents, onQuickBuy, onRequ
   const thesis = analysis?.explanation?.coreThesis ?? '';
   const keyCatalysts = analysis?.explanation?.keyCatalysts ?? [];
   const failureScenarios = analysis?.explanation?.failureScenarios ?? [];
-  const riskPerspectives = analysis?.explanation?.riskPerspectives ?? '';
-  const agentsUsed = analysis?.metadata?.agentsUsed ?? [];
 
-  // Determine recommendation display
   const recLabel = action === 'LONG_YES' ? 'BUY YES' : action === 'LONG_NO' ? 'BUY NO' : 'NO TRADE';
-  const recTone = action === 'LONG_YES' ? 'yes' : action === 'LONG_NO' ? 'no' : 'muted';
 
-  // Edge from the traded token's perspective:
-  // Backend edge = consensus - market (always YES-space).
-  // For LONG_NO, the trader's edge is the inverse (NO is underpriced → positive edge).
+  // Backend edge = consensus - market (always YES-space). For LONG_NO the
+  // trader's edge is the inverse, since NO is the underpriced side.
   const displayEdge = action === 'LONG_NO' ? -edge : edge;
 
   // Token price in cents: prefer live Polymarket price, fallback to analysis snapshot
   const displayYesCents = liveYesCents ?? (marketProb > 0 && marketProb <= 1 ? Math.round(marketProb * 100) : 0);
+  const marketCents =
+    marketProb > 0 && marketProb <= 1 ? Math.round(marketProb * 100) : displayYesCents;
+  const consensusCents =
+    consensusProb > 0 && consensusProb <= 1 ? Math.round(consensusProb * 100) : null;
+  const tradeYesCents = displayYesCents > 0 ? Math.round(displayYesCents) : null;
+  const tradeNoCents = tradeYesCents != null ? 100 - tradeYesCents : null;
+  const yesLean = signals.filter(
+    (signal) => signal.direction === 'YES' || signal.direction === 'LONG_YES'
+  ).length;
+  const noLean = signals.filter(
+    (signal) => signal.direction === 'NO' || signal.direction === 'LONG_NO'
+  ).length;
 
   if (analysisLoading) {
     return (
-      <Card variant="ai" className="p-6 animate-pulse">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-6 h-6 rounded-md bg-ai/20" />
-          <div className="h-4 w-32 bg-surface-2 rounded" />
+      <section className="overflow-hidden rounded-2xl border border-ai/25 bg-surface">
+        <div className="border-b border-ai/15 bg-gradient-to-br from-ai/[0.12] via-ai/[0.03] to-transparent px-4 py-4">
+          <div className="flex animate-pulse items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-ai/20" />
+            <div className="space-y-1.5">
+              <div className="h-3.5 w-24 rounded bg-surface-2" />
+              <div className="h-2.5 w-32 rounded bg-surface-2" />
+            </div>
+          </div>
         </div>
-        <div className="h-12 bg-surface-2 rounded-lg mb-5" />
-        <div className="h-4 bg-surface-2 rounded mb-3 w-3/4" />
-        <div className="h-4 bg-surface-2 rounded mb-3 w-1/2" />
-        <div className="h-20 bg-surface-2 rounded" />
-      </Card>
+        <div className="animate-pulse space-y-3 p-4">
+          <div className="h-8 w-2/3 rounded bg-surface-2" />
+          <div className="h-2 rounded-full bg-surface-2" />
+          <div className="h-16 rounded-xl bg-surface-2" />
+          <div className="h-4 w-3/4 rounded bg-surface-2" />
+          <div className="h-4 w-1/2 rounded bg-surface-2" />
+        </div>
+      </section>
     );
   }
 
   if (!analysis) {
     return (
-      <Card variant="ai" className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="w-6 h-6 rounded-md bg-ai/20 flex items-center justify-center text-xs">
-            🧠
-          </span>
-          <h3 className="text-sm font-semibold flex-1">AI Intelligence</h3>
-        </div>
-
-        {/* Quick Buy Buttons (always visible) */}
-        <div className="grid grid-cols-2 gap-2 mb-5">
-          <button
-            type="button"
-            onClick={() => onQuickBuy?.('yes')}
-            disabled={disabled}
-            aria-label="Buy YES"
-            className={cn(
-              'flex flex-col items-center gap-1 p-3 rounded-[10px] border-[1.5px] transition-colors',
-              disabled
-                ? 'bg-surface-2 border-border text-muted cursor-not-allowed opacity-50'
-                : 'bg-yes/[0.15] border-yes text-yes hover:bg-yes/25'
-            )}
-          >
-            <span className="text-[0.8125rem] font-bold">Buy YES</span>
-            {displayYesCents > 0 && (
-              <span className="font-mono text-xs opacity-80">
-                {displayYesCents}¢
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => onQuickBuy?.('no')}
-            disabled={disabled}
-            aria-label="Buy NO"
-            className={cn(
-              'flex flex-col items-center gap-1 p-3 rounded-[10px] border-[1.5px] transition-colors',
-              disabled
-                ? 'bg-surface-2 border-border text-muted cursor-not-allowed opacity-50'
-                : 'bg-no/[0.15] border-no text-no hover:bg-no/25'
-            )}
-          >
-            <span className="text-[0.8125rem] font-bold">Buy NO</span>
-            {displayYesCents > 0 && (
-              <span className="font-mono text-xs opacity-80">
-                {100 - displayYesCents}¢
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Real-time progress banner */}
-        {analysisStatus.state !== 'none' && (
-          <AnalysisStatusBanner status={analysisStatus} />
-        )}
-
-        {analysisStatus.state === 'none' && (
-          <div className="text-center py-6 border border-dashed border-border rounded-lg">
-            <p className="text-sm text-muted mb-3">{disabled ? 'Market resolved' : 'No analysis available yet'}</p>
-            {!disabled && (
-              <p className="text-xs text-muted mb-4">
-                Request an analysis to get AI-powered recommendations
-              </p>
-            )}
-            <Button variant="ai" size="sm" onClick={onRequestAnalysis} disabled={disabled}>
-              {disabled ? 'Market Resolved' : 'Get Analysis'}
-            </Button>
+      <section className="overflow-hidden rounded-2xl border border-ai/25 bg-surface">
+        <div className="border-b border-ai/15 bg-gradient-to-br from-ai/[0.12] via-ai/[0.03] to-transparent px-4 py-4">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-ai/25 bg-ai/10 text-ai">
+              <Brain className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold leading-tight text-fg">AI verdict</h2>
+              <p className="text-[0.6rem] text-muted">14 agents · one consensus</p>
+            </div>
+            <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[0.58rem] text-muted">
+              no run
+            </span>
           </div>
-        )}
-      </Card>
+
+          <div className="mt-4">
+            {analysisStatus.state !== 'none' ? (
+              <AnalysisStatusBanner status={analysisStatus} />
+            ) : (
+              <div className="rounded-xl border border-dashed border-ai/25 bg-surface/50 p-4">
+                <p className="text-sm font-medium text-fg">
+                  {disabled ? 'This market is resolved' : 'No verdict yet'}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  {disabled
+                    ? 'Analysis is closed for this market.'
+                    : 'Run the full agent panel once to get a consensus probability, confidence band, and trade plan.'}
+                </p>
+                {!disabled ? (
+                  <>
+                    <Button
+                      variant="ai"
+                      size="md"
+                      className="mt-3 h-11 w-full"
+                      onClick={onRequestAnalysis}
+                    >
+                      Run 14-agent analysis
+                    </Button>
+                    <div className="mt-2 flex items-center justify-between font-mono text-[0.58rem] text-muted">
+                      <span>1 credit</span>
+                      <span>~52 seconds</span>
+                    </div>
+                  </>
+                ) : (
+                  <Button variant="secondary" size="sm" className="mt-3 w-full" disabled>
+                    Market resolved
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-border/60 p-4">
+          <TradeActions
+            yesCents={tradeYesCents}
+            noCents={tradeNoCents}
+            action={action}
+            disabled={disabled}
+            onQuickBuy={onQuickBuy}
+          />
+        </div>
+      </section>
     );
   }
 
+  const recColor =
+    action === 'LONG_YES' ? 'text-yes' : action === 'LONG_NO' ? 'text-no' : 'text-fg';
+  const edgeColor =
+    displayEdge > 0 ? 'text-yes' : displayEdge < 0 ? 'text-no' : 'text-muted';
+  const ev = analysis.expectedValue ?? 0;
+
   return (
-    <Card variant="ai" className="p-6">
-      {/* Panel Header */}
-      <div className="flex items-center gap-2 mb-5">
-        <span className="w-6 h-6 rounded-md bg-ai/20 flex items-center justify-center text-xs">
-          🧠
-        </span>
-        <h3 className="text-sm font-semibold flex-1">AI Intelligence</h3>
-        {analysis?.executedAt && (
-          <div className="flex items-center gap-1.5">
-            <FreshnessBadge executedAt={analysis.executedAt} />
-            <span className="text-[0.65rem] text-muted">
-              {formatFreshness(analysis.executedAt)}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Real-time progress banner (refresh in progress) */}
-      {analysisStatus.state !== 'none' && (
-        <div className="mb-5">
-          <AnalysisStatusBanner status={analysisStatus} />
-        </div>
-      )}
-
-      {/* Recommendation Badge */}
-      <div
-        className={cn(
-          'flex items-center gap-3 rounded-lg p-3.5 mb-5 border',
-          action === 'LONG_YES' && 'bg-yes/[0.08] border-yes/20',
-          action === 'LONG_NO' && 'bg-no/[0.08] border-no/20',
-          action === 'NO_TRADE' && 'bg-surface-2 border-border'
-        )}
-      >
-        <Badge tone={recTone as 'yes' | 'no' | 'muted'} size="md">
-          {recLabel}
-        </Badge>
-        {edge !== 0 && (
-          <span
-            className={cn(
-              'font-mono text-sm',
-              action === 'LONG_YES' && 'text-yes',
-              action === 'LONG_NO' && 'text-no',
-              action === 'NO_TRADE' && 'text-muted'
-            )}
-          >
-            {displayEdge > 0 ? '+' : ''}{(displayEdge * 100).toFixed(1)}¢ edge
+    <section className="overflow-hidden rounded-2xl border border-ai/25 bg-surface">
+      {/* Verdict header */}
+      <div className="relative overflow-hidden border-b border-ai/15 bg-gradient-to-br from-ai/[0.14] via-ai/[0.04] to-transparent px-4 pb-4 pt-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-ai/25 bg-ai/10 text-ai">
+            <Brain className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
-        )}
-      </div>
-
-      {/* Quick Buy Buttons */}
-      <div className="grid grid-cols-2 gap-2 mb-5">
-        <button
-          type="button"
-          onClick={() => onQuickBuy?.('yes')}
-          disabled={disabled}
-          aria-label="Buy YES"
-          className={cn(
-            'flex flex-col items-center gap-1 p-3 rounded-[10px] border-[1.5px] transition-colors',
-            disabled
-              ? 'bg-surface-2 border-border text-muted cursor-not-allowed opacity-50'
-              : 'bg-yes/[0.15] border-yes text-yes hover:bg-yes/25',
-            !disabled && action === 'LONG_YES' && 'shadow-[0_0_0_2px_var(--yes),0_0_12px_oklch(72%_0.16_155_/_0.2)]'
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold leading-tight text-fg">AI verdict</h2>
+            <p className="text-[0.6rem] text-muted">
+              {analysis.metadata.agentsUsed?.length || 14} agents · one consensus
+            </p>
+          </div>
+          {analysis.executedAt && (
+            <div className="flex items-center gap-1.5">
+              <FreshnessBadge executedAt={analysis.executedAt} />
+              <span className="text-[0.6rem] text-muted">
+                {formatFreshness(analysis.executedAt)}
+              </span>
+            </div>
           )}
-        >
-          <span className="text-[0.8125rem] font-bold">Buy YES</span>
-          {displayYesCents > 0 && (
-            <span className="font-mono text-xs opacity-80">
-              {displayYesCents}¢
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => onQuickBuy?.('no')}
-          disabled={disabled}
-          aria-label="Buy NO"
-          className={cn(
-            'flex flex-col items-center gap-1 p-3 rounded-[10px] border-[1.5px] transition-colors',
-            disabled
-              ? 'bg-surface-2 border-border text-muted cursor-not-allowed opacity-50'
-              : 'bg-no/[0.15] border-no text-no hover:bg-no/25',
-            !disabled && action === 'LONG_NO' && 'shadow-[0_0_0_2px_var(--no),0_0_12px_oklch(65%_0.18_25_/_0.2)]'
-          )}
-        >
-          <span className="text-[0.8125rem] font-bold">Buy NO</span>
-          {displayYesCents > 0 && (
-            <span className="font-mono text-xs opacity-80">
-              {100 - displayYesCents}¢
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Confidence Meter */}
-      <div className="mb-5">
-        <div className="flex justify-between text-[0.7rem] text-muted mb-1.5">
-          <span>Confidence</span>
-          <span className="font-mono">{(confidence * 100).toFixed(0)}%</span>
         </div>
-        <div className="h-1 bg-surface-2 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-ai rounded-full transition-all"
-            style={{ width: `${Math.min(confidence * 100, 100)}%` }}
+
+        <div className="mt-4 flex items-start justify-between gap-3">
+          <div>
+            <span className="text-[0.62rem] text-muted">Recommendation</span>
+            <div
+              className={cn(
+                'mt-0.5 font-display text-2xl font-bold leading-none tracking-[-0.03em]',
+                recColor
+              )}
+            >
+              {recLabel}
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[0.62rem] text-muted">Edge</span>
+            <div
+              className={cn(
+                'font-mono text-2xl font-bold leading-none tabular-nums',
+                edgeColor
+              )}
+            >
+              {displayEdge > 0 ? '+' : ''}
+              {(displayEdge * 100).toFixed(1)}¢
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3.5">
+          <AIEdgeRail
+            marketCents={marketCents}
+            consensusCents={consensusCents}
+            displayEdge={displayEdge}
+            action={action}
           />
         </div>
       </div>
 
-      {/* Trade Summary */}
-      {summary && (
-        <div className="mb-5">
-          <h4 className="text-xs text-muted uppercase tracking-wider mb-2">
-            Trade Summary
-          </h4>
-          <p className="text-[0.8125rem] leading-relaxed text-fg/85 font-medium">
-            {summary}
-          </p>
-        </div>
-      )}
-
-      {/* Thesis Section */}
-      {thesis && (
-        <div className="mb-5">
-          <h4 className="text-xs text-muted uppercase tracking-wider mb-2">
-            Core Thesis
-          </h4>
-          <p className="text-[0.8125rem] leading-relaxed text-fg/85">
-            {thesis}
-          </p>
-        </div>
-      )}
-
-      {/* Edge Visualization */}
-      {(marketProb > 0 || consensusProb > 0) && (
-        <div className="mb-5 p-3.5 bg-surface-2 rounded-lg">
-          <div className="flex justify-between text-[0.7rem] text-muted mb-2">
-            <span>Edge Visualization</span>
-            <span className={cn('font-mono font-semibold', displayEdge > 0 ? 'text-yes' : displayEdge < 0 ? 'text-no' : 'text-muted')}>
-              {displayEdge > 0 ? '+' : ''}{(displayEdge * 100).toFixed(1)}¢
-            </span>
-          </div>
-          {action === 'LONG_NO' ? (
-            <>
-              <ProbabilityBar cents={Math.round((1 - marketProb) * 100)} aiCents={Math.round((1 - consensusProb) * 100)} variant="thick" />
-              <div className="flex justify-between text-[0.6rem] text-muted mt-1.5">
-                <span>Market (NO): {Math.round((1 - marketProb) * 100)}¢</span>
-                <span className="text-ai">AI (NO): {Math.round((1 - consensusProb) * 100)}¢</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <ProbabilityBar cents={Math.round(marketProb * 100)} aiCents={Math.round(consensusProb * 100)} variant="thick" />
-              <div className="flex justify-between text-[0.6rem] text-muted mt-1.5">
-                <span>Market: {Math.round(marketProb * 100)}¢</span>
-                <span className="text-ai">AI: {Math.round(consensusProb * 100)}¢</span>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Trade Zones Slider */}
-      {analysis && (analysis.entryZone[0] > 0 || analysis.targetZone[0] > 0) && (
-        <TradeZonesSlider
-          entryZone={analysis.entryZone}
-          targetZone={analysis.targetZone}
-          stopLoss={analysis.stopLoss}
-          currentPrice={liveYesCents != null ? liveYesCents / 100 : analysis.metadata.marketProbability}
+      <div className="border-b border-border/60 p-4">
+        <TradeActions
+          yesCents={tradeYesCents}
+          noCents={tradeNoCents}
           action={action}
+          disabled={disabled}
+          onQuickBuy={onQuickBuy}
         />
-      )}
+      </div>
 
-      {/* Expandable Sections */}
-      <div className="flex flex-col gap-3 mt-5">
-        {/* Agent Signals */}
-        {agentsUsed.length > 0 && (
-          <Expandable
-            summary={
-              <span className="flex items-center gap-1.5">
-                Agent Signals
-                <InfoHint label="What agent signals mean">
-                  ↑ means the agent leans YES, ↓ means it leans NO, → means it
-                  has no strong view. The % is how confident the agent is in its
-                  own call. Neutral agents are not counted toward the final
-                  signal.
-                </InfoHint>
-              </span>
+      <div>
+        {analysisStatus.state !== 'none' && (
+          <div className="px-4 pt-4">
+            <AnalysisStatusBanner status={analysisStatus} />
+          </div>
+        )}
+
+        {summary && (
+          <p className="px-4 py-4 text-[0.82rem] leading-6 text-fg/85">{summary}</p>
+        )}
+
+        <div className="grid grid-cols-3 divide-x divide-border/60 border-y border-border/60">
+          <VerdictMetric
+            label="Confidence"
+            value={`${Math.round(confidence * 100)}%`}
+          />
+          <VerdictMetric
+            label="Expected"
+            value={`${ev > 0 ? '+' : ''}${(ev * 100).toFixed(1)}%`}
+            tone={ev > 0 ? 'yes' : ev < 0 ? 'no' : 'muted'}
+          />
+          <VerdictMetric
+            label="Liquidity"
+            value={analysis.liquidityRisk}
+            tone={
+              analysis.liquidityRisk === 'low'
+                ? 'yes'
+                : analysis.liquidityRisk === 'high'
+                  ? 'no'
+                  : 'muted'
             }
-            meta={`${agentsUsed.length} agents`}
-          >
-            <AgentSignalsGrid
-              agents={agentsUsed}
-              signals={signals}
-            />
-          </Expandable>
-        )}
+          />
+        </div>
 
-        {/* Bull vs Bear Debate */}
-        {(analysis?.bullThesis || analysis?.bearThesis) && (
-          <Expandable summary="Bull vs Bear Debate">
-            <DebatePanel
-              bullThesis={analysis.bullThesis}
-              bearThesis={analysis.bearThesis}
-              crossExamination={analysis.crossExamination}
-            />
-          </Expandable>
-        )}
-
-        {/* Consensus */}
-        {consensusProb > 0 && (
-          <Expandable summary="Consensus" meta={`${Math.round(consensusProb * 100)}¢`}>
-            <ConsensusDetail
-              consensusProb={consensusProb}
-              marketProb={marketProb}
-              edge={displayEdge}
-              confidenceBand={analysis?.metadata?.confidenceBand}
+        {analysis.entryZone[0] > 0 || analysis.targetZone[0] > 0 ? (
+          <div className="px-4 pt-4">
+            <TradeZonesSlider
+              entryZone={analysis.entryZone}
+              targetZone={analysis.targetZone}
+              stopLoss={analysis.stopLoss}
+              currentPrice={
+                liveYesCents != null ? liveYesCents / 100 : analysis.metadata.marketProbability
+              }
               action={action}
             />
-          </Expandable>
+          </div>
+        ) : null}
+
+        <div className="divide-y divide-border/60 border-t border-border/60">
+          {thesis && (
+            <PanelDisclosure label="Core thesis">
+              <p className="text-xs leading-relaxed text-muted">{thesis}</p>
+            </PanelDisclosure>
+          )}
+
+          {(analysis.bullThesis || analysis.bearThesis) && (
+            <PanelDisclosure
+              label="Bull vs bear"
+              meta={
+                analysis.crossExamination
+                  ? `${analysis.crossExamination.bullScore}–${analysis.crossExamination.bearScore}`
+                  : undefined
+              }
+            >
+              <DebatePanel
+                bullThesis={analysis.bullThesis}
+                bearThesis={analysis.bearThesis}
+                crossExamination={analysis.crossExamination}
+              />
+            </PanelDisclosure>
+          )}
+
+          {consensusCents != null && (
+            <PanelDisclosure label="Model agreement" meta={`${consensusCents}¢`}>
+              <ConsensusDetail
+                consensusProb={consensusProb}
+                marketProb={marketProb}
+                edge={displayEdge}
+                confidenceBand={analysis.metadata.confidenceBand}
+                action={action}
+              />
+            </PanelDisclosure>
+          )}
+
+          {failureScenarios.length > 0 && (
+            <PanelDisclosure label="Risks" meta={`${failureScenarios.length}`}>
+              <RiskFactorsList risks={failureScenarios} />
+            </PanelDisclosure>
+          )}
+
+          {keyCatalysts.length > 0 && (
+            <PanelDisclosure label="Catalysts" meta={`${keyCatalysts.length}`}>
+              <CatalystsList catalysts={keyCatalysts} />
+            </PanelDisclosure>
+          )}
+        </div>
+
+        {(signals.length > 0 || webResearch) && (
+          <button
+            type="button"
+            onClick={() => webResearch && setWebResearchOpen(true)}
+            disabled={!webResearch}
+            className={cn(
+              'flex w-full items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-left text-[0.65rem] text-muted transition-colors',
+              webResearch ? 'hover:text-fg' : 'cursor-not-allowed opacity-70'
+            )}
+          >
+            <span className="flex items-center gap-3">
+              {signals.length > 0 && (
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-yes" aria-hidden="true" />
+                    {yesLean} lean YES
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-no" aria-hidden="true" />
+                    {noLean} lean NO
+                  </span>
+                </>
+              )}
+            </span>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 font-medium',
+                webResearch ? 'text-accent' : 'text-muted'
+              )}
+            >
+              {webResearch ? 'Web research' : 'No web research'}
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+          </button>
         )}
 
-        {/* Position Sizing */}
-        {riskPerspectives && (
-          <Expandable summary="Position Sizing">
-            <PositionSizingGrid riskPerspectives={riskPerspectives} />
-          </Expandable>
-        )}
+        <Modal
+          open={webResearchOpen}
+          onClose={() => setWebResearchOpen(false)}
+          title="Web research"
+          size="lg"
+          mobileSheet
+        >
+          <div className="max-h-[65vh] overflow-y-auto pr-1">
+            <p className="mb-4 text-[0.65rem] text-muted">
+              Compiled by the web research agent from sources available at run
+              time.
+            </p>
+            {webResearch ? (
+              <Markdown text={webResearch} />
+            ) : (
+              <p className="text-sm text-muted">
+                No web research was saved with this analysis.
+              </p>
+            )}
+          </div>
+        </Modal>
 
-        {/* Risk Factors */}
-        {failureScenarios.length > 0 && (
-          <Expandable summary="Risk Factors" meta={`${failureScenarios.length}`}>
-            <RiskFactorsList risks={failureScenarios} />
-          </Expandable>
-        )}
+        <div className="space-y-3 border-t border-border/60 p-4">
+          <RefreshButton
+            executedAt={analysis.executedAt}
+            onRequestAnalysis={onRequestAnalysis}
+            disabled={disabled}
+          />
+          <RecurringScheduleIndicator marketId={marketSlug} />
+        </div>
+      </div>
+    </section>
+  );
+}
 
-        {/* Key Catalysts */}
-        {keyCatalysts.length > 0 && (
-          <Expandable summary="Key Catalysts" meta={`${keyCatalysts.length}`}>
-            <CatalystsList catalysts={keyCatalysts} />
-          </Expandable>
+function TradeActions({
+  yesCents,
+  noCents,
+  action,
+  disabled,
+  onQuickBuy,
+}: {
+  yesCents: number | null;
+  noCents: number | null;
+  action?: 'LONG_YES' | 'LONG_NO' | 'NO_TRADE';
+  disabled: boolean;
+  onQuickBuy?: (side: 'yes' | 'no') => void;
+}) {
+  const pickedYes = action === 'LONG_YES';
+  const pickedNo = action === 'LONG_NO';
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-2 text-[0.62rem] text-muted">
+        <span>Trade this market</span>
+        {pickedYes || pickedNo ? (
+          <span className="inline-flex items-center gap-1 text-ai">
+            <Sparkles className="h-3 w-3" aria-hidden="true" />
+            AI pick
+          </span>
+        ) : (
+          <span className="font-mono text-[0.58rem]">Polymarket</span>
         )}
       </div>
 
-      {/* Refresh Analysis Button */}
-      <div className="mt-5">
-        <RefreshButton executedAt={analysis?.executedAt} onRequestAnalysis={onRequestAnalysis} disabled={disabled} />
+      <div className="flex flex-col gap-2.5">
+        <PanelBuyButton
+          side="yes"
+          cents={yesCents}
+          recommended={pickedYes}
+          disabled={disabled}
+          onClick={() => onQuickBuy?.('yes')}
+          className={pickedNo ? 'order-2' : 'order-1'}
+        />
+        <PanelBuyButton
+          side="no"
+          cents={noCents}
+          recommended={pickedNo}
+          disabled={disabled}
+          onClick={() => onQuickBuy?.('no')}
+          className={pickedYes ? 'order-2' : 'order-1'}
+        />
       </div>
+    </div>
+  );
+}
 
-      {/* Recurring Analysis Subscription Indicator */}
-      <RecurringScheduleIndicator marketId={marketSlug} />
-    </Card>
+function PanelBuyButton({
+  side,
+  cents,
+  recommended,
+  disabled,
+  onClick,
+  className,
+}: {
+  side: 'yes' | 'no';
+  cents: number | null;
+  recommended: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  className?: string;
+}) {
+  const isYes = side === 'yes';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`Buy ${isYes ? 'YES' : 'NO'}`}
+      className={cn(
+        'flex min-h-[60px] w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left transition-[background,border-color,box-shadow,filter]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+        disabled
+          ? 'cursor-not-allowed border-border bg-surface-2 text-muted opacity-60'
+          : recommended
+            ? isYes
+              ? 'border-yes bg-yes text-bg shadow-[0_8px_22px_-10px_oklch(72%_0.16_155_/_0.65)] hover:brightness-105'
+              : 'border-no bg-no text-bg shadow-[0_8px_22px_-10px_oklch(65%_0.18_25_/_0.6)] hover:brightness-105'
+            : isYes
+              ? 'border-yes/30 bg-yes/[0.05] text-yes hover:border-yes/55 hover:bg-yes/10'
+              : 'border-no/30 bg-no/[0.04] text-no hover:border-no/55 hover:bg-no/10',
+        className
+      )}
+    >
+      <span className="flex flex-col">
+        <span
+          className={cn(
+            'flex items-center gap-1.5 text-[0.58rem] font-semibold',
+            recommended ? 'text-bg/70' : 'text-muted'
+          )}
+        >
+          {recommended ? (
+            <>
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              AI pick
+            </>
+          ) : (
+            'Buy'
+          )}
+        </span>
+        <span
+          className={cn(
+            'mt-0.5 text-base font-bold leading-none',
+            recommended ? 'text-bg' : isYes ? 'text-yes' : 'text-no'
+          )}
+        >
+          {isYes ? 'YES' : 'NO'}
+        </span>
+      </span>
+      {cents != null && (
+        <span
+          className={cn(
+            'font-mono text-2xl font-bold leading-none tabular-nums',
+            recommended ? 'text-bg' : isYes ? 'text-yes' : 'text-no'
+          )}
+        >
+          {cents}
+          <span className="text-sm">¢</span>
+        </span>
+      )}
+    </button>
+  );
+}
+
+function AIEdgeRail({
+  marketCents,
+  consensusCents,
+  displayEdge,
+  action,
+}: {
+  marketCents: number;
+  consensusCents: number | null;
+  displayEdge: number;
+  action?: 'LONG_YES' | 'LONG_NO' | 'NO_TRADE';
+}) {
+  const isNo = action === 'LONG_NO';
+  const tokenLabel = isNo ? 'NO' : 'YES';
+  const tokenMarketCents = isNo ? 100 - marketCents : marketCents;
+  const tokenConsensusCents =
+    consensusCents == null
+      ? null
+      : isNo
+        ? 100 - consensusCents
+        : consensusCents;
+  const low =
+    tokenConsensusCents == null
+      ? tokenMarketCents
+      : Math.min(tokenMarketCents, tokenConsensusCents);
+  const high =
+    tokenConsensusCents == null
+      ? tokenMarketCents
+      : Math.max(tokenMarketCents, tokenConsensusCents);
+
+  return (
+    <div>
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-surface-2">
+        <div
+          className={cn(
+            'absolute inset-y-0 left-0',
+            isNo ? 'bg-no/70' : 'bg-yes/70'
+          )}
+          style={{ width: `${tokenMarketCents}%` }}
+        />
+        {tokenConsensusCents != null && (
+          <>
+            <div
+              className="absolute inset-y-0 bg-ai/45"
+              style={{ left: `${low}%`, width: `${Math.max(high - low, 0.8)}%` }}
+            />
+            <div
+              className="absolute inset-y-[-3px] w-px bg-ai"
+              style={{ left: `${tokenConsensusCents}%` }}
+            />
+          </>
+        )}
+      </div>
+      <div className="mt-1.5 flex items-center justify-between font-mono text-[0.6rem]">
+        <span className="text-muted">
+          {tokenLabel} market {tokenMarketCents}¢
+        </span>
+        {tokenConsensusCents != null && (
+          <span
+            className={cn(
+              displayEdge > 0 ? 'text-yes' : displayEdge < 0 ? 'text-no' : 'text-muted'
+            )}
+          >
+            AI {tokenLabel} fair {tokenConsensusCents}¢
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VerdictMetric({
+  label,
+  value,
+  tone = 'fg',
+}: {
+  label: string;
+  value: string;
+  tone?: 'fg' | 'yes' | 'no' | 'muted';
+}) {
+  return (
+    <div className="px-3 py-2.5">
+      <div className="text-[0.58rem] text-muted">{label}</div>
+      <div
+        className={cn(
+          'mt-0.5 font-mono text-xs font-semibold capitalize tabular-nums',
+          tone === 'yes' && 'text-yes',
+          tone === 'no' && 'text-no',
+          tone === 'muted' && 'text-muted',
+          tone === 'fg' && 'text-fg'
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PanelDisclosure({
+  label,
+  meta,
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  meta?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={defaultOpen || undefined} className="group">
+      <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-xs font-medium text-fg">
+        <span>{label}</span>
+        <span className="flex items-center gap-2 text-[0.6rem] text-muted">
+          {meta}
+          <ChevronRight
+            className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
+            aria-hidden="true"
+          />
+        </span>
+      </summary>
+      <div className="px-4 pb-4">{children}</div>
+    </details>
   );
 }
 
@@ -436,11 +689,11 @@ function TradeZonesSlider({
   const toPercent = (v: number) => ((v - min) / range) * 100;
 
   return (
-    <div className="mb-5 rounded-lg border border-border/50 overflow-hidden">
+    <div className="mb-1 overflow-hidden rounded-xl border border-border/60">
       {/* Header */}
-      <div className="px-3.5 pt-3 pb-2 flex items-center justify-between">
-        <span className="text-[0.7rem] text-muted font-medium uppercase tracking-wider">
-          Trade Zones {isNo ? '(NO token)' : ''}
+      <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
+        <span className="text-[0.7rem] font-medium text-fg">
+          Trade plan {isNo ? '(NO token)' : ''}
         </span>
         <span className="text-[0.6rem] font-mono text-muted">
           {min}¢ - {max}¢
@@ -557,6 +810,21 @@ function TradeZonesSlider({
 /** Inline status banner showing analysis state on the market detail page. */
 function AnalysisStatusBanner({ status }: { status: AnalysisStatus }) {
   const { state, progress } = status;
+  const [elapsed, setElapsed] = useState(0);
+
+  // Elapsed time counter (hooks must run before any early return)
+  useEffect(() => {
+    if (state !== 'in_progress' && state !== 'queued') return;
+    const startTime = progress?.timestamp
+      ? new Date(progress.timestamp).getTime()
+      : Date.now();
+    function tick() {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [progress?.timestamp, state]);
 
   if (state === 'completed') {
     return (
@@ -595,21 +863,6 @@ function AnalysisStatusBanner({ status }: { status: AnalysisStatus }) {
   const stageLabel = progress?.stageName || 'Waiting in queue…';
   const stageNum = progress?.stage ?? 0;
   const totalStages = progress?.totalStages ?? 11;
-
-  // Elapsed time counter
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    const startTime = progress?.timestamp
-      ? new Date(progress.timestamp).getTime()
-      : Date.now();
-    function tick() {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [progress?.timestamp]);
 
   return (
     <div
@@ -651,54 +904,6 @@ function AnalysisStatusBanner({ status }: { status: AnalysisStatus }) {
   );
 }
 
-function AgentSignalsGrid({
-  agents,
-  signals,
-}: {
-  agents: string[];
-  signals: Array<{
-    agentName: string;
-    direction: string;
-    confidence: number;
-  }>;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {agents.map((agent) => {
-        const signal = signals.find((s) => s.agentName === agent);
-        const isUp = signal?.direction === 'LONG_YES' || signal?.direction === 'YES';
-        const isDown = signal?.direction === 'LONG_NO' || signal?.direction === 'NO';
-
-        return (
-          <div
-            key={agent}
-            className="flex items-center gap-1.5 bg-surface-2 rounded-md px-2.5 py-2"
-          >
-            <span
-              className={cn(
-                'text-[0.7rem]',
-                isUp && 'text-yes',
-                isDown && 'text-no',
-                !isUp && !isDown && 'text-muted'
-              )}
-            >
-              {isUp ? '↑' : isDown ? '↓' : '→'}
-            </span>
-            <span className="text-[0.65rem] text-muted flex-1 truncate">
-              {formatAgentName(agent)}
-            </span>
-            {signal && (
-              <span className="font-mono text-[0.6rem] text-fg">
-                {(signal.confidence * 100).toFixed(0)}%
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function DebatePanel({
   bullThesis,
   bearThesis,
@@ -714,8 +919,8 @@ function DebatePanel({
       {bullThesis && (
         <div className="rounded-md p-3 bg-bg border-l-[3px] border-l-yes">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[0.7rem] font-semibold text-yes flex items-center gap-1.5">
-              <span>↑</span> Bull Case
+            <div className="flex items-center gap-1.5 text-[0.7rem] font-semibold text-yes">
+              <ArrowUp className="h-3 w-3" aria-hidden="true" /> Bull Case
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[0.6rem] font-mono text-muted">
@@ -748,8 +953,8 @@ function DebatePanel({
       {bearThesis && (
         <div className="rounded-md p-3 bg-bg border-l-[3px] border-l-no">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[0.7rem] font-semibold text-no flex items-center gap-1.5">
-              <span>↓</span> Bear Case
+            <div className="flex items-center gap-1.5 text-[0.7rem] font-semibold text-no">
+              <ArrowDown className="h-3 w-3" aria-hidden="true" /> Bear Case
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[0.6rem] font-mono text-muted">
@@ -831,51 +1036,12 @@ function ConsensusDetail({
   );
 }
 
-function PositionSizingGrid({
-  riskPerspectives,
-}: {
-  riskPerspectives: string;
-}) {
-  // Parse risk perspectives text into sizing cards
-  // The backend returns a string with aggressive/conservative/neutral guidance
-  const perspectives = parseRiskPerspectives(riskPerspectives);
-
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {perspectives.map((p) => (
-        <div
-          key={p.label}
-          className={cn(
-            'text-center p-3 rounded-md bg-bg border border-border',
-            p.active && 'border-ai bg-ai/[0.06]'
-          )}
-        >
-          <div className="text-[0.65rem] text-muted uppercase tracking-wider mb-1">
-            {p.label}
-          </div>
-          <div
-            className={cn(
-              'font-mono text-base font-bold mb-1',
-              p.active && 'text-ai'
-            )}
-          >
-            {p.size}
-          </div>
-          <div className="text-[0.6rem] text-muted leading-snug">
-            {p.note}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function RiskFactorsList({ risks }: { risks: string[] }) {
   return (
     <div className="flex flex-col gap-2">
       {risks.map((risk, i) => (
         <div key={i} className="flex gap-2 text-xs leading-relaxed text-fg/80">
-          <span className="text-warning shrink-0">⚠</span>
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
           <span>{risk}</span>
         </div>
       ))}
@@ -1090,14 +1256,15 @@ function RefreshButton({
   return (
     <Button
       variant="ai"
-      size="sm"
-      className="w-full"
+      size="md"
+      className="h-12 w-full gap-2 text-sm"
       onClick={onRequestAnalysis}
       disabled={disabled}
     >
+      <Sparkles className="h-4 w-4" aria-hidden="true" />
       {cooldownText
-        ? `Refresh Analysis (${cooldownText})`
-        : 'Refresh Analysis'}
+        ? `Refresh analysis · ${cooldownText}`
+        : 'Refresh AI analysis'}
     </Button>
   );
 }
@@ -1122,58 +1289,4 @@ function formatFreshness(dateStr: string): string {
 function isWithinCooldown(executedAt: string): boolean {
   const executedMs = new Date(executedAt).getTime();
   return Date.now() - executedMs < 60 * 60 * 1000;
-}
-
-function formatAgentName(name: string): string {
-  return name
-    .replace(/_/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-interface SizingPerspective {
-  label: string;
-  size: string;
-  note: string;
-  active: boolean;
-}
-
-function parseRiskPerspectives(text: string): SizingPerspective[] {
-  // Default sizing cards if we can't parse the text
-  const defaults: SizingPerspective[] = [
-    { label: 'Aggressive', size: '15%', note: 'Max EV', active: false },
-    { label: 'Neutral', size: '8%', note: 'Balanced', active: true },
-    { label: 'Conservative', size: '3%', note: 'Capital pres.', active: false },
-  ];
-
-  if (!text) return defaults;
-
-  // Parse labeled sections: [aggressive] ```json {...} ```, [conservative] ..., [neutral] ...
-  const extractSize = (label: string): string | null => {
-    // Find the section for this label
-    const sectionRegex = new RegExp(`\\[${label}\\].*?\\{([^}]*"position_size_pct"\\s*:\\s*([\\d.]+)[^}]*)\\}`, 's');
-    const match = text.match(sectionRegex);
-    if (match && match[2]) {
-      const pct = parseFloat(match[2]);
-      // position_size_pct can be 0.35 (meaning 35%) or 2.5 (meaning 2.5%) - both are percentages
-      // Values > 1 are already in percent, values <= 1 need to be multiplied by 100
-      const displayPct = pct > 1 ? pct : Math.round(pct * 100);
-      return `${displayPct}%`;
-    }
-    return null;
-  };
-
-  const aggressive = extractSize('aggressive');
-  const conservative = extractSize('conservative');
-  const neutral = extractSize('neutral');
-
-  if (aggressive || conservative || neutral) {
-    return [
-      { label: 'Aggressive', size: aggressive || '15%', note: 'Max EV', active: false },
-      { label: 'Neutral', size: neutral || '8%', note: 'Balanced', active: true },
-      { label: 'Conservative', size: conservative || '3%', note: 'Capital pres.', active: false },
-    ];
-  }
-
-  return defaults;
 }

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchData = await response.json();
-    let allMarkets: any[] = [];
+    const allMarkets: any[] = [];
     const marketIds = new Set<string>();
 
     // Extract markets from events in search results

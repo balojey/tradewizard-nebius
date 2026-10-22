@@ -1,10 +1,15 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Wallet, ArrowUpRight, Lock, Copy, Check } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import {
+  ArrowDownToLine,
+  ArrowRight,
+  ArrowUpRight,
+  Wallet,
+  Copy,
+  Check,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import usePolygonBalances from '@/hooks/usePolygonBalances';
 import { usePortfolioSessions } from '@/hooks/usePortfolioSessions';
 import useAddressCopy from '@/hooks/useAddressCopy';
@@ -39,115 +44,119 @@ export function WalletBalanceCard({
 
   if (balanceLoading) {
     return (
-      <Card className="p-4 sm:p-5">
-        <div className="animate-pulse space-y-3">
-          <div className="h-4 w-24 bg-surface-2 rounded" />
-          <div className="grid grid-cols-3 gap-3">
-            <div className="h-12 bg-surface-2 rounded" />
-            <div className="h-12 bg-surface-2 rounded" />
-            <div className="h-12 bg-surface-2 rounded" />
+      <section className="rounded-2xl border border-border bg-surface">
+        <div className="animate-pulse space-y-4 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-2">
+              <div className="h-4 w-28 rounded bg-surface-2" />
+              <div className="h-8 w-40 rounded bg-surface-2" />
+            </div>
+            <div className="h-10 w-44 rounded-lg bg-surface-2" />
           </div>
+          <div className="h-16 rounded-lg bg-surface-2" />
         </div>
-      </Card>
+      </section>
     );
   }
 
   return (
-    <Card className="p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Wallet className="w-4 h-4 text-accent" aria-hidden="true" />
-          <h3 className="text-sm font-medium text-fg">Wallet Balance</h3>
-          <Badge tone="neutral" size="sm">USD</Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={onDeposit}>
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5 rotate-180" aria-hidden="true" />
-            Deposit
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onWithdraw}
-            disabled={available <= 0}
-          >
-            <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
-            Withdraw
-          </Button>
-        </div>
-      </div>
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent">
+                <Wallet className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-fg">Trading wallet</h2>
+                <p className="text-[0.6rem] text-muted">USDC on Polygon</p>
+              </div>
+              <span className="ml-1 rounded-full border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[0.55rem] text-muted">
+                USD
+              </span>
+            </div>
 
-      {/* Safe address */}
-      {safeAddress && (
-        <button
-          onClick={copyAddress}
-          className={cn(
-            'flex items-center gap-2 mb-4 px-3 py-2 rounded-lg w-full text-left transition-colors',
-            'bg-surface-2/50 hover:bg-surface-2 border border-transparent',
-            copied && 'border-yes/30 bg-yes/5'
-          )}
-          aria-label={copied ? 'Address copied' : 'Copy wallet address'}
-        >
-          <span className="text-xs text-muted shrink-0">Address:</span>
-          <span className="text-xs font-mono text-fg truncate">{safeAddress}</span>
-          {copied ? (
-            <Check className="w-3.5 h-3.5 text-yes shrink-0 ml-auto" aria-hidden="true" />
-          ) : (
-            <Copy className="w-3.5 h-3.5 text-muted shrink-0 ml-auto" aria-hidden="true" />
-          )}
-        </button>
-      )}
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="font-mono text-3xl font-bold leading-none tabular-nums text-fg">
+                ${usdcBalance.toFixed(2)}
+              </span>
+              <span className="text-xs text-muted">total balance</span>
+            </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        {/* Total Balance */}
-        <div className="flex flex-col gap-1 p-3 rounded-lg bg-surface-2/50">
-          <span className="text-xs text-muted">Total Balance</span>
-          <span className="text-lg font-mono font-semibold text-fg">
-            ${usdcBalance.toFixed(2)}
-          </span>
-        </div>
-
-        {/* Committed */}
-        <div className="flex flex-col gap-1 p-3 rounded-lg bg-surface-2/50">
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-muted">Committed</span>
-            <Lock className="w-3 h-3 text-warning" aria-hidden="true" />
+            {safeAddress && (
+              <button
+                type="button"
+                onClick={copyAddress}
+                className="mt-2 inline-flex max-w-full items-center gap-1.5 text-[0.65rem] text-muted transition-colors hover:text-fg"
+                aria-label={copied ? 'Address copied' : 'Copy wallet address'}
+              >
+                <span className="truncate font-mono">{safeAddress}</span>
+                {copied ? (
+                  <Check className="h-3 w-3 shrink-0 text-yes" aria-hidden="true" />
+                ) : (
+                  <Copy className="h-3 w-3 shrink-0" aria-hidden="true" />
+                )}
+              </button>
+            )}
           </div>
-          <span
-            className={cn(
-              'text-lg font-mono font-semibold',
-              committedCapital > 0 ? 'text-warning' : 'text-fg'
-            )}
-          >
-            ${committedCapital.toFixed(2)}
-          </span>
-          {committedCapital > 0 && (
-            <span className="text-[10px] text-muted">In use by Portfolio Manager</span>
-          )}
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button variant="primary" size="sm" onClick={onDeposit}>
+              <ArrowDownToLine className="h-3.5 w-3.5" aria-hidden="true" />
+              Deposit
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onWithdraw}
+              disabled={available <= 0}
+            >
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+              Withdraw
+            </Button>
+          </div>
         </div>
 
-        {/* Available */}
-        <div className="flex flex-col gap-1 p-3 rounded-lg bg-surface-2/50">
-          <span className="text-xs text-muted">Available</span>
-          <span
-            className={cn(
-              'text-lg font-mono font-semibold',
-              available > 0 ? 'text-yes' : 'text-fg'
-            )}
-          >
-            ${available.toFixed(2)}
-          </span>
-          <span className="text-[10px] text-muted">Withdrawable</span>
+        <div className="mt-4 grid grid-cols-2 divide-x divide-border/60 border-t border-border/60 pt-3 sm:grid-cols-3">
+          <div className="pr-3">
+            <p className="text-[0.6rem] text-muted">Available</p>
+            <p
+              className={cn(
+                'mt-0.5 font-mono text-sm font-semibold tabular-nums',
+                available > 0 ? 'text-yes' : 'text-fg'
+              )}
+            >
+              ${available.toFixed(2)}
+            </p>
+            <p className="text-[0.55rem] text-muted">Ready to trade</p>
+          </div>
+          <div className="px-3">
+            <p className="text-[0.6rem] text-muted">Committed</p>
+            <p
+              className={cn(
+                'mt-0.5 font-mono text-sm font-semibold tabular-nums',
+                committedCapital > 0 ? 'text-warning' : 'text-fg'
+              )}
+            >
+              ${committedCapital.toFixed(2)}
+            </p>
+            <p className="text-[0.55rem] text-muted">In autopilot sessions</p>
+          </div>
+          <div className="col-span-2 px-3 pt-3 sm:col-span-1 sm:pt-0">
+            <p className="text-[0.6rem] text-muted">Bridge</p>
+            <button
+              type="button"
+              onClick={onBridgeWithdraw}
+              className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-fg"
+            >
+              Withdraw to another chain
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <p className="text-[0.55rem] text-muted">USDC across chains</p>
+          </div>
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={onBridgeWithdraw}
-        className="mt-4 text-xs text-accent hover:text-fg transition-colors"
-      >
-        Withdraw to another chain
-      </button>
-    </Card>
+    </section>
   );
 }

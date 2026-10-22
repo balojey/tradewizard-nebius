@@ -1,0 +1,46 @@
+{
+  "name": "tradewizard-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "npm run render:video && npm run render:poster && npm run render:report && npm run render:report:poster && npm run render:autonomous && npm run render:autonomous:poster && npm run render:video:light && npm run render:poster:light && npm run render:report:light && npm run render:report:poster:light && npm run render:autonomous:light && npm run render:autonomous:poster:light",
+    "render:video": "remotion render src/index.ts AnalysisDemo ../tradewizard-frontend/public/videos/analysis-demo.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:poster": "remotion still src/index.ts AnalysisDemo ../tradewizard-frontend/public/videos/analysis-demo-poster.jpg --frame=352 --overwrite",
+    "render:report": "remotion render src/index.ts AnalysisReport ../tradewizard-frontend/public/videos/analysis-report.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:report:poster": "remotion still src/index.ts AnalysisReport ../tradewizard-frontend/public/videos/analysis-report-poster.jpg --frame=180 --overwrite",
+    "render:autonomous": "remotion render src/index.ts AutonomousTrading ../tradewizard-frontend/public/videos/autonomous-trading.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:autonomous:poster": "remotion still src/index.ts AutonomousTrading ../tradewizard-frontend/public/videos/autonomous-trading-poster.jpg --frame=400 --overwrite",
+    "render:video:light": "remotion render src/index.ts AnalysisDemoLight ../tradewizard-frontend/public/videos/analysis-demo-light.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:poster:light": "remotion still src/index.ts AnalysisDemoLight ../tradewizard-frontend/public/videos/analysis-demo-light-poster.jpg --frame=352 --overwrite",
+    "render:report:light": "remotion render src/index.ts AnalysisReportLight ../tradewizard-frontend/public/videos/analysis-report-light.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:report:poster:light": "remotion still src/index.ts AnalysisReportLight ../tradewizard-frontend/public/videos/analysis-report-light-poster.jpg --frame=180 --overwrite",
+    "render:autonomous:light": "remotion render src/index.ts AutonomousTradingLight ../tradewizard-frontend/public/videos/autonomous-trading-light.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:autonomous:poster:light": "remotion still src/index.ts AutonomousTradingLight ../tradewizard-frontend/public/videos/autonomous-trading-light-poster.jpg --frame=400 --overwrite",
+    "render:mobile": "npm run render:video:mobile && npm run render:poster:mobile && npm run render:report:mobile && npm run render:report:poster:mobile && npm run render:autonomous:mobile && npm run render:autonomous:poster:mobile && npm run render:video:mobile:light && npm run render:poster:mobile:light && npm run render:report:mobile:light && npm run render:report:poster:mobile:light && npm run render:autonomous:mobile:light && npm run render:autonomous:poster:mobile:light",
+    "render:video:mobile": "remotion render src/index.ts AnalysisDemoMobile ../tradewizard-frontend/public/videos/analysis-demo-mobile.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:poster:mobile": "remotion still src/index.ts AnalysisDemoMobile ../tradewizard-frontend/public/videos/analysis-demo-mobile-poster.jpg --frame=352 --overwrite",
+    "render:report:mobile": "remotion render src/index.ts AnalysisReportMobile ../tradewizard-frontend/public/videos/analysis-report-mobile.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:report:poster:mobile": "remotion still src/index.ts AnalysisReportMobile ../tradewizard-frontend/public/videos/analysis-report-mobile-poster.jpg --frame=120 --overwrite",
+    "render:autonomous:mobile": "remotion render src/index.ts AutonomousTradingMobile ../tradewizard-frontend/public/videos/autonomous-trading-mobile.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:autonomous:poster:mobile": "remotion still src/index.ts AutonomousTradingMobile ../tradewizard-frontend/public/videos/autonomous-trading-mobile-poster.jpg --frame=400 --overwrite",
+    "render:video:mobile:light": "remotion render src/index.ts AnalysisDemoMobileLight ../tradewizard-frontend/public/videos/analysis-demo-mobile-light.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:poster:mobile:light": "remotion still src/index.ts AnalysisDemoMobileLight ../tradewizard-frontend/public/videos/analysis-demo-mobile-light-poster.jpg --frame=352 --overwrite",
+    "render:report:mobile:light": "remotion render src/index.ts AnalysisReportMobileLight ../tradewizard-frontend/public/videos/analysis-report-mobile-light.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:report:poster:mobile:light": "remotion still src/index.ts AnalysisReportMobileLight ../tradewizard-frontend/public/videos/analysis-report-mobile-light-poster.jpg --frame=120 --overwrite",
+    "render:autonomous:mobile:light": "remotion render src/index.ts AutonomousTradingMobileLight ../tradewizard-frontend/public/videos/autonomous-trading-mobile-light.mp4 --codec=h264 --crf=23 --pixel-format=yuv420p --overwrite",
+    "render:autonomous:poster:mobile:light": "remotion still src/index.ts AutonomousTradingMobileLight ../tradewizard-frontend/public/videos/autonomous-trading-mobile-light-poster.jpg --frame=400 --overwrite",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.537",
+    "@remotion/google-fonts": "4.0.537",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.537"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
+import { useState, useMemo, useRef, useEffect, useId, Fragment } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/shell/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { ProbabilityBar } from '@/components/ui/ProbabilityBar';
 import { UpgradePrompt } from '@/components/ui/UpgradePrompt';
 import { ScrollToTop } from '@/components/ui/ScrollToTop';
 import { AnalysisModal } from '@/components/markets/AnalysisModal';
+import { MarketCard } from '@/components/markets/MarketCard';
 import { TradePanel, type TradeSide } from '@/components/markets/TradePanel';
 import { Modal } from '@/components/ui/Modal';
 import { useCurrentPlan } from '@/hooks/useCurrentPlan';
@@ -20,9 +20,10 @@ import { useInView } from 'react-intersection-observer';
 import usePoliticalCategories from '@/hooks/usePoliticalCategories';
 import { useAnalysisHistoryPaginated, type AnalysisResultSummary } from '@/hooks/useAnalysisResults';
 import { useAnalysisSubscriptions } from '@/hooks/useAnalysisSubscriptions';
-import { useAnalysisProgress, type AnalysisProgress } from '@/hooks/useAnalysisProgress';
 import { useSpotlight, type SpotlightItem } from '@/hooks/useSpotlight';
 import { cn } from '@/utils/classNames';
+import { formatTimeAgo, getYesProbability } from '@/utils/marketDisplay';
+import { BarChart3 } from 'lucide-react';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,10 @@ function StatusDropdown({
   onChange: (v: 'active' | 'closed') => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const current = STATUS_OPTIONS.find((o) => o.value === value)!;
 
   // Close on outside click
@@ -54,10 +58,75 @@ function StatusDropdown({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  const openMenu = () => {
+    const currentIndex = STATUS_OPTIONS.findIndex((o) => o.value === value);
+    setActiveIndex(currentIndex >= 0 ? currentIndex : 0);
+    setOpen(true);
+  };
+
+  const closeMenu = (returnFocus = false) => {
+    setOpen(false);
+    if (returnFocus) triggerRef.current?.focus();
+  };
+
+  const select = (option: (typeof STATUS_OPTIONS)[number]) => {
+    onChange(option.value);
+    closeMenu(true);
+  };
+
+  const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      openMenu();
+    }
+  };
+
+  const handleOptionKeyDown = (
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex((i) => (i + 1) % STATUS_OPTIONS.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex((i) => (i - 1 + STATUS_OPTIONS.length) % STATUS_OPTIONS.length);
+        break;
+      case 'Home':
+        e.preventDefault();
+        setActiveIndex(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        setActiveIndex(STATUS_OPTIONS.length - 1);
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        select(STATUS_OPTIONS[index]);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        closeMenu(true);
+        break;
+      case 'Tab':
+        closeMenu();
+        break;
+    }
+  };
+
+  useEffect(() => {
+    if (open) optionRefs.current[activeIndex]?.focus();
+  }, [open, activeIndex]);
+
   return (
     <div className="relative shrink-0" ref={ref}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        ref={triggerRef}
+        onClick={() => (open ? closeMenu() : openMenu())}
+        onKeyDown={handleTriggerKeyDown}
         className={cn(
           'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 pr-7 rounded-full border transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
@@ -65,6 +134,7 @@ function StatusDropdown({
         )}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-controls="status-filter-listbox"
         aria-label="Market status filter"
       >
         <span className={current.color}>{current.icon}</span>
@@ -79,23 +149,30 @@ function StatusDropdown({
           strokeWidth="3"
           strokeLinecap="round"
           strokeLinejoin="round"
+          aria-hidden="true"
         >
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1.5 min-w-[140px] rounded-lg border border-border bg-surface shadow-lg py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-          {STATUS_OPTIONS.map((option) => (
+        <div
+          id="status-filter-listbox"
+          role="listbox"
+          aria-label="Market status"
+          className="absolute top-full left-0 mt-1.5 min-w-[140px] rounded-lg border border-border bg-surface shadow-lg py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+        >
+          {STATUS_OPTIONS.map((option, index) => (
             <button
               key={option.value}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
+              ref={(el) => {
+                optionRefs.current[index] = el;
               }}
+              onClick={() => select(option)}
+              onKeyDown={(e) => handleOptionKeyDown(e, index)}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors text-left',
-                'hover:bg-surface-elevated',
+                'hover:bg-surface-elevated focus-visible:outline-none focus-visible:bg-surface-elevated',
                 value === option.value ? 'text-fg font-semibold' : 'text-muted'
               )}
               role="option"
@@ -104,7 +181,7 @@ function StatusDropdown({
               <span className={option.color}>{option.icon}</span>
               {option.label}
               {value === option.value && (
-                <svg className="ml-auto text-accent" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="ml-auto text-accent" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               )}
@@ -149,7 +226,9 @@ function SearchInput({
 }) {
   const [focused, setFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
@@ -174,25 +253,69 @@ function SearchInput({
   });
 
   const suggestions = suggestionsQuery.results.markets;
+  const usingRecent = value.length < 2;
   const showDropdown = focused && (value.length === 0 ? recentSearches.length > 0 : true);
+  const optionCount = usingRecent ? recentSearches.length : suggestions.length;
+
+  const closeDropdown = () => {
+    setFocused(false);
+    setHighlightIndex(-1);
+  };
 
   const handleSelect = (query: string) => {
     onChange(query);
     saveRecentSearch(query);
     setRecentSearches(getRecentSearches());
-    setFocused(false);
+    closeDropdown();
+  };
+
+  const selectSuggestion = (market: PolymarketMarket) => {
+    saveRecentSearch(value.trim());
+    setRecentSearches(getRecentSearches());
+    closeDropdown();
+    window.location.href = `/markets/${market.slug}`;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && value.trim().length >= 2) {
-      saveRecentSearch(value.trim());
-      setRecentSearches(getRecentSearches());
-      setFocused(false);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!focused) setFocused(true);
+      if (optionCount > 0) {
+        setHighlightIndex((i) => (i + 1) % optionCount);
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!focused) setFocused(true);
+      if (optionCount > 0) {
+        setHighlightIndex((i) => (i - 1 + optionCount) % optionCount);
+      }
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (highlightIndex >= 0 && highlightIndex < optionCount) {
+        e.preventDefault();
+        if (usingRecent) handleSelect(recentSearches[highlightIndex]);
+        else selectSuggestion(suggestions[highlightIndex]);
+        return;
+      }
+      if (value.trim().length >= 2) {
+        saveRecentSearch(value.trim());
+        setRecentSearches(getRecentSearches());
+        closeDropdown();
+      }
+      return;
     }
     if (e.key === 'Escape') {
-      setFocused(false);
+      closeDropdown();
     }
   };
+
+  const activeDescendant =
+    showDropdown && highlightIndex >= 0
+      ? `${listboxId}-option-${highlightIndex}`
+      : undefined;
 
   return (
     <div className="relative w-full sm:w-[320px] max-w-full order-last sm:order-none" ref={wrapperRef}>
@@ -208,12 +331,17 @@ function SearchInput({
           type="text"
           placeholder="Search markets…"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setHighlightIndex(-1);
+          }}
           onFocus={() => setFocused(true)}
           onKeyDown={handleKeyDown}
           className="bg-transparent border-none outline-none text-fg text-[0.8125rem] w-full placeholder:text-muted"
           aria-label="Search markets"
           aria-expanded={showDropdown}
+          aria-controls={listboxId}
+          aria-activedescendant={activeDescendant}
           role="combobox"
           aria-autocomplete="list"
         />
@@ -231,8 +359,13 @@ function SearchInput({
       </div>
 
       {showDropdown && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 rounded-lg border border-border bg-surface shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-          {value.length < 2 && recentSearches.length > 0 && (
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label="Market search results"
+          className="absolute top-full left-0 right-0 mt-1.5 rounded-lg border border-border bg-surface shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+        >
+          {usingRecent && recentSearches.length > 0 && (
             <div className="p-2">
               <div className="flex items-center justify-between px-2 pb-1.5">
                 <span className="text-[0.65rem] uppercase tracking-wider text-muted font-semibold">Recent</span>
@@ -243,11 +376,18 @@ function SearchInput({
                   Clear
                 </button>
               </div>
-              {recentSearches.map((term) => (
+              {recentSearches.map((term, index) => (
                 <button
                   key={term}
+                  id={`${listboxId}-option-${index}`}
+                  role="option"
+                  aria-selected={highlightIndex === index}
                   onClick={() => handleSelect(term)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-fg hover:bg-surface-elevated rounded-md transition-colors text-left"
+                  onMouseEnter={() => setHighlightIndex(index)}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-2 py-1.5 text-xs text-fg rounded-md transition-colors text-left',
+                    highlightIndex === index ? 'bg-surface-elevated' : 'hover:bg-surface-elevated'
+                  )}
                 >
                   <svg className="w-3 h-3 text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10" />
@@ -259,7 +399,7 @@ function SearchInput({
             </div>
           )}
 
-          {value.length >= 2 && (
+          {!usingRecent && (
             <div className="p-2">
               {suggestionsQuery.isLoading && (
                 <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted">
@@ -273,23 +413,29 @@ function SearchInput({
               {!suggestionsQuery.isLoading && suggestions.length > 0 && (
                 <>
                   <span className="block px-2 pb-1.5 text-[0.65rem] uppercase tracking-wider text-muted font-semibold">Markets</span>
-                  {suggestions.map((market) => (
+                  {suggestions.map((market, index) => (
                     <a
                       key={market.id}
+                      id={`${listboxId}-option-${index}`}
+                      role="option"
+                      aria-selected={highlightIndex === index}
                       href={`/markets/${market.slug}`}
                       onClick={(e) => {
                         e.preventDefault();
-                        saveRecentSearch(value.trim());
-                        setRecentSearches(getRecentSearches());
-                        setFocused(false);
-                        window.location.href = `/markets/${market.slug}`;
+                        selectSuggestion(market);
                       }}
-                      className="flex items-center gap-2.5 px-2 py-2 hover:bg-surface-elevated rounded-md transition-colors"
+                      onMouseEnter={() => setHighlightIndex(index)}
+                      className={cn(
+                        'flex items-center gap-2.5 px-2 py-2 rounded-md transition-colors',
+                        highlightIndex === index ? 'bg-surface-elevated' : 'hover:bg-surface-elevated'
+                      )}
                     >
                       {(market.image || market.icon) ? (
                         <img src={market.image || market.icon} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" />
                       ) : (
-                        <div className="w-7 h-7 rounded-md bg-surface-2 flex items-center justify-center shrink-0 text-sm">📊</div>
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2">
+                          <BarChart3 className="h-3.5 w-3.5 text-muted/60" aria-hidden="true" />
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-fg line-clamp-1">{market.question}</p>
@@ -310,42 +456,6 @@ function SearchInput({
       )}
     </div>
   );
-}
-
-function getYesProbability(market: PolymarketMarket): number {
-  // Try realtime prices first
-  if (market.realtimePrices) {
-    const tokenIds = market.clobTokenIds ? JSON.parse(market.clobTokenIds) : [];
-    if (tokenIds[0] && market.realtimePrices[tokenIds[0]]) {
-      return Math.round(market.realtimePrices[tokenIds[0]].midPrice * 100);
-    }
-  }
-  // Fallback to outcomePrices
-  if (market.outcomePrices) {
-    try {
-      const prices = JSON.parse(market.outcomePrices);
-      if (prices[0]) return Math.round(parseFloat(prices[0]) * 100);
-    } catch {}
-  }
-  return 50;
-}
-
-function formatVolume(vol: string | number | undefined): string {
-  if (!vol) return '';
-  const num = typeof vol === 'string' ? parseFloat(vol) : vol;
-  if (isNaN(num)) return '';
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M vol`;
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K vol`;
-  return `$${num.toFixed(0)} vol`;
-}
-
-function formatEndDate(date: string | undefined): string {
-  if (!date) return '';
-  try {
-    return `Ends ${new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-  } catch {
-    return '';
-  }
 }
 
 // ─── Skeleton Components ────────────────────────────────────────────────────
@@ -409,7 +519,6 @@ function TrendingCarousel({
   onBuy: (slug: string, side: TradeSide) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const { has } = useCurrentPlan();
 
   const scroll = (direction: 'left' | 'right') => {
     if (!trackRef.current) return;
@@ -459,604 +568,23 @@ function TrendingCarousel({
         className="flex gap-3 sm:gap-4 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0"
         style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
       >
-        {trending.map((market) => (
-          <TrendingCard
-            key={market.id}
-            market={market}
-            analysisMap={analysisMap}
-            subscriptionMap={subscriptionMap}
-            onRequestAnalysis={onRequestAnalysis}
-            onBuy={onBuy}
-          />
-        ))}
+        {trending.map((market) => {
+          const marketKey = market.conditionId || market.id;
+          return (
+            <MarketCard
+              key={market.id}
+              variant="carousel"
+              market={market}
+              analysis={analysisMap.get(marketKey) ?? null}
+              nextAnalysisIn={subscriptionMap.get(marketKey) ?? null}
+              onRequestAnalysis={onRequestAnalysis}
+              onBuy={onBuy}
+            />
+          );
+        })}
       </div>
     </section>
   );
-}
-
-// ─── Trending Card ──────────────────────────────────────────────────────────
-
-function TrendingCard({
-  market,
-  analysisMap,
-  subscriptionMap,
-  onRequestAnalysis,
-  onBuy,
-}: {
-  market: PolymarketMarket;
-  analysisMap: Map<string, AnalysisResultSummary>;
-  subscriptionMap: Map<string, string>;
-  onRequestAnalysis: (marketId: string) => void;
-  onBuy: (slug: string, side: TradeSide) => void;
-}) {
-  const { has } = useCurrentPlan();
-  const yesCents = getYesProbability(market);
-  const noCents = 100 - yesCents;
-  const imageUrl = market.image || market.icon;
-  const marketKey = market.conditionId || market.id;
-  const analysis = analysisMap.get(marketKey);
-  const nextIn = subscriptionMap.get(marketKey);
-  const hasAnalysis = !!analysis;
-  const isYes = analysis?.recommendation === 'LONG_YES';
-  const isNo = analysis?.recommendation === 'LONG_NO';
-  // Display AI fair value and edge in the recommended token's space
-  const aiCents = hasAnalysis
-    ? isNo
-      ? Math.round((1 - analysis.consensusProbability) * 100)
-      : Math.round(analysis.consensusProbability * 100)
-    : 0;
-  const edgeCents = hasAnalysis
-    ? isNo
-      ? Math.abs(aiCents - noCents)
-      : Math.abs(aiCents - yesCents)
-    : 0;
-
-  // Track real-time progress
-  const progress = useAnalysisProgress({ marketId: marketKey });
-  const isRunning = !!progress && progress.status === 'running';
-
-  return (
-    <div
-      className={cn(
-        'flex-shrink-0 w-[260px] sm:w-[300px] rounded-[12px] border bg-surface overflow-hidden transition-colors flex flex-col',
-        isRunning ? 'border-ai/40' : hasAnalysis ? 'border-ai/30 hover:border-ai/50' : 'border-border hover:border-muted'
-      )}
-      style={{ scrollSnapAlign: 'start' }}
-    >
-      {/* Card image */}
-      <div className="relative h-[120px] sm:h-[140px] w-full bg-gradient-to-br from-surface-2 to-surface overflow-hidden">
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="w-full h-full object-cover block" />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <span className="text-4xl opacity-50">📊</span>
-          </div>
-        )}
-      </div>
-      {/* Card body */}
-      <div className="p-4 flex flex-col gap-2 flex-1">
-        <span className="text-[0.625rem] uppercase tracking-wider text-muted font-medium">
-          {market.eventTitle || 'Politics'}
-        </span>
-        <Link href={`/markets/${market.slug}`} className="hover:underline">
-          <h3 className="text-[0.8125rem] font-semibold leading-[1.4] line-clamp-2">
-            {market.question}
-          </h3>
-        </Link>
-        <div className="h-[4px] rounded-full bg-surface-2 overflow-hidden">
-          <div
-            className={cn(
-              'h-full rounded-full transition-[width] duration-200',
-              isNo ? 'bg-no' : 'bg-yes'
-            )}
-            style={{ width: `${isNo ? noCents : yesCents}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between mt-auto">
-          <div className="flex items-center gap-1.5">
-            {isNo ? (
-              <>
-                <span className="font-mono text-[1.125rem] font-bold text-no tabular-nums">
-                  {noCents}¢
-                </span>
-                <span className="text-xs text-muted">/</span>
-                <span className="font-mono text-[1.125rem] font-bold text-yes tabular-nums">
-                  {yesCents}¢
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="font-mono text-[1.125rem] font-bold text-yes tabular-nums">
-                  {yesCents}¢
-                </span>
-                <span className="text-xs text-muted">/</span>
-                <span className="font-mono text-[1.125rem] font-bold text-no tabular-nums">
-                  {noCents}¢
-                </span>
-              </>
-            )}
-          </div>
-          <span className="text-[0.6875rem] text-muted">
-            {formatVolume(market.volume)}
-          </span>
-        </div>
-
-        {/* Inline progress */}
-        {isRunning && (
-          <InlineProgressBar progress={progress} />
-        )}
-
-        {!isRunning && hasAnalysis ? (
-          <>
-            {/* Inline AI recommendation */}
-            <div className="flex flex-col gap-1.5 mt-1 p-2.5 rounded-[6px] bg-ai/[0.08] border border-ai/20 text-[0.625rem]">
-              <div className="flex items-center gap-1.5 font-semibold text-ai">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                </svg>
-                <span>{isYes ? 'Buy Yes' : isNo ? 'Buy No' : 'No Trade'} {aiCents}%</span>
-                <span className="font-normal text-muted">· +{edgeCents}¢ edge</span>
-                <button
-                  onClick={(e) => { e.preventDefault(); onRequestAnalysis(marketKey); }}
-                  className="ml-auto text-muted hover:text-ai"
-                  title="Refresh analysis"
-                >
-                  ↻
-                </button>
-              </div>
-              <p className="text-muted leading-relaxed line-clamp-1">
-                {Math.round(analysis.confidence * 100)}% confidence · {formatTimeAgo(analysis.executedAt)}
-              </p>
-            </div>
-            {/* Trade buttons */}
-            <div className="flex gap-2 mt-1">
-              <button
-                onClick={() => onBuy(market.slug, 'yes')}
-                className={cn(
-                  'flex-1 py-[0.4rem] rounded-[6px] text-[0.6875rem] font-semibold transition-colors',
-                  isYes ? 'bg-yes text-white' : 'bg-yes/12 text-yes hover:bg-yes/20'
-                )}
-              >
-                {isYes ? '★ ' : ''}Buy Yes {yesCents}¢
-              </button>
-              <button
-                onClick={() => onBuy(market.slug, 'no')}
-                className={cn(
-                  'flex-1 py-[0.4rem] rounded-[6px] text-[0.6875rem] font-semibold transition-colors',
-                  isNo ? 'bg-no text-white' : 'bg-no/12 text-no hover:bg-no/20'
-                )}
-              >
-                {isNo ? '★ ' : ''}Buy No {noCents}¢
-              </button>
-            </div>
-            {nextIn && (
-              <div className="flex items-center gap-1.5 text-[0.6rem] text-ai pt-0.5">
-                <svg className="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" />
-                </svg>
-                Next in <span className="font-mono font-semibold">{nextIn}</span>
-              </div>
-            )}
-            {/* Upsell */}
-            {!has('starter') && (
-              <p className="text-[0.675rem] text-muted whitespace-nowrap pt-1">
-                <span className="opacity-60">🔒</span>{' '}
-                Recurring analysis · <Link href="/account/subscription" className="text-accent font-medium hover:underline">Upgrade to Starter+</Link>
-              </p>
-            )}
-            {has('starter') && !has('pro') && !nextIn && (
-              <p className="text-[0.675rem] text-muted whitespace-nowrap pt-1">
-                <span className="opacity-60">⚡</span>{' '}
-                Sub-daily intervals · <Link href="/account/subscription" className="text-accent font-medium hover:underline">Go Pro</Link>
-              </p>
-            )}
-          </>
-        ) : !isRunning ? (
-          <>
-            {/* Get Analysis CTA */}
-            <button
-              onClick={() => onRequestAnalysis(marketKey)}
-              className="flex items-center justify-center gap-1.5 w-full py-2 mt-1 rounded-[6px] text-[0.65rem] font-bold text-white transition-all hover:-translate-y-px"
-              style={{
-                background: 'linear-gradient(135deg, oklch(58% 0.22 295), oklch(55% 0.20 270))',
-                boxShadow: '0 2px 12px oklch(58% 0.18 295 / .35)',
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-              </svg>
-              Get Analysis
-              <span className="opacity-85 font-medium">· 1 credit</span>
-            </button>
-            {/* Buy YES / Buy NO */}
-            <div className="flex gap-2 mt-1">
-              <button
-                onClick={() => onBuy(market.slug, 'yes')}
-                className="flex-1 py-[0.4rem] rounded-[6px] text-[0.6875rem] font-semibold bg-yes/12 text-yes hover:bg-yes/20 transition-colors"
-              >
-                Buy Yes {yesCents}¢
-              </button>
-              <button
-                onClick={() => onBuy(market.slug, 'no')}
-                className="flex-1 py-[0.4rem] rounded-[6px] text-[0.6875rem] font-semibold bg-no/12 text-no hover:bg-no/20 transition-colors"
-              >
-                Buy No {noCents}¢
-              </button>
-            </div>
-            {/* Gated row */}
-            {!has('starter') && (
-              <p className="text-[0.675rem] text-muted whitespace-nowrap pt-1">
-                <span className="opacity-60">🔒</span>{' '}
-                Recurring analysis · <Link href="/account/subscription" className="text-accent font-medium hover:underline">Upgrade to Starter+</Link>
-              </p>
-            )}
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-// ─── Inline Progress Bar ────────────────────────────────────────────────────
-
-const PIPELINE_STAGES = [
-  'Market Ingestion',
-  'Memory Retrieval',
-  'Web Research',
-  'Agent Selection',
-  'Intelligence Agents',
-  'Signal Fusion',
-  'Thesis Construction',
-  'Cross-Examination',
-  'Consensus Engine',
-  'Risk Philosophy',
-  'Recommendation',
-] as const;
-
-function InlineProgressBar({ progress }: { progress: AnalysisProgress }) {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    const startTime = new Date(progress.timestamp).getTime();
-    function tick() {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [progress.timestamp]);
-
-  const currentStage = progress.stage;
-  const percentage = Math.round((currentStage / progress.totalStages) * 100);
-
-  return (
-    <div className="rounded-lg border border-ai/30 bg-gradient-to-r from-ai/[0.06] to-transparent p-3 flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-ai">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ai opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-ai" />
-          </span>
-          Analyzing…
-        </span>
-        <span className="text-[0.6rem] font-mono text-muted tabular-nums">
-          {elapsed}s · {currentStage}/{progress.totalStages}
-        </span>
-      </div>
-      {/* Mini pipeline bar */}
-      <div className="flex gap-0.5 items-center">
-        {PIPELINE_STAGES.map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              'h-1 flex-1 rounded-full',
-              i < currentStage
-                ? 'bg-ai'
-                : i === currentStage
-                  ? 'bg-ai animate-pulse'
-                  : 'bg-surface-2'
-            )}
-          />
-        ))}
-      </div>
-      <p className="text-[0.6rem] text-muted">
-        {progress.stageName}
-      </p>
-    </div>
-  );
-}
-
-// ─── Market Card ────────────────────────────────────────────────────────────
-
-interface MarketCardProps {
-  market: PolymarketMarket;
-  onRequestAnalysis: (marketId: string) => void;
-  onBuy: (slug: string, side: TradeSide) => void;
-  analysis?: AnalysisResultSummary | null;
-  nextAnalysisIn?: string | null;
-}
-
-function MarketCard({ market, onRequestAnalysis, onBuy, analysis, nextAnalysisIn }: MarketCardProps) {
-  const yesCents = getYesProbability(market);
-  const noCents = 100 - yesCents;
-  const { has } = useCurrentPlan();
-  const isClosed = market.closed === true;
-
-  // Track real-time analysis progress for this market
-  const marketKey = market.conditionId || market.id;
-  const progress = useAnalysisProgress({ marketId: marketKey });
-
-  const hasAnalysis = !!analysis;
-  const isRunning = !!progress && progress.status === 'running';
-  const isYes = analysis?.recommendation === 'LONG_YES';
-  const isNo = analysis?.recommendation === 'LONG_NO';
-  // Display AI fair value and edge in the recommended token's space
-  const aiCents = hasAnalysis
-    ? isNo
-      ? Math.round((1 - analysis.consensusProbability) * 100)
-      : Math.round(analysis.consensusProbability * 100)
-    : 0;
-  const edgeCents = hasAnalysis
-    ? isNo
-      ? Math.abs(aiCents - noCents)
-      : Math.abs(aiCents - yesCents)
-    : 0;
-  const recLabel = analysis?.recommendation === 'LONG_YES' ? 'Buy Yes' : analysis?.recommendation === 'LONG_NO' ? 'Buy No' : 'No Trade';
-
-  return (
-    <div
-      className="rounded-[12px] border border-border bg-surface p-4 sm:p-5 hover:border-muted transition-colors flex flex-col gap-3"
-    >
-      <div className="flex items-start gap-3">
-        {market.image || market.icon ? (
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-surface-2 flex items-center justify-center shrink-0 overflow-hidden">
-            <img src={market.image || market.icon} alt="" className="w-full h-full object-cover" />
-          </div>
-        ) : (
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-surface-2 flex items-center justify-center shrink-0">
-            <span className="text-xl opacity-50">📊</span>
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <Link href={`/markets/${market.slug}`} className="hover:underline">
-            <h3 className="text-[0.9375rem] font-semibold leading-snug line-clamp-2">
-              {market.question}
-            </h3>
-          </Link>
-        </div>
-        <span className={cn(
-          'text-[0.6rem] uppercase tracking-wider px-2 py-0.5 rounded font-semibold whitespace-nowrap shrink-0',
-          isRunning
-            ? 'text-ai bg-ai/15'
-            : hasAnalysis
-              ? 'text-ai bg-ai/10'
-              : 'text-ai bg-ai/10'
-        )}>
-          {isRunning ? 'Analyzing' : hasAnalysis ? 'Analyzed' : 'AI Ready'}
-        </span>
-      </div>
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-        {market.eventTitle && <span className="truncate max-w-[200px]">{market.eventTitle}</span>}
-        {market.volume && <span>{formatVolume(market.volume)}</span>}
-        {(market.endDate || market.endDateIso) && (
-          <span>{formatEndDate(market.endDateIso || market.endDate)}</span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <ProbabilityBar
-          cents={isNo ? noCents : yesCents}
-          variant="thick"
-          className="flex-1"
-        />
-        <div className="flex items-center gap-2 shrink-0">
-          {isNo ? (
-            <>
-              <span className="font-mono text-sm font-bold text-no tabular-nums">
-                {noCents}¢
-              </span>
-              <span className="text-xs text-muted">/</span>
-              <span className="font-mono text-sm font-bold text-yes tabular-nums">
-                {yesCents}¢
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="font-mono text-sm font-bold text-yes tabular-nums">
-                {yesCents}¢
-              </span>
-              <span className="text-xs text-muted">/</span>
-              <span className="font-mono text-sm font-bold text-no tabular-nums">
-                {noCents}¢
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Inline analysis progress */}
-      {isRunning && (
-        <InlineProgressBar progress={progress} />
-      )}
-
-      {/* Analyzed state: show inline result + trade actions */}
-      {!isRunning && hasAnalysis && (
-        <>
-          <div className="rounded-lg bg-ai/[0.06] border border-ai/20 p-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className={cn(
-                'text-[0.6875rem] font-bold uppercase tracking-wide px-2 py-0.5 rounded',
-                isYes && 'bg-yes/12 text-yes',
-                isNo && 'bg-no/12 text-no',
-                !isYes && !isNo && 'bg-surface-2 text-muted'
-              )}>
-                {recLabel}
-              </span>
-              <span className="font-mono text-[0.6875rem] text-ai tabular-nums">
-                +{edgeCents}¢ edge · {aiCents}% AI
-              </span>
-            </div>
-            <p className="text-[0.6875rem] text-muted leading-relaxed line-clamp-2">
-              {Math.round(analysis.confidence * 100)}% confidence · Analyzed {formatTimeAgo(analysis.executedAt)}
-            </p>
-          </div>
-
-          {/* Trade actions */}
-          <div className="flex gap-2 items-stretch">
-            <button
-              onClick={() => onBuy(market.slug, 'yes')}
-              disabled={isClosed}
-              className={cn(
-                'flex-1 py-2.5 rounded-md text-[0.8rem] font-semibold transition-colors',
-                isClosed
-                  ? 'bg-surface-2 text-muted cursor-not-allowed opacity-50'
-                  : isYes
-                    ? 'bg-yes text-white shadow-[0_2px_8px_oklch(72%_0.16_155_/_0.3)]'
-                    : 'bg-yes/12 text-yes hover:bg-yes/20'
-              )}
-            >
-              {isYes ? '★ ' : ''}Buy Yes {yesCents}¢
-            </button>
-            <button
-              onClick={() => onBuy(market.slug, 'no')}
-              disabled={isClosed}
-              className={cn(
-                'flex-1 py-2.5 rounded-md text-[0.8rem] font-semibold transition-colors',
-                isClosed
-                  ? 'bg-surface-2 text-muted cursor-not-allowed opacity-50'
-                  : isNo
-                    ? 'bg-no text-white shadow-[0_2px_8px_oklch(65%_0.18_25_/_0.3)]'
-                    : 'bg-no/12 text-no hover:bg-no/20'
-              )}
-            >
-              {isNo ? '★ ' : ''}Buy No {noCents}¢
-            </button>
-            <button
-              onClick={() => onRequestAnalysis(market.conditionId || market.id)}
-              disabled={isClosed}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[0.65rem] font-medium border transition-colors',
-                isClosed
-                  ? 'bg-surface-2 text-muted border-border cursor-not-allowed opacity-50'
-                  : 'bg-surface-2 text-muted border-border hover:border-muted'
-              )}
-              title={isClosed ? 'Market resolved' : 'Refresh analysis'}
-            >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M23 4v6h-6M1 20v-6h6" />
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-              1 cr
-            </button>
-          </div>
-
-          {/* Recurring countdown */}
-          {nextAnalysisIn && (
-            <div className="flex items-center gap-2 text-[0.675rem] text-ai pt-0.5">
-              <svg className="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 6v6l4 2" />
-              </svg>
-              Next analysis in <span className="font-mono font-semibold tabular-nums">{nextAnalysisIn}</span>
-            </div>
-          )}
-
-          {/* Upsell for lower-tier users */}
-          {!has('starter') && (
-            <p className="text-[0.675rem] text-muted whitespace-nowrap">
-              <span className="opacity-60">🔒</span>{' '}
-              Recurring analysis · <Link href="/account/subscription" className="text-accent font-medium hover:underline">Upgrade to Starter+</Link>
-            </p>
-          )}
-          {has('starter') && !has('pro') && !nextAnalysisIn && (
-            <p className="text-[0.675rem] text-muted whitespace-nowrap">
-              <span className="opacity-60">⚡</span>{' '}
-              Sub-daily intervals · <Link href="/account/subscription" className="text-accent font-medium hover:underline">Go Pro</Link>
-            </p>
-          )}
-        </>
-      )}
-
-      {/* Unanalyzed state: show Get Analysis CTA + Buy buttons */}
-      {!isRunning && !hasAnalysis && (
-        <>
-          {/* No analysis: show Get Analysis CTA + Buy buttons */}
-          <button
-            onClick={() => onRequestAnalysis(market.conditionId || market.id)}
-            disabled={isClosed}
-            className={cn(
-              'flex items-center justify-center gap-1.5 w-full py-2.5 rounded-lg text-xs font-bold transition-all',
-              isClosed
-                ? 'bg-surface-2 text-muted cursor-not-allowed opacity-50'
-                : 'text-white hover:-translate-y-px'
-            )}
-            style={isClosed ? undefined : {
-              background: 'linear-gradient(135deg, oklch(58% 0.22 295), oklch(55% 0.20 270))',
-              boxShadow: '0 2px 12px oklch(58% 0.18 295 / .35)',
-            }}
-            aria-label={isClosed ? 'Market resolved' : `Get AI analysis for ${market.question}`}
-          >
-            {!isClosed && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-              </svg>
-            )}
-            {isClosed ? 'Market Resolved' : 'Get Analysis'}
-            {!isClosed && <span className="opacity-85 font-medium">· 1 credit</span>}
-          </button>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => onBuy(market.slug, 'yes')}
-              disabled={isClosed}
-              className={cn(
-                'flex-1 py-2 rounded-md text-xs font-semibold transition-colors',
-                isClosed
-                  ? 'bg-surface-2 text-muted cursor-not-allowed opacity-50'
-                  : 'bg-yes/12 text-yes hover:bg-yes/20'
-              )}
-              aria-label={`Buy Yes at ${yesCents} cents`}
-            >
-              Yes {yesCents}¢
-            </button>
-            <button
-              onClick={() => onBuy(market.slug, 'no')}
-              disabled={isClosed}
-              className={cn(
-                'flex-1 py-2 rounded-md text-xs font-semibold transition-colors',
-                isClosed
-                  ? 'bg-surface-2 text-muted cursor-not-allowed opacity-50'
-                  : 'bg-no/12 text-no hover:bg-no/20'
-              )}
-              aria-label={`Buy No at ${noCents} cents`}
-            >
-              No {noCents}¢
-            </button>
-          </div>
-
-          {/* Gated row - only shown for free users */}
-          {!has('starter') && (
-            <p className="text-[0.675rem] text-muted whitespace-nowrap">
-              <span className="opacity-60">🔒</span>{' '}
-              Recurring analysis · <Link href="/account/subscription" className="text-accent font-medium hover:underline">Upgrade to Starter+</Link>
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
 
 // ─── AI Spotlight Card ──────────────────────────────────────────────────────
@@ -1346,7 +874,7 @@ export default function MarketsPage() {
       </div>
 
       {/* Category Filter Bar */}
-      <div className="sticky top-14 z-10 bg-bg/95 backdrop-blur-sm -mx-4 px-4 sm:-mx-0 sm:px-0 py-2 mb-4">
+      <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-10 bg-bg/95 backdrop-blur-sm -mx-4 px-4 sm:-mx-0 sm:px-0 py-2 mb-4">
         <div className="flex gap-2 items-center">
           {/* Status Dropdown - outside the scrollable area */}
           <StatusDropdown value={marketStatus} onChange={setMarketStatus} />
@@ -1497,7 +1025,7 @@ export default function MarketsPage() {
         </div>
 
         {/* Sidebar - sticky on desktop, hidden on smaller screens */}
-        <div className="hidden lg:block lg:sticky lg:top-[72px] lg:max-h-[calc(100vh-88px)] lg:overflow-y-auto lg:scrollbar-none">
+        <div className="hidden lg:block lg:sticky lg:top-[calc(3.5rem+env(safe-area-inset-top)+1rem)] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:scrollbar-none">
           <Sidebar markets={filteredMarkets} />
         </div>
       </div>

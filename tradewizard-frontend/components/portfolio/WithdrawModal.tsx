@@ -30,7 +30,7 @@ export function WithdrawModal({ open, onClose }: WithdrawModalProps) {
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const [, setTxHash] = useState<string | null>(null);
 
   // Committed capital
   const committedCapital = useMemo(() => {

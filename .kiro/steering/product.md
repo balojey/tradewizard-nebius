@@ -41,10 +41,10 @@ The workflow orchestrates analysis through sequential and parallel stages in a s
 3. **Web Research**: Autonomous Strands Agent with search/scrape tools gathers real-time web context (60s timeout, max 10 searches + 5 scrapes)
 4. **Agent Selection**: All 14 intelligence agents are activated for every market (no conditional filtering)
 5. **Parallel Intelligence Agents**: All 14 agents execute in parallel via Promise.all (120s per-agent timeout), each producing an AgentSignal (direction, confidence, fairProbability, keyDrivers, riskFactors)
-6. **Agent Signal Fusion** (deterministic, no LLM): Weighted aggregation with conflict detection, alignment scoring, and divergence penalty
+6. **Agent Signal Fusion** (deterministic, no LLM): Market-anchored log-odds aggregation with conservative shrinkage, Brier-calibrated agent weights, conflict/alignment scoring, and non-directional risk agents
 7. **Thesis Construction**: Strands Agent generates competing bull and bear theses from fused signal
 8. **Cross-Examination**: Strands Agent applies 5 adversarial tests (evidence, causality, timing, liquidity, tail risk) to both theses
-9. **Consensus Engine** (deterministic, no LLM): Weighted consensus probability with disagreement detection - fails if disagreement > 30%
+9. **Consensus Engine** (deterministic, no LLM): Uses the anchored fused probability; role-play theses only modify confidence. Fails on disagreement > 30% or confidence < 20%, and a divergence circuit breaker blocks implausible edges (> 15%) instead of fading the market
 10. **Risk Philosophy Agents**: Three parallel Strands Agents (aggressive, conservative, neutral) provide position sizing guidance
 11. **Recommendation Generation**: Strands Agent synthesizes final trade action (LONG_YES, LONG_NO, NO_TRADE) with entry/exit zones, EV, and explanation
 

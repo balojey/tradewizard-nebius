@@ -34,7 +34,7 @@ export function CreditBadge() {
   if (isLoading) {
     return (
       <div
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium font-mono bg-surface-2 border border-border text-muted animate-pulse"
+        className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-surface-2/50 px-2.5 py-1.5 text-[0.68rem] font-medium font-mono text-muted animate-pulse"
       >
         <Coins className="w-3.5 h-3.5" aria-hidden="true" />
         <span>- credits</span>
@@ -46,7 +46,7 @@ export function CreditBadge() {
     return (
       <Link
         href="/account/subscription"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium font-mono bg-surface-2 border border-border text-muted hover:text-fg hover:border-accent/40"
+        className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-surface-2/50 px-2.5 py-1.5 text-[0.68rem] font-medium font-mono text-muted hover:border-accent/40 hover:text-fg"
       >
         <Coins className="w-3.5 h-3.5" aria-hidden="true" />
         <span>0 credits</span>
@@ -65,8 +65,8 @@ export function CreditBadge() {
     <Link
       href="/account/subscription"
       className={cn(
-        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium font-mono',
-        'border transition-all duration-150',
+        'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.68rem] font-medium font-mono',
+        'transition-all duration-150',
         isElite &&
           'bg-accent/10 border-accent/30 text-accent hover:bg-accent/20',
         isZero &&
@@ -76,7 +76,7 @@ export function CreditBadge() {
         !isElite &&
           !isZero &&
           !isLow &&
-          'bg-surface-2 border-border text-muted hover:text-fg hover:border-accent/40',
+          'border-border/70 bg-surface-2/50 text-muted hover:border-accent/40 hover:text-fg',
         flash && 'scale-110 ring-2 ring-accent/50'
       )}
     >

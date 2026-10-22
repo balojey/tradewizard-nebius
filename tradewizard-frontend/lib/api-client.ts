@@ -215,7 +215,7 @@ export interface ApiClient {
   delete<T>(path: string): Promise<T>;
 }
 
-export function createApiClient(config: {
+export function createApiClient(_config: {
   baseUrl: string;
   getToken: () => string | null;
 }): ApiClient {

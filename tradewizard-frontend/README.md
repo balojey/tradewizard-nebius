@@ -4,7 +4,7 @@
 
 ## Overview
 
-TradeWizard transforms prediction markets from speculative guessing into guided, intelligence-driven trading. The frontend provides real-time analysis delivery, subscription management, and a complete trading interface powered by Amazon Cognito authentication and WebSocket connections.
+TradeWizard transforms prediction markets from speculative guessing into guided, intelligence-driven trading. The frontend provides real-time analysis delivery, subscription management, and a complete trading interface powered by Cognito authentication and WebSocket connections. AI inference runs server-side on Nebius Token Factory; the browser never holds a provider key.
 
 ### Key Features
 
@@ -12,10 +12,10 @@ TradeWizard transforms prediction markets from speculative guessing into guided,
 - ⚡ **Real-Time Delivery**: WebSocket connection with automatic reconnection for instant analysis results
 - 🤖 **AI Analysis**: Request one-time or recurring multi-agent analysis on any market
 - 📊 **Results Viewer**: Paginated history with infinite scroll, full detail view with agent signals
-- 💳 **Subscription Management**: USDC.e wallet-based plans (Free, Starter, Pro, Elite) with credit system
+- 💳 **Subscription Management**: pUSD (Polymarket USD) wallet-based plans (Free, Starter, Pro, Elite) with credit system
 - 🔔 **Notification Settings**: Configure email, push, webhook channels with quiet hours
 - 💰 **Credit System**: Real-time balance display with optimistic updates
-- 🔗 **On-Chain Payments**: USDC.e transfers from Trading Wallet (Safe) on Polygon
+- 🔗 **On-Chain Payments**: pUSD transfers from Trading Wallet (Safe) on Polygon, with legacy USDC.e read compatibility
 - 🔄 **Auto-Renewal**: ERC-20 allowance-based automatic subscription renewal
 - 🤖 **Autonomous Portfolio Manager**: Activate AI trading agents per market with persona-based strategies
 - 📈 **Portfolio Dashboard**: Real-time session monitoring, trade history, P&L tracking, kill switch
@@ -51,9 +51,9 @@ NEXT_PUBLIC_API_BASE_URL=https://your-api-id.execute-api.us-east-1.amazonaws.com
 # WebSocket (Real-time delivery)
 NEXT_PUBLIC_WS_URL=wss://your-ws-id.execute-api.us-east-1.amazonaws.com/dev
 
-# Wallet Payments (USDC.e on Polygon)
+# Wallet Payments (pUSD on Polygon; legacy USDC.e fallback)
 NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS=0x...  # TradeWizard receiving wallet for subscription/credit payments
-NEXT_PUBLIC_USDC_CONTRACT_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174  # USDC.e on Polygon (optional, defaults to this)
+NEXT_PUBLIC_USDC_CONTRACT_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174  # Legacy USDC.e address (pUSD is canonical in code)
 
 # Polymarket (Market data)
 NEXT_PUBLIC_POLYMARKET_API_URL=https://clob.polymarket.com
@@ -66,8 +66,8 @@ NEXT_PUBLIC_POLYMARKET_API_URL=https://clob.polymarket.com
 | `NEXT_PUBLIC_AWS_REGION` | Yes | AWS region (e.g., `us-east-2`) |
 | `NEXT_PUBLIC_API_BASE_URL` | Yes | REST API Gateway URL from CDK outputs |
 | `NEXT_PUBLIC_WS_URL` | Yes | WebSocket API Gateway URL from CDK outputs |
-| `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` | Yes | Platform Wallet address that receives USDC.e payments |
-| `NEXT_PUBLIC_USDC_CONTRACT_ADDRESS` | No | USDC.e contract on Polygon (defaults to `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`) |
+| `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` | Yes | Platform Wallet address that receives pUSD payments |
+| `NEXT_PUBLIC_USDC_CONTRACT_ADDRESS` | No | Legacy USDC.e contract on Polygon (defaults to `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`) |
 | `NEXT_PUBLIC_POLYMARKET_API_URL` | No | Polymarket CLOB API (defaults to `https://clob.polymarket.com`) |
 
 ## Tech Stack
@@ -80,7 +80,7 @@ NEXT_PUBLIC_POLYMARKET_API_URL=https://clob.polymarket.com
 | State | TanStack React Query |
 | Auth | Amazon Cognito (Custom Auth / Magic Link) |
 | Real-time | WebSocket with exponential backoff |
-| Payments | USDC.e on-chain transfers (Polygon) via relayClient |
+| Payments | pUSD on-chain transfers (Polygon) via relayClient, with legacy USDC.e fallback |
 | Web3 | viem, Magic SDK, @polymarket/builder-relayer-client |
 | Icons | Lucide React |
 | Animations | Framer Motion |
@@ -112,7 +112,7 @@ NEXT_PUBLIC_POLYMARKET_API_URL=https://clob.polymarket.com
 1. **Auth**: User signs in via Magic Link → Cognito issues JWT tokens → stored in localStorage
 2. **API Calls**: `api-client.ts` attaches Bearer token, retries 5xx with backoff
 3. **Real-time**: WebSocket connects on auth, receives analysis results, updates TanStack Query cache
-4. **Payments**: User initiates USDC.e transfer from Trading Wallet (Safe) via relayClient → backend verifies on-chain → activates subscription/credits
+4. **Payments**: User initiates a pUSD transfer from Trading Wallet (Safe) via relayClient (legacy USDC.e fallback) → backend verifies on-chain → activates subscription/credits
 
 ## Project Structure
 
@@ -284,7 +284,7 @@ import { useSubscriptionAllowance } from '@/hooks/useSubscriptionAllowance';
 const { data } = useWalletSubscription();
 // data.plan, data.creditsRemaining, data.billingCycleEnd, data.allowanceStatus
 
-// Subscribe to a plan (USDC.e transfer → backend verification)
+// Subscribe to a plan (pUSD transfer → backend verification)
 const subscribePlan = useSubscribePlan();
 await subscribePlan.mutateAsync({ planId: 'pro' });
 
@@ -294,7 +294,7 @@ await purchaseCredits.mutateAsync({ packId: 'pack_20' });
 
 // Manage auto-renewal allowance
 const { isAutoRenewalEnabled, approveAllowance, revokeAllowance } = useSubscriptionAllowance();
-await approveAllowance.mutateAsync({}); // Approve USDC.e allowance for auto-renewal
+await approveAllowance.mutateAsync({}); // Approve pUSD/legacy USDC.e allowance for auto-renewal
 ```
 
 ## Pages
@@ -314,7 +314,7 @@ await approveAllowance.mutateAsync({}); // Approve USDC.e allowance for auto-ren
 
 ## Subscription Plans
 
-| Plan | Price (USDC.e/mo) | Credits/Month | Recurring Intervals | Notification Channels |
+| Plan | Price (pUSD/mo) | Credits/Month | Recurring Intervals | Notification Channels |
 |------|-------------------|---------------|--------------------|-----------------------|
 | Free | 0 | 20 | One-time only | In-app |
 | Starter | 19 | 100 | 1 day | In-app, email, push |
@@ -324,7 +324,7 @@ await approveAllowance.mutateAsync({}); // Approve USDC.e allowance for auto-ren
 ### Payment Flow
 
 1. User selects a plan or credit pack on the subscription page
-2. Frontend creates a SafeTransaction (`USDC.e.transfer(PlatformWallet, amount)`)
+2. Frontend creates a pUSD transfer (or legacy `USDC.e.transfer` fallback) to the Platform Wallet
 3. Transaction is executed via `relayClient.execute()` from the Trading Wallet (Safe)
 4. Frontend receives the on-chain transaction hash
 5. Frontend POSTs the txHash to the backend for verification
@@ -332,8 +332,8 @@ await approveAllowance.mutateAsync({}); // Approve USDC.e allowance for auto-ren
 
 ### Auto-Renewal
 
-Users can approve a USDC.e allowance to enable automatic renewal:
-- Frontend calls `USDC.e.approve(PlatformWallet, planPrice)` via SafeTransaction
+Users can approve a pUSD or legacy USDC.e allowance to enable automatic renewal:
+- Frontend calls `pUSD.approve` (or legacy `USDC.e.approve`) via SafeTransaction
 - At billing cycle end, the Renewal Lambda calls `transferFrom` to pull funds
 - If allowance/balance is insufficient, a 3-day grace period begins with retry every 24h
 
@@ -407,10 +407,10 @@ CMD ["npm", "start"]
 | WebSocket won't connect | Check `NEXT_PUBLIC_WS_URL` and that user is authenticated |
 | API calls return 401 | Token may be expired - check auto-refresh logic, clear `tw_*` localStorage keys |
 | Analysis not appearing | Verify WebSocket is connected (check `useWebSocket().isConnected`) |
-| Stripe redirect fails | N/A - Stripe has been replaced with on-chain USDC.e payments |
+| Stripe redirect fails | N/A - Stripe has been replaced with on-chain pUSD payments |
 | Credits not updating | TanStack Query cache may be stale - check `useWalletSubscription` staleTime |
 | Payment verification fails | Ensure `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` matches the backend config |
-| Allowance not detected | Check that the Safe address has approved the Platform Wallet on USDC.e contract |
+| Allowance not detected | Check that the Safe address has approved the Platform Wallet on pUSD (or legacy USDC.e) |
 
 ## License
 

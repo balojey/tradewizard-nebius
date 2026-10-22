@@ -14,7 +14,7 @@ AWS CDK infrastructure for the TradeWizard deployment substrate. The AI layer ru
 - **AI**: Nebius Token Factory for all model inference (NVIDIA Nemotron 3 Super + open models), called through Lambda + Strands SDK
 - **Notifications**: SNS (push) + Resend (email; SES retained as explicit fallback)
 - **Monitoring**: CloudWatch dashboards + alarms + SNS alerts
-- **Payments**: USDC.e on-chain transfers (Polygon) via wallet-based payment model
+- **Payments**: pUSD (Polymarket USD) on-chain transfers (Polygon) via wallet-based payment model, with legacy USDC.e read compatibility
 
 ## Cost Optimization Strategy
 
@@ -170,9 +170,9 @@ NEXT_PUBLIC_COGNITO_REGION=us-east-2
 NEXT_PUBLIC_API_URL=https://<api-id>.execute-api.us-east-2.amazonaws.com/dev
 NEXT_PUBLIC_WS_URL=wss://<ws-api-id>.execute-api.us-east-2.amazonaws.com/dev
 
-# Wallet Payments (USDC.e on Polygon)
+# Wallet Payments (pUSD on Polygon; legacy USDC.e fallback)
 NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS=0x...  # Must match PLATFORM_WALLET_ADDRESS in infra config
-NEXT_PUBLIC_USDC_CONTRACT_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174  # Optional, defaults to this
+NEXT_PUBLIC_USDC_CONTRACT_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174  # Legacy USDC.e (pUSD is canonical in code)
 ```
 
 Get these values from the CDK stack outputs after deployment. The `PLATFORM_WALLET_ADDRESS` must be the same address configured in `infra/lib/config.ts`.
@@ -302,8 +302,8 @@ The compute stack deploys 26 Lambda functions (25 in the compute stack + 1 Cogni
 |----------|--------|-------------|
 | `DB_SECRET_ARN` | CDK (Secrets Manager) | Aurora credentials secret ARN |
 | `DB_HOST` | CDK (Aurora endpoint) | PostgreSQL hostname |
-| `PLATFORM_WALLET_ADDRESS` | `config.ts` / env | TradeWizard receiving wallet for USDC.e payments |
-| `USDC_CONTRACT_ADDRESS` | `config.ts` / env | USDC.e contract on Polygon (`0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`) |
+| `PLATFORM_WALLET_ADDRESS` | `config.ts` / env | TradeWizard receiving wallet for pUSD payments |
+| `USDC_CONTRACT_ADDRESS` | `config.ts` / env | Legacy USDC.e contract on Polygon (`0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`); pUSD is canonical |
 | `POLYGON_RPC_URL` | `config.ts` / env | Polygon JSON-RPC endpoint |
 | `SAFE_FACTORY_ADDRESS` | `config.ts` / env | Safe factory for deterministic address derivation |
 | `DEDUP_TABLE` | CDK (DynamoDB) | Renewal dedup table name |
@@ -317,7 +317,7 @@ The compute stack deploys 26 Lambda functions (25 in the compute stack + 1 Cogni
 | `DB_SECRET_ARN` | CDK (Secrets Manager) | Aurora credentials secret ARN |
 | `DB_HOST` | CDK (Aurora endpoint) | PostgreSQL hostname |
 | `PLATFORM_WALLET_ADDRESS` | `config.ts` / env | TradeWizard receiving wallet |
-| `USDC_CONTRACT_ADDRESS` | `config.ts` / env | USDC.e contract on Polygon |
+| `USDC_CONTRACT_ADDRESS` | `config.ts` / env | Legacy USDC.e contract on Polygon |
 | `POLYGON_RPC_URL` | `config.ts` / env | Polygon JSON-RPC endpoint |
 | `SAFE_FACTORY_ADDRESS` | `config.ts` / env | Safe factory for address derivation |
 | `DEDUP_TABLE` | CDK (DynamoDB) | Renewal dedup table name |
@@ -366,7 +366,7 @@ The compute stack deploys 26 Lambda functions (25 in the compute stack + 1 Cogni
 | DELETE | `/subscriptions/{id}` | subscription-api | Cancel subscription |
 | POST | `/subscriptions/renew` | subscription-api | Manual renewal (verify tx hash) |
 | POST | `/credits/purchase` | subscription-api | Verify tx hash and add credits |
-| GET | `/wallet/balance` | subscription-api | Read USDC.e balance from blockchain |
+| GET | `/wallet/balance` | subscription-api | Read pUSD + legacy USDC.e balance from blockchain |
 | GET | `/payments/history` | subscription-api | Paginated payment transaction history |
 | GET | `/user/notifications` | notification-preferences | Get notification settings |
 | PUT | `/user/notifications` | notification-preferences | Update notification settings |
@@ -424,7 +424,7 @@ The full schema is in `sql/001-initial-schema.sql`. Key tables:
 | `users` | User accounts (synced from Cognito) |
 | `subscriptions` | Active plan, credits, wallet address, billing cycle, grace period |
 | `credit_transactions` | Immutable audit trail of all credit changes (plan + credit_pack) |
-| `payment_transactions` | On-chain USDC.e payment history (subscription, renewal, credit pack) |
+| `payment_transactions` | On-chain pUSD/legacy USDC.e payment history (subscription, renewal, credit pack) |
 | `markets` | Cached market metadata from Polymarket |
 | `analysis_requests` | User analysis requests (one-time + recurring) |
 | `market_analysis_schedule` | Internal dedup schedule per market |
@@ -615,7 +615,7 @@ The Cognito user pool is configured with `custom: true` auth flow to support pas
 ### Architecture
 
 ```
-Frontend → relayClient.execute(SafeTx: USDC.e.transfer(PlatformWallet, amount))
+Frontend → relayClient.execute(SafeTx: pUSD.transfer(PlatformWallet, amount), legacy USDC.e fallback)
   → On-chain transfer confirmed → txHash returned
   → Frontend POSTs txHash to /subscriptions or /credits/purchase
   → Lambda (subscription-api) verifies on-chain transfer
@@ -635,7 +635,7 @@ Frontend → relayClient.execute(SafeTx: USDC.e.transfer(PlatformWallet, amount)
 
 ### Automatic Renewals
 
-The Renewal Lambda uses the Platform Wallet private key to call `transferFrom` on the USDC.e contract when users have pre-approved an ERC-20 allowance. This is the only backend-initiated on-chain transaction.
+The Renewal Lambda uses the Platform Wallet private key to call `transferFrom` on pUSD (with legacy USDC.e support) when users have pre-approved an ERC-20 allowance. This is the only backend-initiated on-chain transaction.
 
 ### Polymarket CLOB Credentials
 
@@ -761,7 +761,7 @@ The `./deploy.sh up` command runs 6 steps sequentially:
 
 | Step | Name | What it does |
 |------|------|-------------|
-| 1 | `wallet-secrets` | Creates Platform Wallet private key and Magic SDK secret key in AWS Secrets Manager. Prompts for values if secrets don't already exist. The Platform Wallet key enables the Renewal Lambda to call `transferFrom` on the USDC.e contract for automatic subscription renewals. |
+| 1 | `wallet-secrets` | Creates Platform Wallet private key and Magic SDK secret key in AWS Secrets Manager. Prompts for values if secrets don't already exist. The Platform Wallet key enables the Renewal Lambda to call `transferFrom` on pUSD (legacy USDC.e supported) for automatic subscription renewals. |
 | 2 | `cdk` | Runs `cdk synth` then `cdk deploy --all`. Deploys all CloudFormation stacks (Network, Database, Auth, Storage, Queue, Notification, Compute, Monitoring) and creates the empty `tw-{env}-clob-credentials`, `tw-{env}-resend-api-key`, and `tw-{env}-nebius-api-key` secret resources. This is the longest step (~3-5 min first time, ~1-2 min on updates). |
 | 3 | `api-credentials` | Populates the `tw-{env}-clob-credentials` secret from `CLOB_API_KEY`, `CLOB_API_SECRET`, `CLOB_API_PASSPHRASE`, the `tw-{env}-resend-api-key` secret from `RESEND_API_KEY`, and the `tw-{env}-nebius-api-key` secret from `NEBIUS_API_KEY` when present. Logs a manual `aws secretsmanager put-secret-value` command if env vars are missing. The Portfolio Manager Lambdas refuse to trade until CLOB is populated, email delivery fails until the Resend key is populated (when `EMAIL_PROVIDER=resend`), and `AI_PROVIDER=nebius` fails until its key/models are configured. |
 | 4 | `db` | Runs all PostgreSQL schema migrations (`sql/*.sql` files in order: 001, 002, etc.) against the Aurora cluster. Uses `psql` if available, otherwise falls back to Node.js `pg` client. Safe to re-run (uses IF NOT EXISTS / IF EXISTS guards). |
@@ -866,7 +866,7 @@ Check that your IP is allowed by the Aurora security group. By default, the secu
 1. Check that the transaction hash is valid and confirmed on Polygon
 2. Verify the sender address matches the user's registered Trading Wallet (Safe)
 3. Check CloudWatch logs for the `tw-{env}-subscription-api` Lambda
-4. Ensure the USDC.e contract address and Platform Wallet address are correctly configured
+4. Ensure the pUSD/legacy USDC.e contract addresses and Platform Wallet address are correctly configured
 
 ### Analysis Lambda timeout or errors
 

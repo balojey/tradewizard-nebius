@@ -99,7 +99,7 @@ export function AnalysisModal({
   const [intervalSeconds, setIntervalSeconds] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [requestId, setRequestId] = useState<string | null>(null);
+  const [, setRequestId] = useState<string | null>(null);
   const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
   const [nextAvailableAt, setNextAvailableAt] = useState<string | null>(null);
 

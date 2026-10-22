@@ -10,7 +10,20 @@ export interface ErrorContext {
   action?: string;
   userId?: string;
   marketId?: string;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+interface SentryLike {
+  captureException(
+    error: unknown,
+    options?: { contexts?: { custom?: ErrorContext } }
+  ): void;
+}
+
+declare global {
+  interface Window {
+    Sentry?: SentryLike;
+  }
 }
 
 export interface ErrorLog {
@@ -58,8 +71,8 @@ export function logError(error: Error | unknown, context?: ErrorContext): void {
   }
 
   // Send to error tracking service if available (e.g., Sentry)
-  if (typeof window !== "undefined" && (window as any).Sentry) {
-    (window as any).Sentry.captureException(error, {
+  if (typeof window !== "undefined" && window.Sentry) {
+    window.Sentry.captureException(error, {
       contexts: {
         custom: context,
       },

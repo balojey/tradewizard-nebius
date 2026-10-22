@@ -20,9 +20,9 @@ This video walks through both the product experience and the systems architectur
 
 🛡️ Three Deterministic Gates (non-LLM)
 
-1. Signal Fusion - weighted aggregation scaled by leaderboard accuracy + divergence penalty
+1. Signal Fusion - market-anchored log-odds aggregation, conservative shrinkage, Brier-calibrated weights, divergence penalty
 2. Adversarial Debate - bull & bear theses each face 5 cross-examination tests (evidence, causality, timing, liquidity, tail risk)
-3. Consensus Engine - computes final probability; fails to NO_TRADE if disagreement is greater than 30% or expected value ≤ 0
+3. Consensus Engine - uses the anchored probability; fails to NO_TRADE on disagreement > 30%, confidence < 20%, or expected value ≤ 0
 
 🤖 Autonomous Portfolio Manager (Bounded Autonomy)
 

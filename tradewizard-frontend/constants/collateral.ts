@@ -3,20 +3,20 @@
  *
  * TradeWizard is migrating from USDC.e to pUSD (Polymarket USD) as the canonical
  * collateral. User-facing UI must never surface these token names, addresses,
- * wrapping, or bridging — everything is displayed as USD.
+ * wrapping, or bridging - everything is displayed as USD.
  *
  * Reference: https://docs.polymarket.com/resources/contracts
  */
 
 // ─── Collateral ───────────────────────────────────────────────────────────────
 
-/** pUSD (Polymarket USD) — ERC-20 collateral on Polygon. */
+/** pUSD (Polymarket USD) - ERC-20 collateral on Polygon. */
 export const PUSD_CONTRACT_ADDRESS =
   "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB" as const;
 
 export const PUSD_DECIMALS = 6;
 
-/** USDC.e — legacy collateral retained only for migration/read compatibility. */
+/** USDC.e - legacy collateral retained only for migration/read compatibility. */
 export const USDC_E_CONTRACT_ADDRESS =
   "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as const;
 
@@ -32,7 +32,7 @@ export const COLLATERAL_OFFRAMP_ADDRESS =
 
 // ─── Polymarket Protocol V2 Exchanges ─────────────────────────────────────────
 
-/** ExchangeV3 — settles Polymarket V2 position orders. */
+/** ExchangeV3 - settles Polymarket V2 position orders. */
 export const EXCHANGE_V3_ADDRESS =
   "0xe3333700cA9d93003F00f0F71f8515005F6c00Aa" as const;
 
@@ -44,7 +44,7 @@ export const CTF_EXCHANGE_V2_ADDRESS =
 export const NEG_RISK_CTF_EXCHANGE_V2_ADDRESS =
   "0xe2222d279d744050d28e00520010520000310F59" as const;
 
-/** PositionManager — owns Polymarket V2 ERC-1155 position balances. */
+/** PositionManager - owns Polymarket V2 ERC-1155 position balances. */
 export const POSITION_MANAGER_ADDRESS =
   "0x006F54F7f9A22e0000CC2AB60031000000ae9fEF" as const;
 

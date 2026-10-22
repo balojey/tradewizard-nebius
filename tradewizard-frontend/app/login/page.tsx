@@ -7,7 +7,7 @@ import {
   LoginWithEmailOTPEventOnReceived,
   LoginWithEmailOTPEventEmit,
 } from "magic-sdk";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Mail } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
@@ -279,8 +279,8 @@ function LoginContent() {
       {step === "otp" && (
         <>
           <div className="text-center mb-6">
-            <div className="w-12 h-12 rounded-full bg-ai/10 border border-ai/30 inline-flex items-center justify-center mb-4 text-xl">
-              ✉
+            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full border border-ai/30 bg-ai/10 text-ai">
+              <Mail className="h-5 w-5" aria-hidden="true" />
             </div>
             <h3 className="text-base font-semibold mb-1.5">
               Check your inbox
@@ -349,9 +349,10 @@ function LoginContent() {
                 setOtp("");
                 setError(null);
               }}
-              className="text-xs text-muted hover:text-fg transition-colors"
+              className="inline-flex items-center gap-1 text-xs text-muted hover:text-fg transition-colors"
             >
-              ← Change email
+              <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+              Change email
             </button>
 
             <button

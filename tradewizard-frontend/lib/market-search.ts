@@ -34,7 +34,7 @@ export async function findMarketBySlug(slug: string) {
 
           return market;
         }
-      } catch (error) {
+      } catch {
         // Continue to other search methods
       }
     }
@@ -87,7 +87,7 @@ export async function findMarketBySlug(slug: string) {
             question: clobMarket.question || '',
           };
         }
-      } catch (error) {
+      } catch {
         // Continue to other search methods
       }
     }
@@ -123,7 +123,7 @@ export async function findMarketBySlug(slug: string) {
           return market;
         }
       }
-    } catch (error) {
+    } catch {
       // Continue to other search methods
     }
 

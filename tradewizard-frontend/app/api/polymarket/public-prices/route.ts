@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
                 }
               }
             });
-          } catch (error) {
+          } catch {
             console.warn(`Failed to parse market data for market ${market.id}`);
           }
         }
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
             bidPrice: bidPrice > 0 ? bidPrice : null,
             askPrice: askPrice > 0 ? askPrice : null,
           };
-        } catch (error) {
+        } catch {
           return { tokenId, bidPrice: null, askPrice: null };
         }
       });

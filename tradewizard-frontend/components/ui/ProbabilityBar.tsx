@@ -27,7 +27,7 @@ export function ProbabilityBar({
   return (
     <div
       className={cn(
-        "relative w-full rounded-full bg-surface-2 overflow-hidden",
+        "relative w-full rounded-full bg-surface-2 ring-1 ring-inset ring-border/70 overflow-hidden",
         heightStyles[variant],
         className
       )}
@@ -39,14 +39,14 @@ export function ProbabilityBar({
     >
       {/* Fill bar */}
       <div
-        className="absolute inset-y-0 left-0 rounded-full bg-accent transition-[width] duration-200 ease-out"
+        className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent to-[oklch(62%_0.20_290)] transition-[width] duration-300 ease-out"
         style={{ width: `${clampedCents}%` }}
       />
 
       {/* AI marker */}
       {clampedAiCents != null && (
         <div
-          className="absolute top-0 bottom-0 w-[2px] bg-ai"
+          className="absolute top-0 bottom-0 w-[2px] rounded-full bg-ai shadow-[0_0_6px_oklch(62%_0.18_295_/_0.8)]"
           style={{ left: `${clampedAiCents}%` }}
           aria-label={`AI probability ${clampedAiCents}%`}
         />

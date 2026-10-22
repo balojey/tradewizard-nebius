@@ -2,7 +2,7 @@
  * TradeWizard's unified Polymarket client.
  *
  * Wraps the modern `@polymarket/client` SDK so the app can trade with pUSD,
- * support Protocol V2 and legacy CTF markets, and use Deposit Wallets — all
+ * support Protocol V2 and legacy CTF markets, and use Deposit Wallets - all
  * behind the same UI.
  *
  * The legacy `@polymarket/clob-client` stack remains in place during the
