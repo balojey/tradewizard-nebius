@@ -160,14 +160,26 @@ This is the architectural decision we're most proud of. Between the LLM-generate
 export function fuseSignals(
   signals: AgentSignal[],
   agentPerformance: Record<string, number>,
+  marketProbability = 0.5,
+  options: { maxPassThrough?: number; calibration?: CalibrationMap } = {},
 ): FusedSignal {
-  // Weight = type_weight × confidence × historical_accuracy
-  // Divergence penalty: if max spread > 70%, confidence halved
-  // Output: weighted fair probability, conflict map
+  // 1. De-bias: fair' = market + (fair - E[fair | market])   per-agent fit
+  // 2. Weight = type_weight × confidence × historical_accuracy
+  // 3. Pass-through: 60% of a moderate edge, 30% of a large one, 0% above 30%
+  // 4. Noise floor: standard error over the Kish effective sample size
+  // Output: anchored fair probability, standard error, conflict map
 }
 ```
 
+The de-bias step is the one that took us longest to get right. An LLM asked for P(YES) on a market priced at 0.85 will often answer 0.60 - not because it thinks the favourite is overpriced, but because its outputs cluster near the middle of the range. Averaging that in as a vote means the ensemble systematically points at the cheap token in every lopsided market. So before a forecast counts, we subtract the agent's *habitual* output at that price, fitted by regressing its past forecasts on the prices it saw. What survives the subtraction is the part of the forecast that is actually about this market. Identity calibration for an uncalibrated agent is a no-op, so the stage degrades into the naive version rather than breaking.
+
 Agent performance weights come from a closed-loop scoring system: every recommendation is tracked against the market's actual price movement. Agents that were right gain influence (up to 2×). Agents that were wrong lose influence (down to 0.5×). This feeds back into the next analysis automatically.
+
+### Gate 1a: What the edge has to clear
+
+Fusion produces a probability; it does not produce a decision. That belongs to the consensus engine, and the interesting part is the arithmetic. A flat 4-cent edge floor sounds conservative and is the opposite: on a market with a 1-cent spread it demands four times the cost of trading, while on a 6-cent-spread market it under-charges. So the default `actionable` profile derives the floor from the market's own spread plus slippage (clamped to 1.5c–8c), then takes the larger of that and `MIN_EDGE_SIGMA` (2) times the fusion standard error. The first floor asks "does this pay for the trade?" The second asks "is this distinguishable from noise?" Without the second, a cheap market trades whenever the ensemble drifts 2 cents, which is a coin flip paying fees.
+
+`GATE_PROFILE=strict` restores the older flat-floor, hard-veto behaviour, and every `NO_TRADE` records which gate produced it (`consensus_failed`, `divergence_cap`, `edge_below_threshold`, `edge_below_significance`, `thesis_veto`). That last detail is what makes the gate tunable: "why is everything NO_TRADE?" becomes a `GROUP BY` instead of a debate.
 
 ### Gate 2: Adversarial Cross-Examination
 
@@ -185,13 +197,22 @@ Each test produces a structured score. The debate is not prose - it's a typed ob
 
 ```typescript
 // Disagreement = stddev of agent fair probabilities
-// If disagreement > 0.30 → consensus FAILS → forced NO_TRADE
+// If disagreement > 0.30 or confidence < 0.20 → consensus FAILS → forced NO_TRADE
+// Edge floor = max(spread + slippage, MIN_EDGE_SIGMA × fusionStdError)
+// Thesis confirmation: winning direction must win by ≥ 1.0 margin
+//   (actionable: shares a 30% confidence haircut; strict: hard veto)
 // If EV ≤ 0 → recommendation REJECTED → forced NO_TRADE
 ```
 
-The consensus engine computes a final probability weighted by debate scores and agent accuracy. If agents fundamentally disagree (>30% spread), the system refuses to recommend. This is not a prompt instruction - it's a deterministic check the model cannot override.
+The consensus engine takes the anchored fused probability as its probability source - not a fresh weighted vote. The bull/bear debate is role-play, and role-play does not get to move a probability; it gets to confirm or discount the direction. The gate then asks two questions the old pipeline never asked: does the edge pay for the market's actual round-trip cost, and is it larger than the ensemble's own noise floor? A trade that fails either is not a missed opportunity, it is a coin flip with fees attached.
+
+If agents fundamentally disagree (>30% spread), the system refuses to recommend. This is not a prompt instruction - it's a deterministic check the model cannot override.
 
 **Why this matters:** LLMs are probabilistic. They will occasionally hallucinate confidence. The deterministic gates ensure that even a confidently wrong model cannot produce a recommendation that violates basic statistical sanity.
+
+### Measuring the gates instead of arguing about them
+
+Every analysis also computes an *agent-driven* consensus - one that votes with the agents' explicit direction rather than averaging their probabilities - and stores it beside the live decision without showing it to anyone. Both configs are graded on the same fixed price move (`live_pnl` vs `shadow_pnl`), and every refusal records its gate in `no_trade_reason`. That is the difference between tuning a threshold and guessing at one: the calibration slope of every agent, the breakdown of why runs became `NO_TRADE`, and the live-vs-shadow P&L all come back from one read-only SQL script.
 
 ---
 
@@ -205,7 +226,7 @@ Aurora is where everything that needs to survive a Lambda cold start lives. We u
 |-------|---------|---------------|
 | `agent_memory` | Per-agent historical signals keyed by market + result | Read at analysis start (per-agent isolation), write after each analysis |
 | `agent_performance` | Accuracy stats per agent (total signals, correct signals, avg confidence) | Read at analysis start for weighting, upsert after each scoring event |
-| `analysis_results` | Full recommendation payloads with outcome tracking (pending/success/failure/expired) | Write after analysis, read by scorer every 5min, read by users for history |
+| `analysis_results` | Full recommendation payloads with outcome tracking (pending/success/failure/expired), gate telemetry (`no_trade_reason`), shadow consensus and fixed-horizon P&L (`shadow_*`, `live_pnl`, `shadow_pnl`) | Write after analysis, read by scorer every 5min, read by users for history |
 | `analysis_deliveries` | Per-user delivery dedup (which user received which result) | Read on every request to prevent double-billing, write on delivery |
 | `market_analysis_schedule` | Recurring analysis cadences and subscriber lists per market | Read/write by scheduler and request handler |
 | `credit_transactions` | Immutable audit trail of every credit movement | Append-only writes, read for balance checks |

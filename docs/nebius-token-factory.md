@@ -24,6 +24,8 @@ The short version: the product's intelligence is a set of agent workflows, not a
 
 That split is deliberate. Inference can be swapped or throttled without changing the safety properties of the execution path.
 
+It is also what makes a model swap testable. Swapping `NEBIUS_MODEL_AGENTIC` changes which model argues about a market, not whether the argument is allowed to become a trade: the fusion pass-through, edge floors, significance floor, divergence cap, and thesis confirmation all live in `signal-fusion.ts` and `consensus-engine.ts`, and every refusal is recorded with the gate that produced it. The per-agent calibration fit (`lib/calibration.ts`) and the shadow-consensus measurement exist for exactly this reason - after a model change, the calibration slope of each bucket and the live-vs-shadow P&L tell you whether the new model argues better, instead of leaving you to judge it by the prose in one result.
+
 ## Architecture
 
 ```
@@ -102,7 +104,7 @@ NEBIUS_MODEL_NON_TOOL_MAX_TOKENS=
 NEBIUS_MODEL_DEFAULT_MAX_TOKENS=
 ```
 
-Set `AI_PROVIDER=nebius` explicitly in `.env.dev` / `.env.prod`; `.env.example` ships with Nebius selected.
+`AI_PROVIDER=nebius` is the default in `lib/compute-stack.ts` and `services/shared/ai-provider.ts`, and `.env.example` ships with it selected. `AI_PROVIDER=bedrock` remains selectable for regression comparisons, but the shipped environments are Nebius-only.
 
 ## Credentials
 
@@ -150,6 +152,8 @@ The validator checks:
 
 Run it after changing a model ID, not after a failed analysis.
 
+The validator answers "will this model respond correctly?". The gate telemetry answers "does this model argue better?". After swapping a bucket, `infra/scripts/agent-calibration-report.sql` reports each agent's calibration slope (close to 1.0 = tracks the price, below ~0.9 = regresses toward 0.5) alongside the `no_trade_reason` breakdown and the live-vs-shadow P&L. A model that is fluent but poorly calibrated shows up there before it shows up in a user's portfolio.
+
 ## Failure behavior
 
 | Failure | Behavior |
@@ -193,6 +197,9 @@ The tests cover provider selection, capability mapping, tool-calling invariants,
 
 - `infra/services/shared/ai-provider.ts` - provider selection, capability mapping, key handling, model factory.
 - `infra/services/analysis-lambda/lib/multi-model.ts` - agent/stage assignments and registry construction.
+- `infra/services/analysis-lambda/lib/calibration.ts` - per-agent market calibration and de-biasing.
+- `infra/services/analysis-lambda/lib/shadow-consensus.ts` - agent-driven consensus, measurement only.
+- `infra/scripts/agent-calibration-report.sql` - calibration slope, `no_trade_reason` breakdown, live-vs-shadow P&L.
 - `infra/services/portfolio-lambda/lib/model.ts` - portfolio model resolution.
 - `infra/scripts/validate-nebius.ts` - catalog, tool-calling, and JSON validation.
 - `infra/lib/compute-stack.ts` - secret provisioning and Lambda environment wiring.

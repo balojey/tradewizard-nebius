@@ -67,16 +67,33 @@ The division of responsibility is deliberate. Nebius runs inference. The determi
 ### Analysis Pipeline (11 Stages)
 
 1. **Data Preparation** - Fetch live data from Polymarket CLOB + Gamma APIs
-2. **Memory Retrieval** - Load historical agent signals from Aurora PostgreSQL
+2. **Memory Retrieval** - Load historical agent signals from Aurora PostgreSQL, plus each agent's fitted price-calibration line and Brier-derived weight
 3. **Web Research** - Autonomous research via NewsData.io and Serper tools on Nemotron 3 Super
 4. **Agent Selection** - All 14 agents activated for every market (no conditional filtering)
 5. **Parallel Intelligence Agents** - 14 agents execute in parallel through Nebius Token Factory
-6. **Signal Fusion** (deterministic) - Market-anchored log-odds aggregation with conservative shrinkage, Brier-calibrated agent weights, and conflict detection
+6. **Signal Fusion** (deterministic) - Market-anchored log-odds aggregation. Each agent forecast is de-biased against its own fitted calibration line, evidence-scaled pass-through decides how much of the ensemble's edge survives, Brier-calibrated weights set influence, and a standard-error noise floor plus conflict detection describe how much of the result is signal
 7. **Thesis Construction** - Competing bull and bear theses
 8. **Cross-Examination** - 5 adversarial tests on both theses
-9. **Consensus Engine** (deterministic) - Uses the anchored fused probability; fails on disagreement > 30% or confidence < 20%
+9. **Consensus Engine** (deterministic) - Applies the gate profile: an edge floor derived from the market's spread + slippage and two standard errors of ensemble noise, thesis confirmation, and the divergence cap. Fails to `NO_TRADE` on disagreement > 30% or confidence < 20%, and records the gate that produced the refusal
 10. **Risk Philosophy Agents** - Aggressive, conservative, neutral position sizing
 11. **Recommendation Generation** - LONG_YES, LONG_NO, or NO_TRADE with entry/exit zones
+
+Both sides of this split are measured. Every analysis also computes an agent-driven (shadow) consensus next to the live one, and both are graded on the same 24-hour price move (`live_pnl` vs `shadow_pnl`). The shadow decision is never shown to users — it is the evidence we use before changing a gate.
+
+### Gate Configuration
+
+The deterministic gates are environment knobs, not prompt text, so a gate can be retuned without touching inference:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `GATE_PROFILE` | `actionable` | `actionable` derives the edge floor from the spread + slippage and treats thesis disagreement as a confidence haircut; `strict` restores the flat 4c floor and hard thesis veto |
+| `FUSION_MAX_PASS_THROUGH` | `0.6` | Fraction of the ensemble's raw edge allowed through for moderate (≤15%) disagreements; 15–30% passes at half that, >30% is treated as model error |
+| `MIN_ACTIONABLE_EDGE` | `0.04` | Flat edge floor under the `strict` profile (high-liquidity markets require 1.5×) |
+| `MIN_EDGE_SIGMA` | `2` | How many standard errors of ensemble noise an edge must clear to count as signal |
+| `MAX_ACTIONABLE_DIVERGENCE` | `0.15` | Credibility cap on model-vs-market disagreement |
+| `SHADOW_PNL_HORIZON_HOURS` | `24` | Fixed horizon on which the live and shadow decisions are compared |
+
+Every `NO_TRADE` also persists a machine-readable reason (`consensus_failed`, `divergence_cap`, `edge_below_threshold`, `edge_below_significance`, `thesis_veto`), so "why is everything NO_TRADE?" is a query rather than an interpretation. `infra/scripts/agent-calibration-report.sql` reports both that breakdown and each agent's calibration slope.
 
 ## Frontend Features (Phase 3)
 

@@ -429,7 +429,7 @@ The full schema is in `sql/001-initial-schema.sql`. Key tables:
 | `analysis_requests` | User analysis requests (one-time + recurring) |
 | `market_analysis_schedule` | Internal dedup schedule per market |
 | `market_subscribers` | Which users subscribe to which market |
-| `analysis_results` | Completed analysis metadata |
+| `analysis_results` | Completed analysis metadata, gate telemetry (`no_trade_reason`), and the shadow-consensus decision (`shadow_*`), scored on a fixed horizon (`live_pnl` / `shadow_pnl`) |
 | `analysis_deliveries` | Delivery log (who got what, cached vs fresh) |
 | `agent_memory` | Historical agent signals for closed-loop learning |
 | `agent_performance` | Agent accuracy leaderboard |
@@ -821,7 +821,27 @@ The analysis and portfolio agent logic is implemented as TypeScript Lambda funct
 - `stages/intelligence-agents.ts` - 14 parallel agent definitions with system prompts
 - `stages/` - All workflow stages (data-preparation, web-research, signal-fusion, thesis, consensus, etc.)
 - `tools/` - Strands tools (news, search, shell, tool-factory)
-- `lib/` - Utilities (model, multi-model, json-extractor, types)
+- `lib/` - Utilities (multi-model, calibration, calibration-seed, shadow-consensus, json-extractor, types)
+
+### Deterministic Gate Configuration
+
+The stages between the Nebius agents and the user are pure functions with environment knobs. They can be retuned without re-prompting or re-routing a single model:
+
+| Variable | Default | Where it acts |
+|----------|---------|---------------|
+| `GATE_PROFILE` | `actionable` | `stages/consensus-engine.ts` - `actionable` derives the edge floor from the spread + slippage, treats thesis disagreement as a confidence haircut, and expands the target to the EV break-even distance; `strict` restores the flat 4c floor, hard thesis veto, and pass-through 0.6 |
+| `FUSION_MAX_PASS_THROUGH` | `0.6` | `stages/signal-fusion.ts` - fraction of the raw edge allowed through for moderate (≤15%) disagreements; 15-30% passes at half rate, >30% is blocked as model error. `FUSION_SHRINKAGE` is read as a legacy fallback |
+| `MIN_ACTIONABLE_EDGE` | `0.04` | `stages/consensus-engine.ts` - flat floor under `strict` (×1.5 for high liquidity risk) |
+| `MIN_EDGE_SIGMA` | `2` | `stages/consensus-engine.ts` - standard errors of `fairValueStandardError` the edge must clear under `actionable` |
+| `MAX_ACTIONABLE_DIVERGENCE` | `0.15` | `stages/consensus-engine.ts` - credibility cap on model-vs-market disagreement |
+| `ANALYSIS_HISTORY_DEPTH` | `5` | `stages/historical-context.ts` - past analyses loaded per agent, clamped 1-20 |
+| `SHADOW_PNL_HORIZON_HOURS` | `24` | `services/recommendation-scorer/handler.ts` - fixed horizon for the live-vs-shadow P&L comparison |
+
+Per-agent calibration (`lib/calibration.ts`) is fitted from `agent_memory` joined to `analysis_results` over a 90-day window (`fetchAgentCalibration`), requires `MIN_SAMPLES` 12 observations per agent, and is shrunk toward the identity line until history accumulates; `lib/calibration-seed.ts` holds the cold-start lines so a fresh database does not revert to the cheap-token bias.
+
+The agent-driven (shadow) consensus (`lib/shadow-consensus.ts`) is computed on every analysis for measurement only. Its decision lands in the `shadow_*` columns of `analysis_results` and the full detail payload in S3; `recommendation-scorer` grades both configs on the same price move. The orchestrator retries the insert without those columns if `001-schema.sql` has not been applied yet, so a Lambda-first deploy window is not fatal.
+
+`scripts/agent-calibration-report.sql` is a read-only report over the same data: per-agent calibration slope, `no_trade_reason` breakdown, and live-vs-shadow P&L.
 
 ### Portfolio Lambda (`services/portfolio-lambda/`)
 - `handler.ts` - Portfolio manager entry point (persona agent + decision parsing)

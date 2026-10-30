@@ -20,9 +20,11 @@ This video walks through both the product experience and the systems architectur
 
 🛡️ Three Deterministic Gates (non-LLM)
 
-1. Signal Fusion - market-anchored log-odds aggregation, conservative shrinkage, Brier-calibrated weights, divergence penalty
+1. Signal Fusion - market-anchored log-odds, per-agent price calibration, evidence-scaled pass-through, Brier-calibrated weights, divergence penalty
 2. Adversarial Debate - bull & bear theses each face 5 cross-examination tests (evidence, causality, timing, liquidity, tail risk)
-3. Consensus Engine - uses the anchored probability; fails to NO_TRADE on disagreement > 30%, confidence < 20%, or expected value ≤ 0
+3. Consensus Engine - uses the anchored probability; the edge must clear the market's spread + slippage and 2 standard errors of ensemble noise; fails to NO_TRADE on disagreement > 30%, confidence < 20%, or expected value ≤ 0
+
+Every run also computes an agent-driven "shadow" consensus beside the live one and grades both on the same price move - gates change on evidence, not on vibes.
 
 🤖 Autonomous Portfolio Manager (Bounded Autonomy)
 
