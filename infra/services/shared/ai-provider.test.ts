@@ -67,7 +67,12 @@ afterEach(() => {
 });
 
 describe('resolveAiProvider', () => {
-  it('defaults to bedrock', () => {
+  it('defaults to Nebius Token Factory', () => {
+    expect(resolveAiProvider()).toBe('nebius');
+  });
+
+  it('still accepts explicit bedrock for regression comparison', () => {
+    process.env.AI_PROVIDER = 'bedrock';
     expect(resolveAiProvider()).toBe('bedrock');
   });
 
@@ -126,7 +131,8 @@ describe('Nebius model configuration', () => {
 });
 
 describe('model construction', () => {
-  it('constructs a Bedrock model by default', () => {
+  it('constructs a Bedrock model when explicitly selected', () => {
+    process.env.AI_PROVIDER = 'bedrock';
     process.env.BEDROCK_MODEL_ID = 'bedrock-model';
     process.env.AWS_REGION = 'us-east-1';
     process.env.BEDROCK_MAX_TOKENS = '4096';

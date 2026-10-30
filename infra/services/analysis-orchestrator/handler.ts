@@ -82,6 +82,13 @@ interface TradeRecommendation {
     agentsUsed: string[];
     marketQuestion: string;
     disagreementIndex?: number;
+    thesisVetoTriggered?: boolean;
+    noTradeReason?:
+      | 'consensus_failed'
+      | 'divergence_cap'
+      | 'edge_below_threshold'
+      | 'edge_below_significance'
+      | 'thesis_veto';
   };
   // Full analysis detail attached by the Analysis_Lambda - persisted to
   // agent_memory (per-signal rows) and S3 (full detail JSON) by this Lambda.
@@ -104,6 +111,20 @@ interface TradeRecommendation {
     consensus: Record<string, unknown>;
     riskPerspectives: string;
     webResearchSummary: string;
+    // Shadow (agent-driven) consensus recorded alongside the live decision so
+    // both configs can be graded against realised price moves.
+    shadowConsensus?: {
+      action: 'LONG_YES' | 'LONG_NO' | 'NO_TRADE';
+      voteScore: number;
+      edge: number;
+      fairProbability: number;
+      costFloor: number;
+      participatingAgents: string[];
+      abstainShare: number;
+      calibrationSamples: number;
+      uncalibratedAgents: string[];
+      reason: string;
+    };
   };
 }
 
@@ -682,6 +703,18 @@ async function publishFailureEvent(message: AnalysisMessage, error: Error): Prom
 // ─── RDS Result Storage & Delivery Tracking ─────────────────────────────────────
 
 /**
+ * True when Postgres rejected a statement because a column does not exist yet.
+ * Used to survive the deploy window where the Lambda is updated before the
+ * SQL migration has run.
+ */
+function isUndefinedColumnError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === '42703') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /column .* does not exist/i.test(message);
+}
+
+/**
  * Store the analysis result in the RDS analysis_results table.
  * Returns the generated result UUID for use in delivery tracking and dedup cache.
  */
@@ -710,31 +743,71 @@ async function storeResultInRds(
       : null;
     const outcomeStatus = result.action === 'NO_TRADE' ? 'no_trade' : 'pending';
 
-    const res = await client.query(
-      `INSERT INTO analysis_results (
-         market_id, executed_at, execution_duration_ms, total_llm_calls,
-         result_payload_s3_key, consensus_probability, recommendation,
-         confidence_score, edge, market_probability_at_execution,
-         entry_price, target_price, stop_loss_price, outcome_status
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-       RETURNING id`,
-      [
-        message.marketId,
-        executedAt,
-        durationMs,
-        result.metadata.totalLlmCalls,
-        s3Key,
-        result.metadata.consensusProbability,
-        result.action,
-        result.winProbability,
-        result.metadata.edge,
-        result.metadata.marketProbability,
-        entryPrice,
-        targetPrice,
-        stopLossPrice,
-        outcomeStatus,
-      ]
-    );
+    // Shadow (agent-driven) consensus, when present. Recorded so both configs
+    // can be compared on the same markets; never used for the live decision.
+    const shadow = result._analysisDetail?.shadowConsensus;
+
+    const baseParams = [
+      message.marketId,
+      executedAt,
+      durationMs,
+      result.metadata.totalLlmCalls,
+      s3Key,
+      result.metadata.consensusProbability,
+      result.action,
+      result.winProbability,
+      result.metadata.edge,
+      result.metadata.marketProbability,
+      entryPrice,
+      targetPrice,
+      stopLossPrice,
+      outcomeStatus,
+    ];
+    const shadowParams = [
+      shadow?.action ?? null,
+      shadow?.edge ?? null,
+      shadow?.voteScore ?? null,
+      shadow?.fairProbability ?? null,
+      shadow?.costFloor ?? null,
+      shadow?.reason ?? null,
+      result.metadata.noTradeReason ?? null,
+    ];
+
+    // CDK deploys before the SQL migration runs, so during a deploy window the
+    // shadow_* columns may not exist yet. Retry without them rather than losing
+    // the whole row (which would also break agent_memory's result_id FK).
+    const insert = (includeShadow: boolean) =>
+      client.query(
+        `INSERT INTO analysis_results (
+           market_id, executed_at, execution_duration_ms, total_llm_calls,
+           result_payload_s3_key, consensus_probability, recommendation,
+           confidence_score, edge, market_probability_at_execution,
+           entry_price, target_price, stop_loss_price, outcome_status${
+             includeShadow
+               ? ',\n           shadow_action, shadow_edge, shadow_vote_score, shadow_probability,\n           shadow_cost_floor, shadow_reason, no_trade_reason'
+               : ''
+           }
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14${
+           includeShadow ? ', $15, $16, $17, $18, $19, $20, $21' : ''
+         })
+         RETURNING id`,
+        includeShadow ? [...baseParams, ...shadowParams] : baseParams,
+      );
+
+    let res;
+    try {
+      res = await insert(true);
+    } catch (error) {
+      if (isUndefinedColumnError(error)) {
+        console.warn(
+          'analysis_results is missing the shadow_* columns (schema not migrated yet) - ' +
+          'inserting without shadow data. Run deploy.sh without --skip-db to apply 001-schema.sql.'
+        );
+        res = await insert(false);
+      } else {
+        throw error;
+      }
+    }
     const resultId = res.rows[0].id;
     console.log(`Stored analysis result ${resultId} in RDS for market ${message.marketId}`);
 
@@ -806,6 +879,7 @@ async function storeAgentMemory(
           consensus: detail.consensus,
           riskPerspectives: detail.riskPerspectives,
           webResearchSummary: detail.webResearchSummary,
+          shadowConsensus: detail.shadowConsensus,
         }, null, 2),
         ContentType: 'application/json',
       })

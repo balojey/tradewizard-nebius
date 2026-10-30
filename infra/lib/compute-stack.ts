@@ -114,17 +114,17 @@ export class ComputeStack extends cdk.Stack {
       SES_FROM_EMAIL: process.env.SES_FROM_EMAIL || 'notifications@tradewizard.live',
     };
 
-    // ─── Nebius API Key Secret (optional AI provider) ─────────────────────────
+    // ─── Nebius Token Factory API Key Secret (AI inference provider) ──────────
     //
-    // AI_PROVIDER=bedrock is the default. When AI_PROVIDER=nebius, analysis and
-    // portfolio Lambdas route model calls through Nebius Token Factory using
-    // this secret. deploy.sh (Step 3) populates it from NEBIUS_API_KEY.
+    // AI_PROVIDER=nebius is the default: analysis and portfolio Lambdas route
+    // every model call through Nebius Token Factory using this secret.
+    // deploy.sh (Step 3) populates it from NEBIUS_API_KEY.
     //
     // Expected secret shape:
     //   { "apiKey": "..." }
     const nebiusApiKeySecret = new secretsmanager.Secret(this, 'NebiusApiKeySecret', {
       secretName: resourceName(config.envName, 'nebius-api-key'),
-      description: 'Nebius Token Factory API key for the optional AI provider',
+      description: 'Nebius Token Factory API key for model inference',
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
@@ -139,7 +139,10 @@ export class ComputeStack extends cdk.Stack {
     ];
 
     const aiProviderEnv: Record<string, string> = {
-      AI_PROVIDER: process.env.AI_PROVIDER || 'bedrock',
+      // Nebius Token Factory is the submitted configuration. `bedrock` remains
+      // reachable for regression comparisons, but the shipped environments are
+      // Nebius-only, so the fallback must match.
+      AI_PROVIDER: process.env.AI_PROVIDER || 'nebius',
       NEBIUS_API_KEY_SECRET_ARN: nebiusApiKeySecret.secretArn,
       NEBIUS_BASE_URL: process.env.NEBIUS_BASE_URL || 'https://api.tokenfactory.nebius.com/v1/',
       NEBIUS_MAX_TOKENS: process.env.NEBIUS_MAX_TOKENS || '30000',
@@ -373,9 +376,23 @@ export class ComputeStack extends cdk.Stack {
         DB_SECRET_ARN: dbSecret.secretArn,
         DB_HOST: dbEndpoint,
         ANALYSIS_HISTORY_DEPTH: this.node.tryGetContext('analysisHistoryDepth') ?? process.env.ANALYSIS_HISTORY_DEPTH ?? '5',
-        // Fraction of the ensemble's log-odds deviation from market that is
-        // allowed through fusion. Lower = more market-anchored. 0.15 default.
-        FUSION_SHRINKAGE: process.env.FUSION_SHRINKAGE ?? '0.15',
+        // Maximum fraction of the ensemble's raw edge allowed through fusion
+        // for moderate disagreements. Lower = more market-anchored.
+        FUSION_MAX_PASS_THROUGH: process.env.FUSION_MAX_PASS_THROUGH ?? '0.6',
+        // Minimum anchored edge required to recommend a trade (strict profile).
+        MIN_ACTIONABLE_EDGE: process.env.MIN_ACTIONABLE_EDGE ?? '0.04',
+        // Risk appetite for the analysis layer.
+        //   strict     - flat 4c edge floor, hard thesis veto (old behaviour)
+        //   actionable - edge floor = observed spread + slippage, thesis
+        //                disagreement discounts confidence instead of vetoing,
+        //                and the fusion pass-through is 1.0
+        GATE_PROFILE: process.env.GATE_PROFILE ?? 'actionable',
+        // How many standard errors of ensemble noise an edge must clear before
+        // it is treated as signal rather than drift. Two-sided, so 2.0 ~= 5%.
+        MIN_EDGE_SIGMA: process.env.MIN_EDGE_SIGMA ?? '2',
+        // Credibility cap on model-vs-market disagreement. Above this the edge
+        // is treated as model error rather than opportunity.
+        MAX_ACTIONABLE_DIVERGENCE: process.env.MAX_ACTIONABLE_DIVERGENCE ?? '0.15',
         BEDROCK_MAX_TOKENS: process.env.BEDROCK_MAX_TOKENS ?? '30000',
         NEWS_TOOL_MAX_CALLS: process.env.NEWS_TOOL_MAX_CALLS ?? '5',
         SEARCH_TOOL_MAX_CALLS: process.env.SEARCH_TOOL_MAX_CALLS ?? '10',
@@ -397,7 +414,7 @@ export class ComputeStack extends cdk.Stack {
         MODEL_NOVA_2_LITE_MAX_TOKENS: process.env.MODEL_NOVA_2_LITE_MAX_TOKENS ?? '30000',
         MODEL_LLAMA_3_3: process.env.MODEL_LLAMA_3_3 ?? 'us.meta.llama3-3-70b-instruct-v1:0',
         MODEL_LLAMA_3_3_MAX_TOKENS: process.env.MODEL_LLAMA_3_3_MAX_TOKENS ?? '4096',
-        // Provider switch (Bedrock default, Nebius optional)
+        // Provider switch (Nebius Token Factory default; Bedrock retained for comparison)
         ...aiProviderEnv,
       },
       bundling: {
@@ -441,7 +458,7 @@ export class ComputeStack extends cdk.Stack {
         DB_HOST: dbEndpoint,
         EVENT_BUS_NAME: eventBus.eventBusName,
         ANALYSIS_RESULTS_BUCKET: analysisBucket.bucketName,
-        // Provider switch (Bedrock default, Nebius optional)
+        // Provider switch (Nebius Token Factory default; Bedrock retained for comparison)
         ...aiProviderEnv,
       },
       bundling: {
@@ -816,6 +833,10 @@ export class ComputeStack extends cdk.Stack {
         DB_HOST: dbEndpoint,
         ENVIRONMENT: config.envName,
         RECOMMENDATION_EXPIRY_HOURS: '168', // 7 days
+        // Fixed horizon for grading the live recommendation and the shadow
+        // (agent-driven) consensus on the same price move. Both configs are
+        // compared on this window, so it must not depend on TP/SL levels.
+        SHADOW_PNL_HORIZON_HOURS: process.env.SHADOW_PNL_HORIZON_HOURS ?? '24',
       },
       bundling: {
         minify: isProd,

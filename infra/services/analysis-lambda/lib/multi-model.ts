@@ -1,12 +1,18 @@
 /**
  * Multi-Model Configuration for Analysis_Lambda
  *
- * Distributes agent workload across multiple models to enable parallel
- * execution without hitting per-model RPM limits. Agent→logical-key
- * assignments are provider-agnostic; the active provider (Bedrock or Nebius)
- * supplies the concrete model ID for each logical key.
+ * Distributes agent workload across capability buckets so a run never depends
+ * on a single model's rate limit. Agent→logical-key assignments are
+ * provider-agnostic; the active provider supplies the concrete model ID for
+ * each logical key.
  *
- * Environment Variables (Bedrock - default):
+ * Environment Variables (Nebius Token Factory - default):
+ * - NEBIUS_MODEL_FAST, NEBIUS_MODEL_ANALYTICAL, NEBIUS_MODEL_AGENTIC,
+ *   NEBIUS_MODEL_REASONING, NEBIUS_MODEL_DEEP_REASONING, NEBIUS_MODEL_NON_TOOL,
+ *   NEBIUS_MODEL_DEFAULT
+ * - NEBIUS_BASE_URL, NEBIUS_MAX_TOKENS
+ *
+ * Environment Variables (Bedrock - legacy comparison only):
  * - MODEL_NOVA_MICRO, MODEL_NOVA_LITE, MODEL_KIMI_K2, MODEL_NEMOTRON,
  *   MODEL_GPT_OSS, MODEL_NOVA_2_LITE, MODEL_LLAMA_3_3
  * - AWS_REGION, BEDROCK_MAX_TOKENS
@@ -52,7 +58,7 @@ export interface ModelConfig {
 }
 
 /**
- * Bedrock model registry (default provider). Values match the prior behavior.
+ * Bedrock model registry (legacy comparison provider). Values match the prior behavior.
  */
 function buildBedrockRegistry(): Record<string, ModelConfig> {
   const region = process.env.AWS_REGION || 'us-east-1';

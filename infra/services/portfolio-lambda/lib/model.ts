@@ -1,8 +1,9 @@
 /**
  * Shared model factory for Portfolio_Lambda.
  *
- * Provider-aware: Bedrock by default, or Nebius Token Factory when
- * AI_PROVIDER=nebius. The portfolio agent, prompts, and tools are unchanged.
+ * Provider-aware: Nebius Token Factory by default (AI_PROVIDER=nebius), with
+ * Bedrock still selectable for comparison. The portfolio agent, prompts, and
+ * tools are unchanged.
  *
  * Requirements: 3.5, 3.6, 3.8
  */

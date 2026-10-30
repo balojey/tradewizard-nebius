@@ -16,18 +16,30 @@ export interface AgentSignal {
 
 /** Signal fusion output - market-anchored aggregation of agent signals */
 export interface FusedSignal {
-  /** Final P(YES) after market anchoring and shrinkage. */
+  /** Final P(YES) after market anchoring and evidence-scaled pass-through. */
   weightedFairProbability: number;
   /** Unshrunk ensemble estimate, useful for observability/replay. */
   rawFairProbability?: number;
   /** Market prior used for anchoring. */
   marketProbability?: number;
-  /** Shrinkage factor applied to the ensemble's log-odds adjustment (0..1). */
+  /** Effective pass-through applied to the ensemble's raw edge (0..1). */
   shrinkage?: number;
+  /** Explicit alias for the evidence-scaled pass-through. */
+  passThrough?: number;
   fusionConfidence: number;
   signalAlignment: number;
   /** Dispersion of directional views, normalized to 0..1. */
   signalDisagreement?: number;
+  /**
+   * Standard error of the fused probability estimate, in probability points.
+   *
+   * This is the ensemble's noise floor: how far the aggregate can drift from the
+   * market purely from agent disagreement, given how many (effectively
+   * independent) agents voted. An edge smaller than this is not a signal.
+   */
+  fairValueStandardError?: number;
+  /** Effective number of independent agent votes (Kish sample size). */
+  effectiveSampleSize?: number;
   conflictMap: Array<{ agent1: string; agent2: string; divergence: number }>;
 }
 
@@ -98,6 +110,18 @@ export interface TradeRecommendation {
     marketEndDate?: string;
     /** Whether the divergence circuit breaker blocked the trade. */
     divergenceGuardTriggered?: boolean;
+    /** Whether the winning thesis vetoed the trade direction. */
+    thesisVetoTriggered?: boolean;
+    /**
+     * Machine-readable gate that produced a NO_TRADE verdict.
+     * Lets a run be diagnosed without parsing the explanation prose.
+     */
+    noTradeReason?:
+      | 'consensus_failed'
+      | 'divergence_cap'
+      | 'edge_below_threshold'
+      | 'edge_below_significance'
+      | 'thesis_veto';
   };
   _analysisDetail?: unknown;
 }

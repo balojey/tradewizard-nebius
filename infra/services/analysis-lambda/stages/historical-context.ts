@@ -21,6 +21,13 @@ import {
   SecretsManagerClient,
   GetSecretValueCommand,
 } from '@aws-sdk/client-secrets-manager';
+import {
+  MIN_SAMPLES,
+  calibrationFromMoments,
+  describeCalibration,
+  type CalibrationMap,
+} from '../lib/calibration';
+import { CALIBRATION_SEED } from '../lib/calibration-seed';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -513,4 +520,133 @@ export function buildWeightsFromSignalRows(
   }
 
   return weights;
+}
+
+// ─── Per-Agent Market Calibration ─────────────────────────────────────────────
+
+/**
+ * Row shape for the aggregated calibration query. Postgres computes the
+ * least-squares sufficient statistics so we never pull raw signal rows into the
+ * Lambda.
+ */
+interface CalibrationAggregateRow {
+  agent_name: string;
+  samples: number | string;
+  mean_market: number | string;
+  mean_fair: number | string;
+  mean_market_fair: number | string;
+  mean_market_sq: number | string;
+}
+
+/**
+ * How far back to look when fitting agent calibration. Regression toward 0.5
+ * is a stable property of a model, so a long window is appropriate; the
+ * shrinkage in `calibrationFromMoments` protects against sparse agents.
+ */
+const CALIBRATION_LOOKBACK_DAYS = 90;
+
+const CALIBRATION_QUERY = `
+  SELECT
+    am.agent_name,
+    COUNT(*)::int AS samples,
+    AVG(ar.market_probability_at_execution)::float8 AS mean_market,
+    AVG(am.fair_probability)::float8 AS mean_fair,
+    AVG(ar.market_probability_at_execution * am.fair_probability)::float8 AS mean_market_fair,
+    AVG(ar.market_probability_at_execution * ar.market_probability_at_execution)::float8 AS mean_market_sq
+  FROM agent_memory am
+  JOIN analysis_results ar ON ar.id = am.result_id
+  WHERE ar.market_probability_at_execution IS NOT NULL
+    AND ar.executed_at > NOW() - ($1 || ' days')::INTERVAL
+  GROUP BY am.agent_name
+`;
+
+/**
+ * Fits each intelligence agent's habitual output as a function of the market
+ * price: `E[fair | market] = intercept + slope * market`.
+ *
+ * A slope near 1 means the agent genuinely tracks the price. A slope well below
+ * 1 means it regresses toward 0.5, which - left uncorrected - turns every
+ * lopsided market into a vote for the cheaper token. See
+ * `lib/calibration.ts` for why this matters and how the residual is used.
+ *
+ * Deliberately includes NEUTRAL signals: an agent emitting 0.50 on a market
+ * priced at 0.85 is the clearest possible evidence of regression, and excluding
+ * it would bias the fit.
+ *
+ * On failure: returns an empty map (every agent then behaves as it does today,
+ * because identity calibration is a no-op). Never throws.
+ */
+export async function fetchAgentCalibration(): Promise<CalibrationMap> {
+  const creds = await getDbCredentials();
+  if (!creds) return {};
+
+  let client: import('pg').Client | null = null;
+
+  try {
+    const pg = await import('pg');
+
+    const connectionString = `postgresql://${creds.username}:${encodeURIComponent(creds.password)}@${creds.host}:${creds.port}/${creds.dbname}?sslmode=no-verify`;
+    client = new pg.Client({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      statement_timeout: 10_000,
+    });
+
+    await client.connect();
+
+    const result = await client.query<CalibrationAggregateRow>(CALIBRATION_QUERY, [
+      String(CALIBRATION_LOOKBACK_DAYS),
+    ]);
+
+    // Start from the seed and let live history take precedence per agent.
+    //
+    // De-biasing depends on history. After a purge, an empty fit would revert
+    // every agent to the identity line and restore the cheap-token bias, so the
+    // seed holds the correction until an agent has re-accumulated at least
+    // MIN_SAMPLES fresh observations. Agents below that threshold keep their
+    // seeded line rather than an under-sampled one.
+    const calibration: CalibrationMap = { ...CALIBRATION_SEED };
+    let fromHistory = 0;
+
+    for (const row of result.rows) {
+      const samples = Number(row.samples);
+      if (!Number.isFinite(samples) || samples < MIN_SAMPLES) continue;
+
+      calibration[row.agent_name] = calibrationFromMoments({
+        samples,
+        meanMarket: Number(row.mean_market),
+        meanFair: Number(row.mean_fair),
+        meanMarketFair: Number(row.mean_market_fair),
+        meanMarketSq: Number(row.mean_market_sq),
+      });
+      fromHistory += 1;
+    }
+
+    const seeded = Object.keys(calibration).length - fromHistory;
+    const fitted = Object.entries(calibration)
+      .map(([agentName, cal]) => `${agentName}(${describeCalibration(cal)})`)
+      .join(', ');
+
+    console.log(
+      `[AgentCalibration] ${fromHistory} agent(s) fitted from the last ` +
+      `${CALIBRATION_LOOKBACK_DAYS}d of history, ${seeded} from seed` +
+      `${fitted ? `: ${fitted}` : ' (no data)'}`
+    );
+
+    return calibration;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[AgentCalibration] Failed to fit agent calibration: ${msg} - using identity (no-op)`
+    );
+    return {};
+  } finally {
+    if (client) {
+      try {
+        await client.end();
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
 }

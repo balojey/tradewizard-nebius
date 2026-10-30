@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateConsensus,
   determineAction,
+  evaluateThesisConfirmation,
   MAX_ACTIONABLE_DIVERGENCE,
   runConsensusEngine,
 } from './consensus-engine';
@@ -108,8 +109,29 @@ describe('determineAction', () => {
   });
 
   it('requires a larger edge under high liquidity risk', () => {
-    expect(determineAction(0.08, 0.0, false, 'low')).toBe('LONG_YES');
-    expect(determineAction(0.08, 0.0, false, 'high')).toBe('NO_TRADE');
+    // Strict profile: the flat 4c floor becomes 6c when liquidity risk is high.
+    expect(determineAction(0.05, 0.0, false, 'low', { profile: 'strict' })).toBe('LONG_YES');
+    expect(determineAction(0.05, 0.0, false, 'high', { profile: 'strict' })).toBe('NO_TRADE');
+  });
+});
+
+describe('evaluateThesisConfirmation', () => {
+  it('confirms a clear bull win', () => {
+    const result = evaluateThesisConfirmation({ bullScore: 2.5, bearScore: -1 });
+    expect(result.passes).toBe(true);
+    expect(result.winningDirection).toBe('bull');
+  });
+
+  it('confirms a clear bear win', () => {
+    const result = evaluateThesisConfirmation({ bullScore: -1, bearScore: 2.5 });
+    expect(result.passes).toBe(true);
+    expect(result.winningDirection).toBe('bear');
+  });
+
+  it('rejects a weak or tied debate', () => {
+    const result = evaluateThesisConfirmation({ bullScore: 0.2, bearScore: -0.2 });
+    expect(result.passes).toBe(false);
+    expect(result.winningDirection).toBeNull();
   });
 });
 
@@ -126,9 +148,42 @@ describe('runConsensusEngine', () => {
 
     expect(result.action).toBe('NO_TRADE');
     expect(result.divergenceGuardTriggered).toBe(true);
+    expect(result.noTradeReason).toBe('divergence_cap');
   });
 
-  it('does not flag the guard for a normal edge', () => {
+  it('does not flag the guard for a normal, thesis-confirmed edge', () => {
+    const result = runConsensusEngine(
+      fused(0.58),
+      thesis('bull', 0.6),
+      thesis('bear', 0.4),
+      { bullScore: 2, bearScore: -2 },
+      0.5,
+      'low',
+    );
+
+    expect(result.action).toBe('LONG_YES');
+    expect(result.divergenceGuardTriggered).toBe(false);
+    expect(result.thesisVetoTriggered).toBe(false);
+    expect(result.noTradeReason).toBeUndefined();
+  });
+
+  it('vetoes a trade when the winning thesis points the other way', () => {
+    const result = runConsensusEngine(
+      fused(0.58),
+      thesis('bull', 0.6),
+      thesis('bear', 0.4),
+      { bullScore: -1, bearScore: 2 },
+      0.5,
+      'low',
+      { profile: 'strict' },
+    );
+
+    expect(result.action).toBe('NO_TRADE');
+    expect(result.thesisVetoTriggered).toBe(true);
+    expect(result.noTradeReason).toBe('thesis_veto');
+  });
+
+  it('vetoes a trade when the debate is too close to call', () => {
     const result = runConsensusEngine(
       fused(0.58),
       thesis('bull', 0.6),
@@ -136,9 +191,71 @@ describe('runConsensusEngine', () => {
       { bullScore: 0, bearScore: 0 },
       0.5,
       'low',
+      { profile: 'strict' },
     );
 
-    expect(result.action).toBe('LONG_YES');
-    expect(result.divergenceGuardTriggered).toBe(false);
+    expect(result.action).toBe('NO_TRADE');
+    expect(result.thesisVetoTriggered).toBe(true);
+  });
+
+  it('allows a bearish trade when the bear thesis wins cross-examination', () => {
+    const result = runConsensusEngine(
+      fused(0.42),
+      thesis('bull', 0.6),
+      thesis('bear', 0.3),
+      { bullScore: -1, bearScore: 2 },
+      0.5,
+      'low',
+    );
+
+    expect(result.action).toBe('LONG_NO');
+    expect(result.thesisVetoTriggered).toBe(false);
+    expect(result.noTradeReason).toBeUndefined();
+  });
+});
+
+describe('noTradeReason attribution', () => {
+  it('reports edge_below_threshold when the anchored edge is too small', () => {
+    const result = runConsensusEngine(
+      fused(0.52),
+      thesis('bull', 0.6),
+      thesis('bear', 0.4),
+      { bullScore: 2, bearScore: -2 },
+      0.5,
+      'low',
+    );
+
+    expect(result.action).toBe('NO_TRADE');
+    expect(result.noTradeReason).toBe('edge_below_threshold');
+    expect(result.thesisVetoTriggered).toBe(false);
+  });
+
+  it('reports consensus_failed ahead of the edge gates', () => {
+    const result = runConsensusEngine(
+      fused(0.58, { signalDisagreement: 0.8 }),
+      thesis('bull', 0.6),
+      thesis('bear', 0.4),
+      { bullScore: 2, bearScore: -2 },
+      0.5,
+      'low',
+    );
+
+    expect(result.action).toBe('NO_TRADE');
+    expect(result.noTradeReason).toBe('consensus_failed');
+  });
+
+  it('reports thesis_veto when the edge passed but the debate did not', () => {
+    const result = runConsensusEngine(
+      fused(0.58),
+      thesis('bull', 0.6),
+      thesis('bear', 0.4),
+      { bullScore: -1, bearScore: 2 },
+      0.5,
+      'low',
+      { profile: 'strict' },
+    );
+
+    expect(result.action).toBe('NO_TRADE');
+    expect(result.noTradeReason).toBe('thesis_veto');
   });
 });

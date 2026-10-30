@@ -21,6 +21,16 @@ import { getConnectionString } from '../shared/db';
 
 const EXPIRY_HOURS = parseInt(process.env.RECOMMENDATION_EXPIRY_HOURS || '168', 10); // 7 days default
 
+/**
+ * Fixed horizon for the live-vs-shadow comparison. Both configs are scored on
+ * the same price move, so the comparison is not confounded by their different
+ * entry/target/stop levels (the shadow config does not produce levels at all).
+ */
+const PNL_HORIZON_HOURS = parseInt(process.env.SHADOW_PNL_HORIZON_HOURS || '24', 10);
+
+/** Max rows scored per run - keeps the 5-minute schedule well inside its budget. */
+const PNL_BATCH_LIMIT = 100;
+
 interface PendingRecommendation {
   id: string;
   market_id: string;
@@ -53,7 +63,12 @@ export async function handler(): Promise<void> {
   try {
     await client.connect();
 
-    // 1. Fetch all pending recommendations
+    // 1. Score fixed-horizon P&L for the live and shadow configs. Independent of
+    //    the TP/SL path below: it applies to NO_TRADE rows too, which is where
+    //    the interesting comparison lives.
+    await scoreHorizonOutcomes(client);
+
+    // 2. Fetch all pending recommendations
     const pendingResult = await client.query<PendingRecommendation>(
       `SELECT id, market_id, recommendation, target_price, stop_loss_price, executed_at
        FROM analysis_results
@@ -149,6 +164,127 @@ export async function handler(): Promise<void> {
   } finally {
     await client.end();
   }
+}
+
+// ─── Fixed-Horizon P&L Scoring (live vs shadow) ─────────────────────────────
+
+interface HorizonRow {
+  id: string;
+  market_id: string;
+  recommendation: string | null;
+  shadow_action: string | null;
+  market_probability_at_execution: number | string;
+  executed_at: string;
+}
+
+/**
+ * Per-share P&L of holding the recommended binary token over the horizon.
+ *
+ * Buying YES profits when the YES price rises; buying NO profits when it
+ * falls. Expressing both as `sign * move` (in probability points) makes them
+ * directly comparable without needing entry/target/stop levels - which the
+ * shadow config deliberately does not produce.
+ */
+function directionalPnl(action: string | null, move: number): number {
+  if (action === 'LONG_YES') return move;
+  if (action === 'LONG_NO') return -move;
+  return 0;
+}
+
+/**
+ * Score every analysis whose horizon has elapsed on the same price move, for
+ * both the live recommendation and the shadow (agent-driven) consensus.
+ *
+ * This is the evidence the Slice 1 measurement exists to produce: if the
+ * agent-driven config does not beat the live one on `shadow_pnl` vs `live_pnl`
+ * - including its higher actionability - it should not replace it. NO_TRADE
+ * rows are scored too (P&L 0), so coverage is visible alongside P&L.
+ *
+ * Best-effort: failures are logged and never block TP/SL scoring.
+ */
+async function scoreHorizonOutcomes(client: import('pg').Client): Promise<void> {
+  let rows: HorizonRow[] = [];
+
+  try {
+    const result = await client.query<HorizonRow>(
+      `SELECT id, market_id, recommendation, shadow_action,
+              market_probability_at_execution, executed_at
+       FROM analysis_results
+       WHERE pnl_scored_at IS NULL
+         AND shadow_action IS NOT NULL
+         AND market_probability_at_execution IS NOT NULL
+         AND executed_at <= NOW() - ($1 || ' hours')::INTERVAL
+       ORDER BY executed_at ASC
+       LIMIT $2`,
+      [String(PNL_HORIZON_HOURS), PNL_BATCH_LIMIT]
+    );
+    rows = result.rows;
+  } catch (error) {
+    console.error('Failed to fetch horizon-scoring candidates:', error);
+    return;
+  }
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const marketIds = [...new Set(rows.map((row) => row.market_id))];
+  const priceMap = await fetchCurrentPrices(marketIds);
+
+  const now = new Date();
+  let scored = 0;
+  let shadowActionable = 0;
+  let shadowPnlSum = 0;
+  let livePnlSum = 0;
+
+  for (const row of rows) {
+    const price = priceMap.get(row.market_id);
+    if (price === undefined || price === null) continue;
+
+    const executedPrice = Number(row.market_probability_at_execution);
+    if (!Number.isFinite(executedPrice)) continue;
+
+    const move = price - executedPrice;
+    const livePnl = directionalPnl(row.recommendation, move);
+    const shadowPnl = directionalPnl(row.shadow_action, move);
+
+    if (row.shadow_action === 'LONG_YES' || row.shadow_action === 'LONG_NO') {
+      shadowActionable++;
+      shadowPnlSum += shadowPnl;
+    }
+    if (row.recommendation === 'LONG_YES' || row.recommendation === 'LONG_NO') {
+      livePnlSum += livePnl;
+    }
+
+    try {
+      await client.query(
+        `UPDATE analysis_results
+         SET horizon_hours = $1,
+             horizon_move = $2,
+             live_pnl = $3,
+             shadow_pnl = $4,
+             pnl_scored_at = $5
+         WHERE id = $6`,
+        [
+          PNL_HORIZON_HOURS,
+          Number(move.toFixed(4)),
+          Number(livePnl.toFixed(4)),
+          Number(shadowPnl.toFixed(4)),
+          now.toISOString(),
+          row.id,
+        ]
+      );
+      scored++;
+    } catch (error) {
+      console.error(`Failed to score horizon outcome for result ${row.id}:`, error);
+    }
+  }
+
+  console.log(
+    `Horizon scoring (${PNL_HORIZON_HOURS}h): scored ${scored}/${rows.length} results - ` +
+    `live P&L ${livePnlSum.toFixed(3)}, shadow P&L ${shadowPnlSum.toFixed(3)} ` +
+    `over ${shadowActionable} shadow trades`
+  );
 }
 
 // ─── Agent Scoring ───────────────────────────────────────────────────────────

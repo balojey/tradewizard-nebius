@@ -42,6 +42,9 @@ infra/
 │   │   ├── handler.ts              # 11-stage analysis workflow entry point (Strands SDK)
 │   │   ├── lib/
 │   │   │   ├── multi-model.ts      # Multi-model routing (capability buckets via shared/ai-provider.ts)
+│   │   │   ├── calibration.ts      # Per-agent market calibration fit + de-biasing (pure)
+│   │   │   ├── calibration-seed.ts # Cold-start calibration lines used until history re-accumulates
+│   │   │   ├── shadow-consensus.ts # Agent-driven (vote-based) consensus - measurement only, never live
 │   │   │   ├── json-extractor.ts   # Robust JSON extraction from LLM responses
 │   │   │   └── types.ts            # Shared interfaces (TradeRecommendation, AgentSignal, etc.)
 │   │   ├── tools/
@@ -51,13 +54,13 @@ infra/
 │   │   │   └── tool-factory.ts     # Tool factory for agent-specific tool sets
 │   │   └── stages/
 │   │       ├── data-preparation.ts     # Price history CSV + related markets JSON
-│   │       ├── historical-context.ts   # Agent memory from Aurora PostgreSQL
+│   │       ├── historical-context.ts   # Agent memory + Brier weights + calibration fit (Aurora PostgreSQL)
 │   │       ├── web-research.ts         # Autonomous web research agent
 │   │       ├── intelligence-agents.ts  # 14 parallel agents with system prompts
-│   │       ├── signal-fusion.ts        # Deterministic weighted aggregation
+│   │       ├── signal-fusion.ts        # Deterministic de-biased, market-anchored fusion + noise floor
 │   │       ├── thesis-construction.ts  # Bull/bear thesis agent
 │   │       ├── cross-examination.ts    # 5 adversarial tests agent
-│   │       ├── consensus-engine.ts     # Deterministic consensus + action determination
+│   │       ├── consensus-engine.ts     # Deterministic gates (gate profile, edge + significance floors)
 │   │       ├── risk-philosophy.ts      # 3 parallel risk agents
 │   │       └── recommendation.ts       # Final TradeRecommendation synthesis agent
 │   ├── portfolio-lambda/
@@ -151,6 +154,13 @@ infra/
 │       └── persona-registry.ts     # 6 trading personas with rules and customization
 ├── sql/
 │   └── 001-schema.sql              # Full PostgreSQL schema (all tables, indexes, triggers, idempotent migration guards)
+├── scripts/
+│   ├── validate-nebius.ts          # Token Factory catalog, tool-calling, and JSON-extraction check before deploy
+│   ├── agent-calibration-report.sql # Read-only per-agent calibration slope + live-vs-shadow outcome report
+│   ├── purge-analysis-data.sh      # Targeted analysis-history purge (keeps users, subscriptions, portfolio trades)
+│   ├── debug-agents-local.ts       # Local single-run harness for the intelligence agents
+│   ├── bakeoff-models.ts           # Side-by-side model comparison harness
+│   └── refund-credits.ts           # Operator credit refund helper
 ├── deploy.sh                       # Deployment script (up/down/status, --skip-db)
 ├── package.json
 ├── tsconfig.json
@@ -358,6 +368,9 @@ User requests analysis → API Gateway → Lambda (analysis-request)
 - 14 TypeScript intelligence agents defined in `infra/services/analysis-lambda/stages/intelligence-agents.ts`
 - All 14 agents run on every market (no conditional selection by market type)
 - Deterministic logic (signal fusion, consensus) in `infra/services/analysis-lambda/stages/signal-fusion.ts` and `consensus-engine.ts`
+- Per-agent market calibration (fit + `deBiasProbability`) in `infra/services/analysis-lambda/lib/calibration.ts`; the fit is loaded from Aurora by `fetchAgentCalibration` in `stages/historical-context.ts` (90-day window, `MIN_SAMPLES` 12, shrunk toward identity, seeded by `lib/calibration-seed.ts` until history re-accumulates)
+- Shadow (agent-driven) consensus in `infra/services/analysis-lambda/lib/shadow-consensus.ts` — measurement only, persisted as `analysis_results.shadow_*` and graded by `recommendation-scorer`
+- Gate knobs (env, set in `lib/compute-stack.ts`): `GATE_PROFILE`, `FUSION_MAX_PASS_THROUGH`, `MIN_ACTIONABLE_EDGE`, `MIN_EDGE_SIGMA`, `MAX_ACTIONABLE_DIVERGENCE`, `SHADOW_PNL_HORIZON_HOURS`
 - Deployed via CDK as part of the Analysis_Lambda NodejsFunction (bundled into the Lambda)
 - Orchestrator Lambda (`infra/services/analysis-orchestrator/handler.ts`) is a thin dispatcher that invokes Analysis_Lambda via `@aws-sdk/client-lambda`
 - **Multi-model routing** (active, `infra/services/analysis-lambda/lib/multi-model.ts`): logical agent keys resolve to capability buckets, then to the active provider's model IDs:

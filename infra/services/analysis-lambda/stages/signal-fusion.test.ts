@@ -29,7 +29,7 @@ describe('fuseSignals', () => {
     expect(result.conflictMap).toHaveLength(0);
   });
 
-  it('does not let a neutral-at-0.5 ensemble drag a favorite to 0.5', () => {
+  it('does not let a confident neutral-at-0.5 ensemble drag a favorite to 0.5', () => {
     const result = fuseSignals(
       [
         signal('market_microstructure', 'NEUTRAL', 0.5, 0.8),
@@ -40,13 +40,13 @@ describe('fuseSignals', () => {
       0.8,
     );
 
-    // The ensemble says 0.5 but the market prior dominates the shrunk view.
-    expect(result.weightedFairProbability).toBeGreaterThan(0.74);
-    expect(result.weightedFairProbability).toBeLessThan(0.8);
+    // The raw edge is 30%, so only the extreme pass-through applies.
     expect(result.rawFairProbability).toBeCloseTo(0.5, 2);
+    expect(result.weightedFairProbability).toBeCloseTo(0.71, 2);
+    expect(result.passThrough).toBeCloseTo(0.3, 4);
   });
 
-  it('keeps a bearish ensemble anchored to a favorite market', () => {
+  it('blocks a model-error-sized disagreement with the market', () => {
     const result = fuseSignals(
       [
         signal('market_microstructure', 'NO', 0.2, 0.9),
@@ -58,10 +58,48 @@ describe('fuseSignals', () => {
       0.8,
     );
 
-    // Unanchored this would be 0.20. The shrunk output stays close to 0.80.
+    // Raw edge is -60%: treated as model error, so the market prior wins.
     expect(result.rawFairProbability).toBeCloseTo(0.2, 1);
-    expect(result.weightedFairProbability).toBeGreaterThan(0.7);
-    expect(result.weightedFairProbability).toBeLessThan(0.8);
+    expect(result.weightedFairProbability).toBeCloseTo(0.8, 4);
+    expect(result.passThrough).toBe(0);
+  });
+
+  it('ignores low-confidence no-view signals', () => {
+    const confident = [
+      signal('breaking_news', 'NO', 0.62, 0.8),
+    ];
+    const withNoView = [
+      ...confident,
+      signal('market_microstructure', 'NEUTRAL', 0.5, 0.3),
+      signal('polling_intelligence', 'NEUTRAL', 0.5, 0.3),
+      signal('mean_reversion', 'NEUTRAL', 0.5, 0.3),
+    ];
+
+    const withoutNoise = fuseSignals(confident, {}, 0.665);
+    const withNoise = fuseSignals(withNoView, {}, 0.665);
+
+    expect(withNoise.weightedFairProbability).toBeCloseTo(
+      withoutNoise.weightedFairProbability,
+      6,
+    );
+    expect(withNoise.weightedFairProbability).toBeGreaterThan(0.63);
+    expect(withNoise.weightedFairProbability).toBeLessThan(0.65);
+  });
+
+  it('passes through most of a moderate aligned edge', () => {
+    const result = fuseSignals(
+      [
+        signal('market_microstructure', 'YES', 0.66, 0.8),
+        signal('polling_intelligence', 'YES', 0.66, 0.8),
+      ],
+      {},
+      0.6,
+    );
+
+    // Raw edge is +6%; 60% pass-through gives +3.6%.
+    expect(result.rawFairProbability).toBeCloseTo(0.66, 2);
+    expect(result.weightedFairProbability).toBeCloseTo(0.636, 2);
+    expect(result.passThrough).toBeCloseTo(0.6, 4);
   });
 
   it('still produces a directional view when the market is near 0.5', () => {

@@ -24,7 +24,13 @@ import type {
   Thesis,
   TradeRecommendation,
 } from '../lib/types';
-import { MAX_ACTIONABLE_DIVERGENCE, type ConsensusEngineOutput } from './consensus-engine';
+import {
+  MAX_ACTIONABLE_DIVERGENCE,
+  MIN_ACTIONABLE_EDGE,
+  readGateProfile,
+  type ConsensusEngineOutput,
+  type GateProfile,
+} from './consensus-engine';
 import type { RiskPhilosophyResult } from './risk-philosophy';
 
 // ============================================================================
@@ -38,6 +44,16 @@ const MIN_RISK_REWARD_RATIO = 1.5;
 
 /** Highest target price allowed after deterministic correction. */
 const MAX_TARGET_PRICE = 0.98;
+
+/**
+ * How far beyond EV break-even an expanded target is placed.
+ *
+ * Expanding to the exact break-even distance produces EV == 0, which the
+ * positive-EV check then rejects - so the trade would be refused for the very
+ * reason we just tried to accommodate. 15% of headroom keeps EV strictly
+ * positive while staying close to the maths.
+ */
+const EV_BREAKEVEN_MARGIN = 0.15;
 
 // ============================================================================
 // System Prompt
@@ -184,6 +200,8 @@ export interface RecommendationInput {
   liquidity?: number;
   /** Current bid-ask spread in probability points. */
   spread?: number;
+  /** Risk appetite inherited from the consensus engine. */
+  gateProfile?: GateProfile;
 }
 
 // ============================================================================
@@ -362,6 +380,8 @@ function buildRecommendationPrompt(input: RecommendationInput): string {
           : `IMPORTANT: The consensus engine determined NO_TRADE. ` +
             `The edge (${input.consensusOutput.edge.toFixed(3)}) is insufficient, consensus failed ` +
             `(disagreement: ${input.consensusOutput.consensusResult.disagreementIndex.toFixed(3)}), ` +
+            `the winning thesis did not confirm the trade direction ` +
+            `(${input.consensusOutput.thesisVetoTriggered ? 'thesis veto triggered' : 'thesis confirmed'}), ` +
             `or the divergence circuit breaker blocked an implausibly large disagreement with the market ` +
             `(${input.consensusOutput.divergenceGuardTriggered ? 'triggered' : 'not triggered'}). ` +
             `You MUST output action "NO_TRADE". Set entry_zone and target_zone to [0, 0] and stop_loss to 0. ` +
@@ -397,6 +417,8 @@ export function parseRecommendation(
   json: Record<string, unknown>,
   input: RecommendationInput,
 ): RecommendationParseResult {
+  const profile: GateProfile = input.gateProfile ?? readGateProfile();
+
   // Action - must match consensus action (agent can't override consensus)
   const action = input.consensusOutput.action;
 
@@ -467,17 +489,57 @@ export function parseRecommendation(
       return { ok: false, reason: 'stop loss is not below entry' };
     }
 
-    // Enforce a minimum risk/reward ratio. Expand the target (do not tighten
-    // the stop) so the trade has enough room to pay for the risk.
-    if (targetDistance < MIN_RISK_REWARD_RATIO * stopDistance) {
-      const requiredTargetMid = entryMid + MIN_RISK_REWARD_RATIO * stopDistance;
+    const consensusProb = clamp01(input.consensusOutput.consensusResult.probability);
+    const marketProb = clamp01(input.marketProbability);
+
+    const consensusWinProbability =
+      action === 'LONG_NO' ? 1 - consensusProb : consensusProb;
+    const marketWinProbability =
+      action === 'LONG_NO' ? 1 - marketProb : marketProb;
+
+    // Win probability.
+    //
+    // `strict` floored this at the market-implied probability unless the edge
+    // was "credible", which asserts the market is right and we are not - making
+    // EV negative by construction and rejecting tradeable edges. `actionable`
+    // uses the consensus estimate, which is what the edge claim is.
+    if (profile === 'actionable') {
+      winProbability = consensusWinProbability;
+    } else {
+      const hasCredibleEdge =
+        Math.abs(input.consensusOutput.edge) >= MIN_ACTIONABLE_EDGE &&
+        input.consensusOutput.consensusResult.confidence >= 0.5;
+      winProbability = hasCredibleEdge
+        ? consensusWinProbability
+        : Math.min(consensusWinProbability, marketWinProbability);
+    }
+
+    // Risk/reward. Two constraints, merged into one required distance:
+    //   1. a flat minimum reward:risk, and
+    //   2. EV break-even: td/sd > (1-p)/p at this win probability.
+    //
+    // The second constraint is what makes an "educated risk" honest: a cheap
+    // token needs a far target to justify the risk, and rather than refusing
+    // the trade we derive the target that pays for it.
+    const evBreakevenRatio =
+      winProbability > 0 && winProbability < 1
+        ? (1 - winProbability) / winProbability
+        : Number.POSITIVE_INFINITY;
+    const requiredRatio =
+      profile === 'actionable'
+        ? Math.max(MIN_RISK_REWARD_RATIO, evBreakevenRatio * (1 + EV_BREAKEVEN_MARGIN))
+        : MIN_RISK_REWARD_RATIO;
+
+    if (targetDistance < requiredRatio * stopDistance) {
+      const requiredTargetMid = entryMid + requiredRatio * stopDistance;
       if (requiredTargetMid > MAX_TARGET_PRICE) {
         return {
           ok: false,
           reason:
-            `risk/reward ratio ${(targetDistance / stopDistance).toFixed(2)} is below ` +
-            `${MIN_RISK_REWARD_RATIO} and the required target ${requiredTargetMid.toFixed(3)} ` +
-            `exceeds the maximum ${MAX_TARGET_PRICE}`,
+            `win probability ${winProbability.toFixed(3)} needs a ` +
+            `${requiredRatio.toFixed(2)}:1 reward/risk, which puts the target at ` +
+            `${requiredTargetMid.toFixed(3)} - beyond the ${MAX_TARGET_PRICE} maximum. ` +
+            `The price would have to move further than the token allows.`,
         };
       }
 
@@ -494,34 +556,13 @@ export function parseRecommendation(
 
       console.warn(
         `[Recommendation] Expanded target from ${previousTargetMid.toFixed(3)} to ` +
-        `${targetMid.toFixed(3)} to meet ${MIN_RISK_REWARD_RATIO}:1 risk/reward ` +
-        `(entry ${entryMid.toFixed(3)}, stop ${stopLoss.toFixed(3)}).`,
+        `${targetMid.toFixed(3)} to meet ${requiredRatio.toFixed(2)}:1 reward/risk ` +
+        `(entry ${entryMid.toFixed(3)}, stop ${stopLoss.toFixed(3)}, ` +
+        `win prob ${winProbability.toFixed(3)}).`,
       );
     }
 
     riskRewardRatio = targetDistance / stopDistance;
-
-    const consensusProb = Math.max(
-      0,
-      Math.min(1, input.consensusOutput.consensusResult.probability),
-    );
-    const marketProb = Math.max(0, Math.min(1, input.marketProbability));
-
-    const consensusWinProbability =
-      action === 'LONG_NO' ? 1 - consensusProb : consensusProb;
-    const marketWinProbability =
-      action === 'LONG_NO' ? 1 - marketProb : marketProb;
-
-    // Use the market-implied probability as a floor unless the model has a
-    // genuinely credible edge. This prevents the system from overpaying for a
-    // cheap underdog just because its ensemble is modestly bearish.
-    const hasCredibleEdge =
-      Math.abs(input.consensusOutput.edge) >= 0.10 &&
-      input.consensusOutput.consensusResult.confidence >= 0.5;
-
-    winProbability = hasCredibleEdge
-      ? consensusWinProbability
-      : Math.min(consensusWinProbability, marketWinProbability);
 
     expectedValue =
       winProbability * targetDistance - (1 - winProbability) * stopDistance;
@@ -529,13 +570,13 @@ export function parseRecommendation(
     if (expectedValue <= 0) {
       console.warn(
         `[Recommendation] Rejecting ${action}: expected value ${expectedValue.toFixed(4)} <= 0 ` +
-        `at consensus-derived win probability ${winProbability.toFixed(3)}. ` +
+        `at win probability ${winProbability.toFixed(3)}. ` +
         `Levels: entry=${entryMid.toFixed(3)}, target=${targetMid.toFixed(3)}, stop=${stopLoss.toFixed(3)}.`,
       );
       return {
         ok: false,
         reason:
-          `expected value is ${expectedValue.toFixed(4)} at the consensus-derived ` +
+          `expected value is ${expectedValue.toFixed(4)} at the ` +
           `win probability ${winProbability.toFixed(3)}`,
       };
     }
@@ -566,6 +607,8 @@ export function parseRecommendation(
     volatility: input.volatility,
     marketEndDate: input.marketEndDate,
     divergenceGuardTriggered: input.consensusOutput.divergenceGuardTriggered,
+    thesisVetoTriggered: input.consensusOutput.thesisVetoTriggered,
+    noTradeReason: isNoTrade ? input.consensusOutput.noTradeReason : undefined,
   };
 
   return {
@@ -670,13 +713,28 @@ function createFallbackResult(
       'Model-market divergence too large to be credible',
       'Ensemble is likely miscalibrated for this market',
     ];
+  } else if (input.consensusOutput.thesisVetoTriggered) {
+    summary =
+      `NO_TRADE: The thesis that won cross-examination does not support the trade direction. ` +
+      `The debate did not confirm the ensemble's signal.`;
+    coreThesis =
+      `The ensemble pointed to ${input.consensusOutput.action}, but the adversarial bull/bear ` +
+      `examination favored the opposite case or was too close to call.`;
+    uncertaintyNote =
+      `A trade needs both a credible ensemble edge and a thesis that survives cross-examination. ` +
+      `Here, one of those conditions failed.`;
+    failureScenarios = [
+      'Cross-examination favored the opposite thesis',
+      'Thesis margin was too weak to confirm the trade',
+    ];
   } else if (isConsensusFailed) {
     summary = `NO_TRADE: Consensus failed with ${(disagreement * 100).toFixed(1)}% disagreement among agents. Too much uncertainty to take a position.`;
     coreThesis = `Agent disagreement index (${disagreement.toFixed(3)}) exceeds the 30% threshold, indicating fundamentally conflicting views on this market's direction.`;
     uncertaintyNote = `High disagreement suggests the market is in a genuinely uncertain state where different analytical frameworks reach opposing conclusions. Wait for clarity before entering.`;
     failureScenarios = ['Agent disagreement too high', 'Conflicting directional signals'];
-  } else if (isNoTradeAction && Math.abs(edge) < 0.07) {
-    summary = `NO_TRADE: Edge of ${(edge * 100).toFixed(1)}% is below the minimum ${7}% threshold. Insufficient mispricing to justify transaction costs.`;
+  } else if (isNoTradeAction && Math.abs(edge) < (input.consensusOutput.edgeFloor ?? MIN_ACTIONABLE_EDGE)) {
+    const floor = input.consensusOutput.edgeFloor ?? MIN_ACTIONABLE_EDGE;
+    summary = `NO_TRADE: Edge of ${(edge * 100).toFixed(1)}% is below the ${(floor * 100).toFixed(1)}% floor for this market's spread. Insufficient mispricing to justify transaction costs.`;
     coreThesis = `The market price (${input.marketProbability.toFixed(3)}) is close to our consensus fair value (${input.consensusOutput.consensusResult.probability.toFixed(3)}). No exploitable mispricing exists.`;
     uncertaintyNote = `The market appears efficiently priced for this event. A significant catalyst or new information would be needed to create a tradeable edge.`;
     failureScenarios = ['Insufficient edge to cover transaction costs', 'Market efficiently priced'];
@@ -729,6 +787,8 @@ function createFallbackResult(
       volatility: input.volatility,
       marketEndDate: input.marketEndDate,
       divergenceGuardTriggered: input.consensusOutput.divergenceGuardTriggered,
+      thesisVetoTriggered: input.consensusOutput.thesisVetoTriggered,
+      noTradeReason: input.consensusOutput.noTradeReason,
     },
   };
 
@@ -998,6 +1058,11 @@ function validateEntryProximity(
  */
 function clampPrice(price: number): number {
   return Math.max(0.01, Math.min(0.99, price));
+}
+
+/** Clamp to a valid probability in [0, 1] (no CLOB margin). */
+function clamp01(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 }
 
 // ============================================================================

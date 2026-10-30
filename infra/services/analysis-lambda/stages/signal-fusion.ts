@@ -14,13 +14,14 @@
  */
 
 import type { AgentSignal, FusedSignal } from '../lib/types';
+import { deBiasProbability, type CalibrationMap } from '../lib/calibration';
 
 /**
  * Agent type weights - higher weight = more influence on fused probability.
  * Price/market-aware agents carry more weight than role-biased narrative
  * agents. Risk/tail agents are non-directional and do not vote on probability.
  */
-const TYPE_WEIGHTS: Record<string, number> = {
+export const TYPE_WEIGHTS: Record<string, number> = {
   polling_intelligence: 1.8,
   market_microstructure: 1.5,
   momentum: 1.2,
@@ -41,22 +42,37 @@ const TYPE_WEIGHTS: Record<string, number> = {
 export const NON_DIRECTIONAL_AGENTS = new Set(['risk_assessment', 'tail_risk']);
 
 /**
- * Fraction of the ensemble's log-odds deviation from market that is allowed
- * through. 0 = ignore the ensemble, 1 = fully trust it. Kept conservative:
- * prediction-market prices are efficient and LLM probability estimates are
- * noisy. Override with FUSION_SHRINKAGE for replay/backtesting.
+ * Maximum fraction of the ensemble's raw edge that is allowed through for a
+ * moderate, aligned disagreement. 0 = ignore the ensemble, 1 = fully trust it.
+ *
+ * This is deliberately not a single fixed shrinkage factor:
+ * - moderate raw edges (<= 15%) pass through at MAX_PASS_THROUGH
+ * - larger raw edges (15-30%) pass through at half that rate
+ * - extreme raw edges (> 30%) are treated as model error and blocked
+ *
+ * Prediction-market prices are efficient, but a genuinely aligned ensemble
+ * often finds a real 5-12% edge. This gives it room without reviving the old
+ * 40-50% contrarian bets. Override with FUSION_MAX_PASS_THROUGH.
  */
-const DEFAULT_SHRINKAGE = 0.15;
+const DEFAULT_MAX_PASS_THROUGH = 0.6;
+const EXTREME_EDGE_THRESHOLD = 0.15;
+const MODEL_ERROR_EDGE_THRESHOLD = 0.30;
+const EXTREME_PASS_THROUGH_FACTOR = 0.5;
 
-function readShrinkage(): number {
-  const raw = process.env.FUSION_SHRINKAGE;
-  if (raw === undefined || raw.trim() === '') return DEFAULT_SHRINKAGE;
+function readMaxPassThrough(): number {
+  const raw =
+    process.env.FUSION_MAX_PASS_THROUGH ?? process.env.FUSION_SHRINKAGE;
+  if (raw === undefined || raw.trim() === '') return DEFAULT_MAX_PASS_THROUGH;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return DEFAULT_SHRINKAGE;
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_PASS_THROUGH;
   return Math.max(0, Math.min(1, parsed));
 }
 
-const SHRINKAGE = readShrinkage();
+const MAX_PASS_THROUGH = readMaxPassThrough();
+
+/** Signals this close to 0.5 with this little confidence are "no view". */
+const NO_VIEW_CONFIDENCE_THRESHOLD = 0.4;
+const NEAR_NEUTRAL_BAND = 0.05;
 
 /** Log-odds distance used to normalize disagreement into 0..1. */
 const DISAGREEMENT_SCALE = 2.5;
@@ -92,13 +108,29 @@ function sigmoid(logOdds: number): number {
  *   - weightedFairProbability in [0, 1].
  *   - fusionConfidence in [0, 1].
  *   - signalAlignment in [0, 1] (1.0 = perfect agreement).
- *   - The ensemble's deviation from market is shrunk by SHRINKAGE.
+ *   - The ensemble's raw edge is passed through according to its magnitude:
+ *     60% for moderate edges, 30% for large edges, 0% for model-error edges.
  */
 export function fuseSignals(
   signals: AgentSignal[],
   agentPerformance: Record<string, number>,
   marketProbability: number = 0.5,
+  options: {
+    /** Overrides FUSION_MAX_PASS_THROUGH for this run. */
+    maxPassThrough?: number;
+    /**
+     * Per-agent price calibration. Each forecast is re-centred on the current
+     * market price before contributing, so an agent's habitual drift toward 0.5
+     * is not mistaken for a directional view. Missing agents fall back to the
+     * identity line, which is a no-op.
+     */
+    calibration?: CalibrationMap;
+  } = {},
 ): FusedSignal {
+  const maxPassThrough =
+    options.maxPassThrough === undefined
+      ? MAX_PASS_THROUGH
+      : clamp(options.maxPassThrough, 0, 1);
   const market = clamp(
     Number.isFinite(marketProbability) ? marketProbability : 0.5,
     0.01,
@@ -110,6 +142,7 @@ export function fuseSignals(
   let weightedAdjSum = 0;
   let weightedAdjSqSum = 0;
   let weightedConfSum = 0;
+  let weightSqSum = 0;
 
   const directionalSignals: AgentSignal[] = [];
   const riskConfidences: number[] = [];
@@ -127,10 +160,30 @@ export function fuseSignals(
       continue;
     }
 
-    const fairProbability = clamp(
+    const rawFairProbability = clamp(
       Number.isFinite(signal.fairProbability) ? signal.fairProbability : 0.5,
       0.01,
       0.99,
+    );
+
+    // A neutral probability with low confidence is a fallback/no-view, not a
+    // directional forecast. Treating it as a vote makes a 0.50 output look
+    // bearish in a 0.67 market and invents fake edges.
+    if (
+      confidence < NO_VIEW_CONFIDENCE_THRESHOLD &&
+      Math.abs(rawFairProbability - 0.5) < NEAR_NEUTRAL_BAND
+    ) {
+      continue;
+    }
+
+    // Remove the agent's habitual drift from the price before the forecast is
+    // turned into an edge. Without this, "no view" (a 0.50 output on an 0.85
+    // market) is read as a strong bearish vote and the ensemble can only ever
+    // point at the cheaper token. Identity calibration leaves this untouched.
+    const fairProbability = deBiasProbability(
+      rawFairProbability,
+      market,
+      options.calibration?.[signal.agentName],
     );
 
     const typeWeight = TYPE_WEIGHTS[signal.agentName] ?? 1.0;
@@ -150,6 +203,7 @@ export function fuseSignals(
     weightedAdjSum += adjustment * weight;
     weightedAdjSqSum += adjustment * adjustment * weight;
     weightedConfSum += confidence * weight;
+    weightSqSum += weight * weight;
     directionalSignals.push(signal);
   }
 
@@ -159,20 +213,36 @@ export function fuseSignals(
       weightedFairProbability: market,
       rawFairProbability: market,
       marketProbability: market,
-      shrinkage: SHRINKAGE,
+      shrinkage: 0,
+      passThrough: 0,
       fusionConfidence: 0,
       signalAlignment: 0,
       signalDisagreement: 1,
+      fairValueStandardError: 0,
+      effectiveSampleSize: 0,
       conflictMap: [],
     };
   }
 
   const rawAdjustment = weightedAdjSum / totalWeight;
-
-  // Shrink the ensemble's adjustment toward the market prior.
-  const shrunkAdjustment = rawAdjustment * SHRINKAGE;
-  const weightedFairProbability = sigmoid(marketLogOdds + shrunkAdjustment);
   const rawFairProbability = sigmoid(marketLogOdds + rawAdjustment);
+
+  // Evidence-scaled pass-through. Moderate disagreements keep more of the
+  // ensemble's edge; extreme disagreements are treated as model error.
+  const rawEdge = rawFairProbability - market;
+  const absRawEdge = Math.abs(rawEdge);
+  const passThrough =
+    absRawEdge > MODEL_ERROR_EDGE_THRESHOLD
+      ? 0
+      : absRawEdge > EXTREME_EDGE_THRESHOLD
+        ? maxPassThrough * EXTREME_PASS_THROUGH_FACTOR
+        : maxPassThrough;
+
+  const weightedFairProbability = clamp(
+    market + rawEdge * passThrough,
+    0.01,
+    0.99,
+  );
 
   // Weighted dispersion of log-odds adjustments.
   const variance = Math.max(
@@ -232,14 +302,31 @@ export function fuseSignals(
     1,
   );
 
+  // Noise floor of the fused estimate.
+  //
+  // Agents are not independent (shared models, shared inputs), so the naive
+  // n is optimistic; the Kish effective sample size at least accounts for
+  // uneven weighting. The standard error is computed in log-odds space and
+  // mapped to probability points with the delta method around the estimate,
+  // which is the scale the edge and the spread are both measured in.
+  const effectiveSampleSize =
+    weightSqSum > 0 ? (totalWeight * totalWeight) / weightSqSum : 0;
+  const seLogOdds =
+    effectiveSampleSize > 1 ? Math.sqrt(variance / effectiveSampleSize) : 0;
+  const slope = weightedFairProbability * (1 - weightedFairProbability);
+  const fairValueStandardError = clamp(slope * seLogOdds, 0, 0.5);
+
   return {
     weightedFairProbability,
     rawFairProbability,
     marketProbability: market,
-    shrinkage: SHRINKAGE,
+    shrinkage: passThrough,
+    passThrough,
     fusionConfidence,
     signalAlignment,
     signalDisagreement,
+    fairValueStandardError,
+    effectiveSampleSize,
     conflictMap,
   };
 }

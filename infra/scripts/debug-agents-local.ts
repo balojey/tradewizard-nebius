@@ -40,7 +40,7 @@ function loadEnv(path: string): void {
 
 loadEnv(join(__dirname, '..', '.env.dev'));
 process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
-process.env.AI_PROVIDER = process.env.AI_PROVIDER || 'bedrock';
+process.env.AI_PROVIDER = process.env.AI_PROVIDER || 'nebius';
 
 // Build a small but realistic price history CSV for the shell-tool agents.
 const csvPath = '/tmp/price-history-debug.csv';

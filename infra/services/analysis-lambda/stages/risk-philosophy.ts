@@ -2,7 +2,7 @@
  * Risk Philosophy Stage - 3 sequential Strands Agents for position sizing
  *
  * Creates 3 Strands Agents sequentially (aggressive, conservative, neutral)
- * to stay within Bedrock RPM limits. Each returns a risk perspective containing
+ * to stay inside provider rate limits. Each returns a risk perspective containing
  * position sizing, Kelly fraction, entry strategy, stop-loss/take-profit distances,
  * reasoning, and max drawdown tolerance.
  *

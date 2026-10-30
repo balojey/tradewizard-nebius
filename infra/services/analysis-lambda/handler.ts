@@ -16,15 +16,16 @@ import {
   deriveLiquidityRisk,
   type MarketBriefing,
 } from './stages/data-preparation';
-import { fetchHistoricalContext, fetchAgentPerformanceWeights } from './stages/historical-context';
+import { fetchHistoricalContext, fetchAgentPerformanceWeights, fetchAgentCalibration } from './stages/historical-context';
 import { runWebResearch } from './stages/web-research';
 import { runIntelligenceAgents, ALL_AGENT_NAMES } from './stages/intelligence-agents';
 import { fuseSignals } from './stages/signal-fusion';
 import { runThesisConstruction } from './stages/thesis-construction';
 import { runCrossExamination } from './stages/cross-examination';
-import { runConsensusEngine } from './stages/consensus-engine';
+import { runConsensusEngine, readGateProfile } from './stages/consensus-engine';
 import { runRiskPhilosophy } from './stages/risk-philosophy';
 import { runRecommendation } from './stages/recommendation';
+import { runShadowConsensus } from './lib/shadow-consensus';
 import { resetNewsToolCache } from './tools/news-tool';
 import { resetSearchToolCache } from './tools/search-tool';
 import { resetAllSharedCaches } from './tools/tool-factory';
@@ -259,6 +260,11 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
 
     const payload = event as AnalysisPayload;
 
+    // Risk appetite for this run. `actionable` (default) prices the market's
+    // real round-trip cost and treats the thesis debate as a confidence input;
+    // `strict` is the old flat-4c / hard-veto behaviour.
+    const gateProfile = readGateProfile();
+
     // Fail fast if the active AI provider's credentials are missing.
     await assertAiProviderCredentials();
 
@@ -295,10 +301,11 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
     };
 
     // Run data preparation and historical context in parallel
-    const [dataResult, historicalEntries, agentPerformanceWeights] = await Promise.all([
+    const [dataResult, historicalEntries, agentPerformanceWeights, agentCalibration] = await Promise.all([
       prepareData(briefing),
       fetchHistoricalContext(payload.marketId),
       fetchAgentPerformanceWeights(payload.marketId),
+      fetchAgentCalibration(),
     ]);
     totalLlmCalls += 0; // No LLM calls in these stages
     await publishProgress(payload.userId, payload.requestId, payload.marketId, 2);
@@ -370,6 +377,16 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       agentsResult.signals,
       agentPerformanceWeights,
       marketProbability,
+      // Under `actionable` the ensemble's edge is no longer shrunk toward the
+      // market: the divergence cap already prevents implausible disagreement,
+      // and the gate profile is the risk knob. A 6pt ensemble edge should not
+      // arrive at the gate as 3.6pt and fail a 4pt floor.
+      {
+        maxPassThrough: gateProfile === 'actionable' ? 1 : undefined,
+        // Removes each agent's habitual drift toward 0.5 so "no view" is not
+        // counted as a directional vote. No-op for agents without history.
+        calibration: agentCalibration,
+      },
     );
 
     // ── Stage 7: Thesis Construction ─────────────────────────────────────────
@@ -400,6 +417,34 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       crossExamResult.crossExamResult,
       marketProbability,
       liquidityRisk,
+      {
+        spread: marketInfo?.spread,
+        profile: gateProfile,
+        fairValueStandardError: fusedSignal.fairValueStandardError,
+      },
+    );
+
+    // ── Shadow: agent-driven consensus (measurement only) ─────────────────────
+    // Runs the config we intend to move to without affecting what users see.
+    // The result is stored on _analysisDetail and persisted to analysis_results
+    // so recommendation-scorer can compare both configs against realised moves.
+    // See lib/shadow-consensus.ts for the rationale.
+    const shadowConsensus = runShadowConsensus({
+      signals: agentsResult.signals,
+      marketProbability,
+      calibration: agentCalibration,
+      agentPerformance: agentPerformanceWeights,
+      spread: marketInfo?.spread,
+    });
+
+    console.log(
+      `[Analysis_Lambda] Gate profile=${gateProfile}, edge floor=` +
+      `${consensusOutput.edgeFloor?.toFixed(4) ?? 'n/a'} | ` +
+      `live=${consensusOutput.action}` +
+      `${consensusOutput.noTradeReason ? ` (${consensusOutput.noTradeReason})` : ''} ` +
+      `edge=${consensusOutput.edge.toFixed(3)} | ` +
+      `shadow=${shadowConsensus.action} edge=${shadowConsensus.edge.toFixed(3)} ` +
+      `vote=${shadowConsensus.voteScore.toFixed(3)} (${shadowConsensus.reason})`
     );
 
     // If consensus failed or NO_TRADE, we still run risk philosophy and recommendation
@@ -434,6 +479,7 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       liquidityRisk,
       liquidity: marketInfo?.liquidity,
       spread: marketInfo?.spread,
+      gateProfile,
     });
     totalLlmCalls += 1;
 
@@ -448,6 +494,7 @@ export async function handler(event: unknown): Promise<TradeRecommendation> {
       consensus: consensusOutput.consensusResult,
       riskPerspectives: riskResult.summary,
       webResearchSummary: webResearch.brief,
+      shadowConsensus,
     };
 
     // Update metadata with final counts

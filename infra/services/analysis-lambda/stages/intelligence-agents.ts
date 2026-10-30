@@ -1,9 +1,10 @@
 /**
  * Intelligence Agents Stage - Parallel execution of 14 specialized agents
  *
- * Executes all 14 intelligence agents in parallel using multiple Bedrock models
- * to avoid hitting per-model RPM limits. Each agent is assigned a specific model
- * based on its capabilities and the model's strengths (see lib/multi-model.ts).
+ * Executes all 14 intelligence agents in parallel across the Nebius Token Factory
+ * capability buckets so one model's rate limit cannot stall a run. Each agent is
+ * assigned a bucket based on its capabilities and whether it needs tools (see
+ * lib/multi-model.ts and services/shared/ai-provider.ts).
  *
  * Each agent gets its own isolated tool instance with per-agent call counters,
  * while sharing result caches across agents for deduplication.
@@ -695,10 +696,26 @@ function buildAgentPrompt(
       lines.push(`- Recent price volatility (sigma): ${context.priceVolatility.toFixed(4)}`);
     }
 
+    // Conviction policy.
+    //
+    // The previous wording told every agent to "keep your fairProbability close
+    // to the current market price", which systematically suppressed the only
+    // thing that makes an analysis tradeable: a quantified, evidenced
+    // disagreement with the price. The discipline that matters is not modesty,
+    // it is evidence - so the instruction now demands a named, unpriced fact
+    // before allowing a large move, and explicitly permits the large move when
+    // that fact exists. Manufactured conviction is still filtered downstream by
+    // the divergence cap and the per-agent calibration fit.
     lines.push(
-      `- The market price is the aggregate of informed traders. Treat it as a strong prior. ` +
-        `Only deviate materially if you have specific, verifiable evidence that is not already priced in. ` +
-        `If you cannot identify such evidence, keep your fairProbability close to the current market price.`,
+      `- The market price is the aggregate of informed traders, so treat it as your prior. ` +
+        `Then ask one question: is there specific, verifiable information that the current price does not reflect?\n` +
+        `- If there is: set fairProbability to the value that information implies, however far that is from the price, ` +
+        `and name the unpriced evidence in keyDrivers. A well-evidenced 10-point disagreement is more useful than a ` +
+        `2-point hedge with no evidence behind it. Do not soften a justified view to look reasonable.\n` +
+        `- If there is not: set fairProbability to the current YES price. An honest "no view" is a valid and useful answer. ` +
+        `A neutral forecast is not a bearish one.\n` +
+        `- Never inflate a deviation without naming the evidence. Disagreements larger than 15 points are discarded ` +
+        `downstream as model error, so manufactured conviction is wasted.`,
     );
 
     sections.push(lines.join('\n'));
@@ -934,7 +951,7 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Best-effort human-readable description of a thrown value.
- * Bedrock/SDK errors are not always `Error` instances; without this they
+ * Provider/SDK errors are not always `Error` instances; without this they
  * stringify to "[object Object]" and hide the real cause.
  */
 function describeError(error: unknown): string {
@@ -955,8 +972,8 @@ function describeError(error: unknown): string {
 
 /**
  * Check if an error is a provider throttling/rate-limit error.
- * Handles Bedrock message-based throttling and OpenAI-compatible SDK errors
- * (Nebius) that expose an HTTP status code.
+ * Handles Bedrock message-based throttling (legacy provider) and the
+ * OpenAI-compatible errors Nebius Token Factory returns with an HTTP status code.
  */
 function isThrottlingError(error: unknown): boolean {
   if (error instanceof Error) {
@@ -1090,13 +1107,13 @@ function timeoutReject(ms: number, agentName: string): Promise<never> {
 // ============================================================================
 
 /**
- * Runs all 14 intelligence agents in PARALLEL using multiple Bedrock models.
+ * Runs all 14 intelligence agents in PARALLEL across the capability buckets.
  *
- * Multi-model distribution (see lib/multi-model.ts):
- * - Nova Micro (200 RPM):    market_microstructure, probability_baseline, momentum
- * - Nova Lite (200 RPM):     risk_assessment, polling_intelligence, mean_reversion
- * - Nemotron (100 RPM):      breaking_news, event_impact, historical_patterns
- * - GPT-OSS (100 RPM):       media_sentiment, social_sentiment, narrative_velocity
+ * Capability distribution (see lib/multi-model.ts):
+ * - fast (Qwen3-30B-A3B):         market_microstructure, probability_baseline, momentum
+ * - analytical (Qwen3-235B-A22B): risk_assessment, polling_intelligence, mean_reversion
+ * - agentic (Nemotron 3 Super):   breaking_news, event_impact, historical_patterns
+ * - reasoning (GPT-OSS 120B):     media_sentiment, social_sentiment, narrative_velocity
  * - Kimi K2 (100 RPM):       catalyst_identification, tail_risk
  *
  * Each agent gets per-agent tool instances with isolated call counters.

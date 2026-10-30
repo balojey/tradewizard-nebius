@@ -335,7 +335,13 @@ npm run lint             # Check linting
 ## Error Handling & Observability
 
 - Graceful degradation at every layer - partial failures don't crash the pipeline
-- Consensus can fail (disagreement > 30%) - system refuses to recommend rather than giving low-confidence output
+- Consensus can fail (disagreement > 30% or confidence < 20%) - system refuses to recommend rather than giving low-confidence output
+- Divergence circuit breaker: edges > 15% against the market are treated as model error and return NO_TRADE
+- Signal fusion is market-anchored with evidence-scaled pass-through (100% for edges <= 15% under `actionable`, 50% for 15-30%, 0% above 30% as model error), per-agent market calibration removes habitual drift toward 0.5, and agent weights use Brier calibration; low-confidence no-view signals are ignored
+- The `actionable` gate profile derives the edge floor from the observed spread + slippage instead of a flat 4c, and requires the edge to clear 2 standard errors of ensemble noise (`fairValueStandardError` over the Kish effective sample size). `GATE_PROFILE=strict` restores the flat 4c floor, pass-through 0.6, and a hard thesis veto
+- Cross-examination is a confirmation gate: the winning bull/bear thesis must agree with the trade direction by a margin of at least 1.0 (`actionable` discounts confidence 30% instead of vetoing); role-play theses are never averaged into probability
+- Every `NO_TRADE` records a machine-readable `no_trade_reason` (`consensus_failed` | `divergence_cap` | `edge_below_threshold` | `edge_below_significance` | `thesis_veto`) for diagnosis across runs
+- The agent-driven (shadow) consensus is computed alongside the live decision and graded on the same 24h price move (`live_pnl` vs `shadow_pnl`); it is measurement only and never reaches the user
 - CloudWatch alarms: execution time > 60s (warn), > 120s (critical), DLQ depth > 0, daily inference spend > 80% budget
 - Per-analysis cost tracking (model costs, tool costs, compute duration)
 - SQS dead-letter queue for failed dispatches (3 retries with exponential backoff)

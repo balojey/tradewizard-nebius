@@ -1,16 +1,19 @@
 /**
  * Shared AI provider abstraction.
  *
- * TradeWizard's AI workflow runs on Amazon Bedrock by default. Setting
- * AI_PROVIDER=nebius routes every model call through Nebius Token Factory's
- * OpenAI-compatible API instead. Prompts, tools, and workflow stages are
- * unchanged because both providers are exposed to Strands as a `Model`.
+ * TradeWizard's AI workflow runs on Nebius Token Factory (`AI_PROVIDER=nebius`,
+ * the default). Token Factory exposes an OpenAI-compatible API, so prompts,
+ * tools, and workflow stages are unchanged - the provider is only a `Model`
+ * implementation behind Strands.
+ *
+ * `bedrock` remains selectable for regression comparisons with the previous
+ * deployment, but the shipped environments run Nebius-only.
  *
  * Scope: this only covers model inference. Trade execution (Polymarket CLOB
  * orders, risk enforcement) remains deterministic application code.
  *
  * Environment variables:
- * - AI_PROVIDER: "bedrock" (default) or "nebius"
+ * - AI_PROVIDER: "nebius" (default) or "bedrock"
  * - NEBIUS_API_KEY_SECRET_ARN: Secrets Manager ARN containing {"apiKey": "..."}
  * - NEBIUS_API_KEY: local-development fallback key
  * - NEBIUS_BASE_URL: OpenAI-compatible base URL
@@ -85,16 +88,16 @@ let cachedNebiusKeyAt = 0;
 
 // ─── Provider Selection ─────────────────────────────────────────────────────────
 
-/** Resolve the active AI provider. Defaults to Bedrock. */
+/** Resolve the active AI provider. Defaults to Nebius Token Factory. */
 export function resolveAiProvider(): AiProvider {
-  const raw = (process.env.AI_PROVIDER || 'bedrock').trim().toLowerCase();
+  const raw = (process.env.AI_PROVIDER || 'nebius').trim().toLowerCase();
 
   if (raw === 'bedrock' || raw === 'nebius') {
     return raw;
   }
 
   throw new Error(
-    `Unsupported AI_PROVIDER "${raw}". Expected "bedrock" or "nebius".`
+    `Unsupported AI_PROVIDER "${raw}". Expected "nebius" or "bedrock".`
   );
 }
 

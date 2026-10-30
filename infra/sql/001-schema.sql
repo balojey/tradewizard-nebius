@@ -301,6 +301,73 @@ WHERE outcome_status = 'pending'
   AND recommendation IN ('LONG_YES', 'LONG_NO')
   AND executed_at < NOW() - INTERVAL '7 days';
 
+-- ----------------------------------------------------------------------------
+-- Shadow (agent-driven) consensus
+--
+-- Recorded alongside every analysis so the live pipeline and the agent-driven
+-- config can be graded on the same markets. Nothing here affects the live
+-- recommendation until the shadow data justifies a switch.
+-- See infra/services/analysis-lambda/lib/shadow-consensus.ts.
+-- ----------------------------------------------------------------------------
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN shadow_action TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN shadow_edge NUMERIC(6, 4);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN shadow_vote_score NUMERIC(6, 4);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN shadow_probability NUMERIC(5, 4);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN shadow_cost_floor NUMERIC(6, 4);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN shadow_reason TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Machine-readable reason a run produced NO_TRADE
+-- ('consensus_failed' | 'divergence_cap' | 'edge_below_threshold' | 'thesis_veto').
+-- Aggregating this is how you see which gate is doing the killing.
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN no_trade_reason TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Fixed-horizon outcome scoring, applied identically to both configs so the
+-- comparison is not confounded by different TP/SL levels.
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN horizon_hours INTEGER;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN horizon_move NUMERIC(6, 4);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN live_pnl NUMERIC(8, 4);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN shadow_pnl NUMERIC(8, 4);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE analysis_results ADD COLUMN pnl_scored_at TIMESTAMPTZ;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Shadow rows awaiting horizon scoring.
+CREATE INDEX IF NOT EXISTS idx_analysis_results_pnl_pending
+  ON analysis_results (executed_at)
+  WHERE pnl_scored_at IS NULL AND shadow_action IS NOT NULL;
+
+
 CREATE TABLE IF NOT EXISTS analysis_deliveries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   result_id UUID NOT NULL REFERENCES analysis_results(id) ON DELETE CASCADE,
@@ -559,6 +626,10 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_trial_end ON subscriptions(trial_en
 CREATE INDEX IF NOT EXISTS idx_deliveries_user ON analysis_deliveries(user_id, delivered_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_agent_memory_market ON agent_memory(market_id, agent_name, signal_timestamp DESC);
+
+-- Feeds the per-agent calibration fit (agent_memory JOIN analysis_results on
+-- result_id) and the scorer's per-result signal lookup.
+CREATE INDEX IF NOT EXISTS idx_agent_memory_result ON agent_memory(result_id, agent_name);
 
 CREATE INDEX IF NOT EXISTS idx_markets_condition ON markets(condition_id);
 
