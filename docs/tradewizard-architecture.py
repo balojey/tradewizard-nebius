@@ -1,6 +1,12 @@
 """
-TradeWizard V2 - Full System Architecture Diagram
-Generated using the Python `diagrams` package.
+TradeWizard - Platform Architecture
+
+Renders docs/tradewizard-architecture.png with the Python `diagrams` package
+(needs Graphviz `dot` on PATH).
+
+Model inference is Nebius Token Factory: the agent groups and the non-tool
+stages all point at the Nebius node, and every model name is the capability
+bucket's configured Token Factory model. There is no Bedrock node.
 """
 
 from diagrams import Diagram, Cluster, Edge
@@ -23,8 +29,11 @@ graph_attr = {
     "fontsize": "28",
     "bgcolor": "white",
     "pad": "0.8",
-    "nodesep": "0.8",
-    "ranksep": "1.2",
+    # Wide node separation: diagrams renders fixed-size icons with labels that
+    # overflow horizontally, so model names like "Qwen3-235B Analytical" need
+    # room or adjacent labels collide.
+    "nodesep": "1.4",
+    "ranksep": "1.4",
     "splines": "ortho",
 }
 
@@ -73,11 +82,11 @@ with Diagram(
         analysis_lambda = Lambda("Analysis Lambda\n(11-Stage Workflow)")
 
         with Cluster("14 Intelligence Agents"):
-            agents_group_1 = Lambda("Qwen3-30B Fast Agents\n(Microstructure, Baseline,\nMomentum)")
-            agents_group_2 = Lambda("Qwen3-235B Analytical Agents\n(Risk, Polling,\nMean Reversion)")
-            agents_group_3 = Lambda("Nemotron 3 Super Agents\n(News, Events,\nHistorical, Web Research)")
-            agents_group_4 = Lambda("GPT-OSS 120B Agents\n(Media, Social,\nNarrative)")
-            agents_group_5 = Lambda("DeepSeek-V4 Agents\n(Catalyst, Tail Risk)")
+            agents_group_1 = Lambda("Qwen3-30B Fast\n(Microstructure,\nBaseline, Momentum)")
+            agents_group_2 = Lambda("Qwen3-235B\nAnalytical\n(Risk, Polling, Reversion)")
+            agents_group_3 = Lambda("Nemotron 3 Super\n(News, Events,\nHistorical, Research)")
+            agents_group_4 = Lambda("GPT-OSS 120B\n(Media, Social,\nNarrative)")
+            agents_group_5 = Lambda("DeepSeek-V4 Pro\n(Catalyst, Tail Risk)")
 
         with Cluster("Non-Tool Stages (Kimi K3)"):
             thesis = Lambda("Thesis +\nCross-Exam")
